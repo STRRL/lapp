@@ -1,0 +1,27 @@
+{
+  "name": "lapp",
+  "version": "0.1.0",
+  "description": "Log Auto Pattern Pipeline - Automatically discover and categorize log patterns",
+  "license": "MIT",
+  "module": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "lapp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "discover": "bun run src/index.ts discover",
+    "apply": "bun run src/index.ts apply"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.10",
+    "ai": "^6.0.34",
+    "zod": "^4.3.5"
+  }
+}
