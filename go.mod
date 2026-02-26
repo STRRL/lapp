@@ -3,8 +3,12 @@ module github.com/strrl/lapp
 go 1.25.7
 
 require (
+	github.com/cloudwego/eino v0.7.35
+	github.com/cloudwego/eino-ext/adk/backend/local v0.1.1
+	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/jaeyo/go-drain3 v0.1.2
+	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
 	github.com/trivago/grok v1.0.0
 )
@@ -17,10 +21,6 @@ require (
 	github.com/bytedance/sonic v1.14.1 // indirect
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino v0.7.35 // indirect
-	github.com/cloudwego/eino-ext/adk/backend/local v0.1.1 // indirect
-	github.com/cloudwego/eino-ext/components/model/openai v0.1.8 // indirect
-	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.13 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.3.3 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.3.3 // indirect
@@ -38,7 +38,6 @@ require (
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect

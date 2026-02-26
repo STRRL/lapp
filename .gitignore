@@ -25,6 +25,11 @@ go.work.sum
 # OS
 .DS_Store
 
+# Env
+.env
+.env.*
+!.env.example
+
 # Project specific
 /output/
 *.duckdb
