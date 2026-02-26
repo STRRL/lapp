@@ -1,111 +1,120 @@
-# LAPP - Log Auto Pattern Pipeline
+# LAPP Go Project Skeleton Plan
 
-## Vision
+## Context
 
-Transform a chaotic log stream into multiple semantic substreams, and continuously analyze their trends, anomalies, and pattern changes within a pipeline.
+LAPP (Log Auto Pattern Pipeline) has completed research (29 papers) and architecture design, but has zero Go code. We need to set up the full project skeleton covering all modules in ARCHITECTURE.md, get the end-to-end pipeline working: CLI → Ingestor → Parser → Store → Querier.
 
-## Core Concept
+## Key Decisions
 
-### The Problem
+- **Drain library**: `github.com/Jaeyo/go-drain3` as initial implementation, interface-based design allows future rewrite
+- **Ingestor**: reads arbitrary log files (not Loghub-specific), Loghub only used in integration tests
+- **Existing TS code**: Leave in place, no conflict with Go code
 
-Raw logs are messy. A single log stream contains many different types of events mixed together:
-- User actions
-- System events
-- Errors and warnings
-- Health checks
-- Background jobs
-
-Manually writing regex or parsers for each pattern is tedious and doesn't scale.
-
-### The Solution
-
-Use LLM to automatically discover patterns from log samples, then split the log stream into meaningful substreams for independent analysis.
-
-## Pattern Discovery Flow
+## Project Structure
 
 ```
-1. User pipes logs via stdin
-
-2. Auto-discover (one-shot)
-   - Sample first 50 lines → LLM
-   - LLM returns: [{ regex: "...", description: "..." }, ...]
-   - User reviews / adjusts
-
-3. Apply regex pipeline
-   - Match in order
-   - Matched → corresponding substream
-   - Unmatched → leftover
-
-4. User inspects leftover
-   - Too noisy? → Manually trigger another round
-   - Acceptable? → Done
+lapp/
+├── go.mod                          # module github.com/strrl/lapp
+├── cmd/
+│   └── lapp/
+│       └── main.go                 # CLI entrypoint: ingest / query subcommands
+├── pkg/
+│   ├── ingestor/
+│   │   ├── ingestor.go             # read log file → stream of LogEntry
+│   │   └── ingestor_test.go
+│   ├── parser/
+│   │   ├── parser.go               # Parser interface, Template, Result types
+│   │   ├── chain.go                # ChainParser: JSON → Grok → Drain → LLM, priority chain
+│   │   ├── json.go                 # JSON log parser
+│   │   ├── json_test.go
+│   │   ├── grok.go                 # Grok pattern parser (basic patterns: syslog, nginx, etc.)
+│   │   ├── grok_test.go
+│   │   ├── drain.go                # DrainParser wrapping go-drain3
+│   │   ├── drain_test.go
+│   │   ├── llm.go                  # LLM extractor interface + stub (real impl later)
+│   │   ├── llm_test.go
+│   │   └── chain_test.go
+│   ├── store/
+│   │   ├── store.go                # Store interface
+│   │   ├── duckdb.go               # DuckDB store: log entries, templates, labels, config
+│   │   └── duckdb_test.go
+│   ├── querier/
+│   │   ├── querier.go              # query by template, time range, labels
+│   │   └── querier_test.go
+│   └── loghub/
+│       ├── loader.go               # CSV loader for integration tests only
+│       └── loader_test.go
+└── integration_test.go             # end-to-end: load HDFS → full pipeline → query results
 ```
 
-## LLM Output Format
+## Implementation Steps
 
-```json
-[
-  {
-    "regex": "\\[INFO\\] User \\d+ logged in",
-    "description": "User login events"
-  },
-  {
-    "regex": "\\[ERROR\\] Connection timeout to .*",
-    "description": "Connection timeout errors"
-  }
-]
-```
+### Step 1: Go module init + dependencies
+- `go mod init github.com/strrl/lapp`
+- Dependencies: go-drain3, go-duckdb, grok library
 
-## Tech Stack
+### Step 2: Ingestor (`pkg/ingestor/`)
+- `ingestor.go`: `Ingest(filePath string) (chan LogEntry, error)` — read file line by line, emit LogEntry (raw line + line number + timestamp if parseable)
+- Also support reading from stdin (filePath = "-")
+- `ingestor_test.go`: test with a small temp file
 
-- **Runtime**: Bun
-- **LLM SDK**: Vercel AI SDK
-- **LLM Provider**: OpenRouter
-- **Model**: google/gemini-2.0-flash-001
+### Step 3: Parser interface + all strategies (`pkg/parser/`)
+- `parser.go`: define `Parser` interface, `Template`, `Result` types
+- `json.go`: detect and parse JSON log lines, extract structured fields
+- `grok.go`: match against predefined grok patterns (syslog, common log, etc.)
+- `drain.go`: DrainParser wrapping go-drain3
+- `llm.go`: LLMParser interface + stub implementation that always returns "miss" (real LLM integration later)
+- `chain.go`: ChainParser executes strategies in priority order: JSON → Grok → Drain → LLM. First match wins.
 
-## Current Implementation (MVP)
+### Step 4: Store (`pkg/store/`)
+- `store.go`: define Store interface
+- `duckdb.go`: DuckDB store — log entries, templates, labels, parser config, all in one DB. Auto-create tables on init.
 
-- [x] Read logs from stdin (Unix pipe friendly)
-- [x] LLM-based pattern discovery with structured output
-- [x] Apply regex pipeline to split logs into substreams
-- [x] Show leftover for manual inspection
+### Step 5: Querier (`pkg/querier/`)
+- `querier.go`: Querier wraps Store, provides high-level query methods:
+  - `ByTemplate(templateID) []LogEntry`
+  - `Summary() []TemplateSummary` (template + count)
+  - `Search(opts QueryOpts) []LogEntry` (time range, label filter)
 
-## Future Work
+### Step 6: CLI (`cmd/lapp/main.go`)
+- `ingest` subcommand: read log file → Parser chain → Store
+- `query` subcommand: query stored logs by template/label
+- `templates` subcommand: list discovered templates
+- No cobra, just stdlib flag + os.Args dispatch
 
-### Phase 1: Core Enhancement
-- [ ] Save/load pattern configurations
-- [ ] Interactive mode for pattern refinement
-- [ ] Better leftover analysis (trigger re-discovery)
+### Step 7: Loghub test helper (`pkg/loghub/`)
+- `loader.go`: `LoadDataset(csvPath string) ([]LogEntry, error)` for integration tests
+- `loader_test.go`: load HDFS 2k corrected CSV, verify entry count
 
-### Phase 2: Substream Analysis
-- [ ] Per-substream statistics (count, rate, trend)
-- [ ] Anomaly detection within substreams
-- [ ] Pattern lifecycle tracking (appear/disappear/change)
+### Step 8: Integration test (`integration_test.go`)
+- Load HDFS 2k dataset → write to temp log file → run full pipeline (Ingestor → Parser → Store → Querier)
+- Verify: templates discovered, entries stored, queries return correct results
+- Skip if `LOGHUB_PATH` env var not set
 
-### Phase 3: Pipeline Visualization
-- [ ] Express pipeline as a graph
-- [ ] Web UI for pipeline management
-- [ ] Real-time streaming support
-
-## Design Principles
-
-1. **Progressive**: Don't aim for perfect classification upfront. Iterate.
-2. **LLM as eyes**: Let AI "see" logs and generate regex. Human reviews.
-3. **Leftover as safety net**: Always have a bucket for unclassified logs.
-4. **Controllable**: Support both manual and automatic modes.
-
-## Usage
+## Verification
 
 ```bash
-# Set API key
-export OPENROUTER_API_KEY=your_key
+# All unit tests
+go test ./...
 
-# Discover patterns
-cat logs.txt | bun run src/index.ts discover
+# Loghub integration test
+LOGHUB_PATH=/Users/strrl/playground/GitHub/.claude-playground/Loghub-2.0/2k_dataset go test -v -run TestIntegration
 
-# From kubectl
-kubectl logs deploy/xxx | bun run src/index.ts discover
-
-# Apply saved patterns
-cat logs.txt | bun run src/index.ts apply patterns.json
+# Manual CLI test
+go run ./cmd/lapp/ ingest /path/to/some.log
+go run ./cmd/lapp/ templates
+go run ./cmd/lapp/ query --template "E1"
 ```
+
+## Files to Modify
+
+- `CLAUDE.md` — add Go build/test commands
+- `.gitignore` — add Go binary paths, *.db files
+
+## Not in Scope (for this skeleton)
+
+- Real LLM integration (stub only, interface ready)
+- Multiline detection
+- Benchmark metrics (GA, PA, FTA)
+- Web UI
+- Elasticsearch / GCP Logging ingestors
