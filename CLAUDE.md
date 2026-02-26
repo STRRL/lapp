@@ -50,7 +50,3 @@ pkg/loghub/         Loghub-2.0 CSV loader (integration tests only)
 - Parser: go-drain3, trivago/grok
 - Storage: DuckDB (via duckdb-go/v2)
 - LLM: stub for now (interface ready)
-
-## Legacy TS Code
-
-The `src/` directory contains the original TypeScript prototype (Bun + Vercel AI SDK). It is kept for reference but is not actively maintained.
