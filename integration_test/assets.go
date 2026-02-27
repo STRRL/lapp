@@ -21,18 +21,15 @@ func loghubPath(t *testing.T) string {
 	return p
 }
 
-// newChainParser creates a fresh JSON→Drain chain parser.
+// newDrainParser creates a fresh DrainParser.
 // Each call returns independent state (important because DrainParser is stateful).
-func newChainParser(t *testing.T) *parser.ChainParser {
+func newDrainParser(t *testing.T) *parser.DrainParser {
 	t.Helper()
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		t.Fatalf("create drain parser: %v", err)
 	}
-	return parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	)
+	return drainParser
 }
 
 // newStore creates a fresh in-memory DuckDB store with cleanup registered.

@@ -8,12 +8,13 @@ import (
 	"github.com/jaeyo/go-drain3/pkg/drain3"
 )
 
-var _ Parser = (*DrainParser)(nil)
-
 // DrainParser uses the Drain algorithm to discover log templates online.
 type DrainParser struct {
-	mu           sync.Mutex
-	drain        *drain3.Drain
+	mu    sync.Mutex
+	drain *drain3.Drain
+	// clusterUUIDs maps Drain cluster IDs to stable UUIDs for consistent template identification.
+	// key is drain3.ClusterId, value is a UUID string.
+	// FIXME: use uuid type not uuid string
 	clusterUUIDs map[int64]string
 }
 
@@ -32,46 +33,43 @@ func NewDrainParser() (*DrainParser, error) {
 	}, nil
 }
 
-// Parse feeds a log line into Drain and returns the matching cluster info.
-func (p *DrainParser) Parse(content string) Result {
+// Feed processes a batch of log lines through the Drain algorithm.
+func (p *DrainParser) Feed(contents []string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	cluster, _, err := p.drain.AddLogMessage(content)
-	if err != nil || cluster == nil {
-		return Result{Matched: false}
+	for _, content := range contents {
+		cluster, _, err := p.drain.AddLogMessage(content)
+		if err != nil {
+			return errors.Errorf("drain add: %w", err)
+		}
+		if cluster == nil {
+			continue
+		}
+		if _, ok := p.clusterUUIDs[cluster.ClusterId]; !ok {
+			p.clusterUUIDs[cluster.ClusterId] = uuid.New().String()
+		}
 	}
-
-	id, ok := p.clusterUUIDs[cluster.ClusterId]
-	if !ok {
-		id = uuid.New().String()
-		p.clusterUUIDs[cluster.ClusterId] = id
-	}
-
-	return Result{
-		Matched:   true,
-		PatternID: id,
-		Pattern:   cluster.GetTemplate(),
-	}
+	return nil
 }
 
-// Templates returns all Drain clusters discovered so far.
-func (p *DrainParser) Templates() []Template {
+// Templates returns all Drain clusters discovered so far with their counts.
+func (p *DrainParser) Templates() ([]DrainCluster, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	clusters := p.drain.GetClusters()
-	templates := make([]Template, 0, len(clusters))
+	templates := make([]DrainCluster, 0, len(clusters))
 	for _, c := range clusters {
 		id, ok := p.clusterUUIDs[c.ClusterId]
 		if !ok {
-			// Skip clusters not seen during Parse — they have no matching log_entries rows
 			continue
 		}
-		templates = append(templates, Template{
+		templates = append(templates, DrainCluster{
 			ID:      id,
 			Pattern: c.GetTemplate(),
+			Count:   int(c.Size),
 		})
 	}
-	return templates
+	return templates, nil
 }

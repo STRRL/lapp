@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestDrainParser_Parse(t *testing.T) {
+func TestDrainParser_FeedAndTemplates(t *testing.T) {
 	p, err := NewDrainParser()
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
@@ -20,33 +20,15 @@ func TestDrainParser_Parse(t *testing.T) {
 		"081109 204005 36 INFO dfs.FSNamesystem: BLOCK* NameSystem.allocateBlock: /mnt/hadoop/mapred/system/job_200811092030_0002/job.jar. blk_5260569883199042858",
 	}
 
-	patternIDs := make(map[string]string)
-	for _, line := range lines {
-		result := p.Parse(line)
-		if !result.Matched {
-			t.Errorf("expected line to match, got unmatched: %s", line)
-		}
-		if result.PatternID == "" {
-			t.Error("expected non-empty PatternID")
-		}
-		if _, err := uuid.Parse(result.PatternID); err != nil {
-			t.Errorf("expected PatternID to be a valid UUID, got %q: %v", result.PatternID, err)
-		}
-		if result.Pattern == "" {
-			t.Error("expected non-empty Pattern")
-		}
-		patternIDs[line] = result.PatternID
+	if err := p.Feed(lines); err != nil {
+		t.Fatalf("Feed: %v", err)
 	}
 
-	// Verify stability: re-parsing the same line yields the same PatternID
-	for _, line := range lines {
-		result := p.Parse(line)
-		if result.PatternID != patternIDs[line] {
-			t.Errorf("unstable PatternID for %q: first=%s, second=%s", line, patternIDs[line], result.PatternID)
-		}
+	templates, err := p.Templates()
+	if err != nil {
+		t.Fatalf("Templates: %v", err)
 	}
 
-	templates := p.Templates()
 	if len(templates) == 0 {
 		t.Fatal("expected at least one template after feeding lines")
 	}
@@ -60,6 +42,18 @@ func TestDrainParser_Parse(t *testing.T) {
 		if _, err := uuid.Parse(tmpl.ID); err != nil {
 			t.Errorf("expected template ID to be a valid UUID, got %q: %v", tmpl.ID, err)
 		}
+		if tmpl.Count <= 0 {
+			t.Errorf("expected positive Count, got %d for template %s", tmpl.Count, tmpl.ID)
+		}
+	}
+
+	// Verify total count across templates matches input lines
+	totalCount := 0
+	for _, tmpl := range templates {
+		totalCount += tmpl.Count
+	}
+	if totalCount != len(lines) {
+		t.Errorf("expected total count %d, got %d", len(lines), totalCount)
 	}
 }
 
@@ -69,8 +63,42 @@ func TestDrainParser_EmptyInput(t *testing.T) {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
 
-	templates := p.Templates()
+	templates, err := p.Templates()
+	if err != nil {
+		t.Fatalf("Templates: %v", err)
+	}
 	if len(templates) != 0 {
 		t.Errorf("expected 0 templates before any input, got %d", len(templates))
+	}
+}
+
+func TestMatchTemplate(t *testing.T) {
+	templates := []DrainCluster{
+		{ID: "1", Pattern: "INFO server started on port <*>"},
+		{ID: "2", Pattern: "ERROR connection <*> to <*>"},
+	}
+
+	// Should match first template
+	matched, ok := MatchTemplate("INFO server started on port 8080", templates)
+	if !ok {
+		t.Fatal("expected match for server started line")
+	}
+	if matched.ID != "1" {
+		t.Errorf("expected template 1, got %s", matched.ID)
+	}
+
+	// Should match second template
+	matched, ok = MatchTemplate("ERROR connection lost to db-host", templates)
+	if !ok {
+		t.Fatal("expected match for error line")
+	}
+	if matched.ID != "2" {
+		t.Errorf("expected template 2, got %s", matched.ID)
+	}
+
+	// Should not match
+	_, ok = MatchTemplate("DEBUG something else entirely", templates)
+	if ok {
+		t.Error("expected no match for unrelated line")
 	}
 }

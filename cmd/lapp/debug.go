@@ -68,13 +68,21 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	chain, err := buildParserChain()
+	drainParser, err := parser.NewDrainParser()
 	if err != nil {
-		return err
+		return errors.Errorf("drain parser: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Parsing %d entries...\n", len(mergedLines))
-	if err := analyzer.BuildWorkspace(outDir, mergedLines, chain); err != nil {
+	if err := drainParser.Feed(mergedLines); err != nil {
+		return errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		return errors.Errorf("drain templates: %w", err)
+	}
+
+	if err := analyzer.BuildWorkspace(outDir, mergedLines, templates); err != nil {
 		return errors.Errorf("build workspace: %w", err)
 	}
 
@@ -129,16 +137,4 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(result)
 	return nil
-}
-
-// buildParserChain creates a JSON → Drain parser chain for workspace analysis.
-func buildParserChain() (*parser.ChainParser, error) {
-	drainParser, err := parser.NewDrainParser()
-	if err != nil {
-		return nil, errors.Errorf("drain parser: %w", err)
-	}
-	return parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	), nil
 }

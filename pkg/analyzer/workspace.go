@@ -18,32 +18,27 @@ var agentsMD []byte
 
 var errorPattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
 
-type lineResult struct {
-	raw       string
-	patternID string
-}
-
 // BuildWorkspace creates pre-processed analysis files in the given directory.
-func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error {
+func BuildWorkspace(dir string, lines []string, templates []parser.DrainCluster) error {
 	if err := writeRawLog(dir, lines); err != nil {
 		return errors.Errorf("write raw.log: %w", err)
 	}
 
-	// Parse all lines to discover templates
-	var results []lineResult
+	// Match each line against discovered templates
+	var matches []lineMatch
 	for _, line := range lines {
-		r := chain.Parse(line)
-		results = append(results, lineResult{
-			raw:       line,
-			patternID: r.PatternID,
-		})
+		t, ok := parser.MatchTemplate(line, templates)
+		id := ""
+		if ok {
+			id = t.ID
+		}
+		matches = append(matches, lineMatch{raw: line, templateID: id})
 	}
 
-	templates := chain.Templates()
-	if err := writeSummary(dir, templates, results); err != nil {
+	if err := writeSummary(dir, templates, matches); err != nil {
 		return errors.Errorf("write summary.txt: %w", err)
 	}
-	if err := writeErrors(dir, templates, results); err != nil {
+	if err := writeErrors(dir, templates, matches); err != nil {
 		return errors.Errorf("write errors.txt: %w", err)
 	}
 	if err := writeAgentsMD(dir); err != nil {
@@ -64,7 +59,12 @@ func writeRawLog(dir string, lines []string) error {
 	)
 }
 
-func writeSummary(dir string, templates []parser.Template, results []lineResult) error {
+type lineMatch struct {
+	raw        string
+	templateID string
+}
+
+func writeSummary(dir string, templates []parser.DrainCluster, matches []lineMatch) error {
 	// Count occurrences and collect samples per template
 	type templateStats struct {
 		id      string
@@ -81,17 +81,17 @@ func writeSummary(dir string, templates []parser.Template, results []lineResult)
 		}
 	}
 
-	for _, r := range results {
-		if r.patternID == "" {
+	for _, m := range matches {
+		if m.templateID == "" {
 			continue
 		}
-		s, ok := statsMap[r.patternID]
+		s, ok := statsMap[m.templateID]
 		if !ok {
 			continue
 		}
 		s.count++
 		if len(s.samples) < 3 {
-			s.samples = append(s.samples, r.raw)
+			s.samples = append(s.samples, m.raw)
 		}
 	}
 
@@ -117,7 +117,7 @@ func writeSummary(dir string, templates []parser.Template, results []lineResult)
 	return os.WriteFile(filepath.Join(dir, "summary.txt"), []byte(buf.String()), 0o644)
 }
 
-func writeErrors(dir string, templates []parser.Template, results []lineResult) error {
+func writeErrors(dir string, templates []parser.DrainCluster, matches []lineMatch) error {
 	// Find templates that match error patterns
 	errorTemplates := make(map[string]bool)
 	for _, t := range templates {
@@ -129,10 +129,10 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 	var buf strings.Builder
 	buf.WriteString("# Error and Warning Patterns\n\n")
 
-	hasContent := writeErrorTemplates(&buf, templates, errorTemplates, results)
+	hasContent := writeErrorTemplates(&buf, templates, errorTemplates, matches)
 
 	// Lines with error keywords but no template match
-	unmatchedErrors := collectUnmatchedErrors(results, 50)
+	unmatchedErrors := collectUnmatchedErrors(matches, 50)
 	if len(unmatchedErrors) > 0 {
 		hasContent = true
 		buf.WriteString("## Unmatched Error Lines\n\n")
@@ -148,7 +148,7 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 	return os.WriteFile(filepath.Join(dir, "errors.txt"), []byte(buf.String()), 0o644)
 }
 
-func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, errorTemplates map[string]bool, results []lineResult) bool {
+func writeErrorTemplates(buf *strings.Builder, templates []parser.DrainCluster, errorTemplates map[string]bool, matches []lineMatch) bool {
 	hasContent := false
 	for _, t := range templates {
 		if !errorTemplates[t.ID] {
@@ -157,11 +157,11 @@ func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, erro
 		hasContent = true
 		count := 0
 		var samples []string
-		for _, r := range results {
-			if r.patternID == t.ID {
+		for _, m := range matches {
+			if m.templateID == t.ID {
 				count++
 				if len(samples) < 3 {
-					samples = append(samples, r.raw)
+					samples = append(samples, m.raw)
 				}
 			}
 		}
@@ -174,11 +174,11 @@ func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, erro
 	return hasContent
 }
 
-func collectUnmatchedErrors(results []lineResult, limit int) []string {
+func collectUnmatchedErrors(matches []lineMatch, limit int) []string {
 	var errLines []string
-	for _, r := range results {
-		if r.patternID == "" && errorPattern.MatchString(r.raw) {
-			errLines = append(errLines, r.raw)
+	for _, m := range matches {
+		if m.templateID == "" && errorPattern.MatchString(m.raw) {
+			errLines = append(errLines, m.raw)
 			if len(errLines) >= limit {
 				break
 			}

@@ -1,23 +1,40 @@
 package parser
 
-// Template represents a discovered log template.
-type Template struct {
+import "strings"
+
+// DrainCluster represents a discovered log template.
+type DrainCluster struct {
+	// FIXME: also use uuid type here
 	ID      string
 	Pattern string
+	Count   int
 }
 
-// Result holds the outcome of parsing a single log line.
-type Result struct {
-	Matched   bool
-	PatternID string
-	Pattern   string
-	Params    map[string]string
+// MatchTemplate finds the best matching template for a log line by comparing
+// tokens against template patterns (where "<*>" is a wildcard).
+// Returns the matched template and true, or zero-value and false if no match.
+func MatchTemplate(line string, templates []DrainCluster) (DrainCluster, bool) {
+	lineTokens := strings.Fields(line)
+	for _, t := range templates {
+		patTokens := strings.Fields(t.Pattern)
+		if matchTokens(lineTokens, patTokens) {
+			return t, true
+		}
+	}
+	return DrainCluster{}, false
 }
 
-// Parser discovers and matches log templates.
-type Parser interface {
-	// Parse processes a log line and returns the matching result.
-	Parse(content string) Result
-	// Templates returns all discovered templates so far.
-	Templates() []Template
+func matchTokens(lineTokens, patTokens []string) bool {
+	if len(lineTokens) != len(patTokens) {
+		return false
+	}
+	for i, pt := range patTokens {
+		if pt == "<*>" {
+			continue
+		}
+		if pt != lineTokens[i] {
+			return false
+		}
+	}
+	return true
 }

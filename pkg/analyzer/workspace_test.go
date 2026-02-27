@@ -23,11 +23,15 @@ func TestBuildWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
-	chain := parser.NewChainParser(
-		drainParser,
-	)
+	if err := drainParser.Feed(lines); err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		t.Fatalf("Templates: %v", err)
+	}
 
-	err = BuildWorkspace(dir, lines, chain)
+	err = BuildWorkspace(dir, lines, templates)
 	if err != nil {
 		t.Fatalf("BuildWorkspace: %v", err)
 	}
@@ -79,11 +83,15 @@ func TestBuildWorkspace_NoErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
-	chain := parser.NewChainParser(
-		drainParser,
-	)
+	if err := drainParser.Feed(lines); err != nil {
+		t.Fatalf("Feed: %v", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		t.Fatalf("Templates: %v", err)
+	}
 
-	err = BuildWorkspace(dir, lines, chain)
+	err = BuildWorkspace(dir, lines, templates)
 	if err != nil {
 		t.Fatalf("BuildWorkspace: %v", err)
 	}

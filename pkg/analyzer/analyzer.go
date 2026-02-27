@@ -66,18 +66,22 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 		return "", errors.Errorf("resolve temp dir: %w", err)
 	}
 
-	// Build parser chain and workspace
+	// Parse lines with Drain
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		return "", errors.Errorf("drain parser: %w", err)
 	}
-	chain := parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	)
 
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
-	if err := BuildWorkspace(absDir, lines, chain); err != nil {
+	if err := drainParser.Feed(lines); err != nil {
+		return "", errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		return "", errors.Errorf("drain templates: %w", err)
+	}
+
+	if err := BuildWorkspace(absDir, lines, templates); err != nil {
 		return "", errors.Errorf("build workspace: %w", err)
 	}
 

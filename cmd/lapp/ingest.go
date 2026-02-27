@@ -42,21 +42,10 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	merged := multiline.Merge(ch, detector)
 
-	// Only use Drain for pattern discovery.
-	// JSON/Grok parsers were removed because:
-	// - Grok: predefined patterns (SYSLOG, APACHE) match structurally but don't
-	//   produce generalized templates — a single pattern like "SYSLOG" covers all
-	//   syslog lines without distinguishing between different log messages.
-	// - JSON: similar issue — groups by key structure, not by message semantics.
-	// - LLM: stub, not implemented yet.
-	// Drain discovers meaningful patterns by clustering similar lines online.
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		return errors.Errorf("drain parser: %w", err)
 	}
-	chain := parser.NewChainParser(
-		drainParser,
-	)
 
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
@@ -68,73 +57,69 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("store init: %w", err)
 	}
 
-	count, err := ingestLines(ctx, s, merged, chain)
+	lines, err := collectAndStore(ctx, s, merged)
 	if err != nil {
 		return err
 	}
 
-	templates, patternCount, cleared, err := saveDiscoveredPatterns(ctx, s, chain)
+	patterns, templateCount, err := discoverAndSavePatterns(ctx, s, drainParser, lines)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches, %d orphan entries cleared)\n",
-		count, templates, patternCount, cleared)
+	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches)\n",
+		len(lines), templateCount, patterns)
 	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
 	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
 	return nil
 }
 
-func ingestLines(ctx context.Context, s *store.DuckDBStore, merged <-chan multiline.MergeResult, chain *parser.ChainParser) (int, error) {
-	var count int
+func collectAndStore(ctx context.Context, s *store.DuckDBStore, merged <-chan multiline.MergeResult) ([]string, error) {
+	var lines []string
 	var batch []store.LogEntry
 	for rr := range merged {
 		if rr.Err != nil {
-			return 0, errors.Errorf("read log: %w", rr.Err)
+			return nil, errors.Errorf("read log: %w", rr.Err)
 		}
 		ml := rr.Value
-		result := chain.Parse(ml.Content)
-		entry := store.LogEntry{
+		lines = append(lines, ml.Content)
+		batch = append(batch, store.LogEntry{
 			LineNumber:    ml.StartLine,
 			EndLineNumber: ml.EndLine,
 			Timestamp:     time.Now(),
 			Raw:           ml.Content,
-			PatternID:     result.PatternID,
-		}
-		batch = append(batch, entry)
+		})
 
 		if len(batch) >= 500 {
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
-				return 0, errors.Errorf("insert batch: %w", err)
+				return nil, errors.Errorf("insert batch: %w", err)
 			}
 			batch = batch[:0]
 		}
-		count++
 	}
 
 	if len(batch) > 0 {
 		if err := s.InsertLogBatch(ctx, batch); err != nil {
-			return 0, errors.Errorf("insert batch: %w", err)
+			return nil, errors.Errorf("insert batch: %w", err)
 		}
 	}
-	return count, nil
+	return lines, nil
 }
 
-func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *parser.ChainParser) (templateCount, patternCount int, cleared int64, err error) {
-	templates := chain.Templates()
-
-	// Count occurrences per pattern to filter out single-match patterns.
-	// Drain is an online algorithm — a cluster with only 1 log line means
-	// Drain never saw a similar line, so the "pattern" is just the literal
-	// original text with no generalization. Not useful as a pattern.
-	patternCounts, err := s.PatternCounts(ctx)
-	if err != nil {
-		return 0, 0, 0, errors.Errorf("pattern counts: %w", err)
+func discoverAndSavePatterns(ctx context.Context, s *store.DuckDBStore, dp *parser.DrainParser, lines []string) (patternCount, templateCount int, err error) {
+	if err := dp.Feed(lines); err != nil {
+		return 0, 0, errors.Errorf("drain feed: %w", err)
 	}
 
+	templates, err := dp.Templates()
+	if err != nil {
+		return 0, 0, errors.Errorf("drain templates: %w", err)
+	}
+
+	// Filter out single-match patterns (not generalized)
 	var patterns []store.Pattern
 	for _, t := range templates {
-		if patternCounts[t.ID] <= 1 {
+		if t.Count <= 1 {
 			continue
 		}
 		patterns = append(patterns, store.Pattern{
@@ -145,14 +130,9 @@ func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *pa
 	}
 	if len(patterns) > 0 {
 		if err := s.InsertPatterns(ctx, patterns); err != nil {
-			return 0, 0, 0, errors.Errorf("insert patterns: %w", err)
+			return 0, 0, errors.Errorf("insert patterns: %w", err)
 		}
 	}
 
-	cleared, err = s.ClearOrphanPatternIDs(ctx)
-	if err != nil {
-		return 0, 0, 0, errors.Errorf("clear orphan pattern IDs: %w", err)
-	}
-
-	return len(templates), len(patterns), cleared, nil
+	return len(patterns), len(templates), nil
 }
