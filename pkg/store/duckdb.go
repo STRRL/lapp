@@ -189,7 +189,7 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 		`SELECT p.pattern_id, COALESCE(p.raw_pattern, ''), COUNT(*) as cnt,
 		        COALESCE(p.pattern_type, ''), COALESCE(p.semantic_id, ''), COALESCE(p.description, '')
 		 FROM log_entries le
-		 INNER JOIN patterns p ON json_extract_string(le.labels, '$.pattern') = p.semantic_id
+		 INNER JOIN patterns p ON json_extract_string(le.labels, '$.pattern_id') = p.pattern_id
 		 GROUP BY p.pattern_id, p.raw_pattern, p.pattern_type, p.semantic_id, p.description
 		 ORDER BY cnt DESC`,
 	)

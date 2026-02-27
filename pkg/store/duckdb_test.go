@@ -187,12 +187,12 @@ func TestPatternSummaries(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", Labels: map[string]string{"pattern": "pat-a"}},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", Labels: map[string]string{"pattern": "pat-a"}},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", Labels: map[string]string{"pattern": "pat-a"}},
-		{LineNumber: 4, Timestamp: ts, Raw: "line 4", Labels: map[string]string{"pattern": "pat-b"}},
-		{LineNumber: 5, Timestamp: ts, Raw: "line 5", Labels: map[string]string{"pattern": "pat-b"}},
-		{LineNumber: 6, Timestamp: ts, Raw: "line 6", Labels: map[string]string{"pattern": "pat-c"}},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", Labels: map[string]string{"pattern": "pat-a", "pattern_id": "00000000-0000-0000-0000-00000000000a"}},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", Labels: map[string]string{"pattern": "pat-a", "pattern_id": "00000000-0000-0000-0000-00000000000a"}},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", Labels: map[string]string{"pattern": "pat-a", "pattern_id": "00000000-0000-0000-0000-00000000000a"}},
+		{LineNumber: 4, Timestamp: ts, Raw: "line 4", Labels: map[string]string{"pattern": "pat-b", "pattern_id": "00000000-0000-0000-0000-00000000000b"}},
+		{LineNumber: 5, Timestamp: ts, Raw: "line 5", Labels: map[string]string{"pattern": "pat-b", "pattern_id": "00000000-0000-0000-0000-00000000000b"}},
+		{LineNumber: 6, Timestamp: ts, Raw: "line 6", Labels: map[string]string{"pattern": "pat-c", "pattern_id": "00000000-0000-0000-0000-00000000000c"}},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
@@ -257,9 +257,9 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", Labels: map[string]string{"pattern": "server-startup"}},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", Labels: map[string]string{"pattern": "server-startup"}},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", Labels: map[string]string{"pattern": "unmatched"}},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", Labels: map[string]string{"pattern": "server-startup", "pattern_id": "00000000-0000-0000-0000-000000000001"}},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", Labels: map[string]string{"pattern": "server-startup", "pattern_id": "00000000-0000-0000-0000-000000000001"}},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", Labels: map[string]string{"pattern": "unmatched", "pattern_id": "00000000-0000-0000-0000-000000000099"}},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)

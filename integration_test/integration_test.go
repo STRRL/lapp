@@ -2,15 +2,23 @@ package integration_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/strrl/lapp/integration_test/loghub"
 	"github.com/strrl/lapp/pkg/ingestor"
 	"github.com/strrl/lapp/pkg/parser"
 	"github.com/strrl/lapp/pkg/store"
 )
+
+func TestMain(m *testing.M) {
+	// Load .env.test if present (does not override existing env vars)
+	_ = godotenv.Load("../.env.test")
+	os.Exit(m.Run())
+}
 
 var datasets = []string{
 	"Apache",
@@ -77,7 +85,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 					Raw:        entry.Content,
 				}
 				if tpl, ok := parser.MatchTemplate(entry.Content, templates); ok {
-					le.Labels = map[string]string{"pattern": tpl.ID.String()}
+					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
 				}
 				batch[i] = le
 			}
@@ -194,7 +202,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 					Raw:        ll.content,
 				}
 				if tpl, ok := parser.MatchTemplate(ll.content, templates); ok {
-					le.Labels = map[string]string{"pattern": tpl.ID.String()}
+					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
 				}
 				batch[i] = le
 			}

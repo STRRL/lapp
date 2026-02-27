@@ -202,7 +202,10 @@ func storeLogsWithLabels(
 
 		if tpl, ok := parser.MatchTemplate(ml.Content, templates); ok {
 			if sid, found := semanticIDMap[tpl.ID.String()]; found {
-				entry.Labels = map[string]string{"pattern": sid}
+				entry.Labels = map[string]string{
+					"pattern":    sid,
+					"pattern_id": tpl.ID.String(),
+				}
 			}
 		}
 
