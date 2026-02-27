@@ -24,6 +24,10 @@ func runTemplates(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
+	if err := s.Init(); err != nil {
+		return fmt.Errorf("init store: %w", err)
+	}
+
 	q := querier.NewQuerier(s)
 	summaries, err := q.Summary()
 	if err != nil {
