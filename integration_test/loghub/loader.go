@@ -17,7 +17,7 @@ type LogEntry struct {
 // LoadDataset reads a Loghub structured CSV file and returns parsed entries.
 // Column indices are determined dynamically from the header row.
 func LoadDataset(csvPath string) ([]LogEntry, error) {
-	f, err := os.Open(csvPath) //nolint:gosec // G703: path from caller, expected
+	f, err := os.Open(csvPath)
 	if err != nil {
 		return nil, errors.Errorf("open csv: %w", err)
 	}

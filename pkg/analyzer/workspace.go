@@ -53,11 +53,11 @@ func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error
 }
 
 func writeAgentsMD(dir string) error {
-	return os.WriteFile(filepath.Join(dir, "AGENTS.md"), agentsMD, 0o644) //nolint:gosec // G306: workspace files for local analysis
+	return os.WriteFile(filepath.Join(dir, "AGENTS.md"), agentsMD, 0o644)
 }
 
 func writeRawLog(dir string, lines []string) error {
-	return os.WriteFile( //nolint:gosec // G306: workspace files for local analysis
+	return os.WriteFile(
 		filepath.Join(dir, "raw.log"),
 		[]byte(strings.Join(lines, "\n")),
 		0o644,
@@ -114,7 +114,7 @@ func writeSummary(dir string, templates []parser.Template, results []lineResult)
 		buf.WriteString("\n")
 	}
 
-	return os.WriteFile(filepath.Join(dir, "summary.txt"), []byte(buf.String()), 0o644) //nolint:gosec // G306: workspace files for local analysis
+	return os.WriteFile(filepath.Join(dir, "summary.txt"), []byte(buf.String()), 0o644)
 }
 
 func writeErrors(dir string, templates []parser.Template, results []lineResult) error {
@@ -145,7 +145,7 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 		buf.WriteString("No error or warning patterns detected.\n")
 	}
 
-	return os.WriteFile(filepath.Join(dir, "errors.txt"), []byte(buf.String()), 0o644) //nolint:gosec // G306: workspace files for local analysis
+	return os.WriteFile(filepath.Join(dir, "errors.txt"), []byte(buf.String()), 0o644)
 }
 
 func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, errorTemplates map[string]bool, results []lineResult) bool {

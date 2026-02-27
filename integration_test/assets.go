@@ -63,7 +63,7 @@ func outputDir(t *testing.T) string {
 			t.Fatalf("create temp dir: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G703: path from env var, expected
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create output dir: %v", err)
 		}
 	}
@@ -96,7 +96,7 @@ func saveTemplates(t *testing.T, dir string, result templateResult) {
 	if err != nil {
 		t.Fatalf("marshal templates: %v", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // G306: test output files
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write templates: %v", err)
 	}
 	t.Logf("Saved %d templates to %s", result.TemplateCount, path)

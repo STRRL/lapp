@@ -151,7 +151,7 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 	if opts.Limit > 0 {
 		// DuckDB's database/sql driver does not reliably bind LIMIT via placeholder,
 		// so we interpolate the int directly. This is safe as opts.Limit is an int.
-		query += fmt.Sprintf(" LIMIT %d", opts.Limit) //nolint:gosec // G202: safe integer interpolation
+		query += fmt.Sprintf(" LIMIT %d", opts.Limit)
 	}
 
 	rows, err := s.db.QueryContext(ctx, query, args...)

@@ -17,7 +17,6 @@ const maxRun = 10
 var tokenLookup = makeTokenLookup()
 var toUpperLookup = makeToUpperLookup()
 
-//nolint:gosec // G602: false positive, loop is bounded by [256]byte array
 func makeToUpperLookup() [256]byte {
 	var lookup [256]byte
 	for i := range lookup {
@@ -29,7 +28,6 @@ func makeToUpperLookup() [256]byte {
 	return lookup
 }
 
-//nolint:gosec // G602: false positive, loop is bounded by [256]Token array
 func makeTokenLookup() [256]Token {
 	var lookup [256]Token
 
@@ -153,7 +151,6 @@ func (t *tokenizer) tokenize(input []byte) ([]Token, []int) {
 	}
 
 	for i := 1; i < inputLen; i++ {
-		//nolint:gosec // G602: i is bounded by inputLen = len(input)
 		char := input[i]
 		currentToken := tokenLookup[char]
 

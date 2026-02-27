@@ -44,7 +44,6 @@ Be concise and actionable. Focus on what matters.`,
 
 // Config holds configuration for the analyzer.
 type Config struct {
-	//nolint:gosec // G117: config field, not a secret value
 	APIKey string
 	Model  string
 }
@@ -241,7 +240,7 @@ func preflightCheck(ctx context.Context, config Config) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.Errorf("preflight: cannot reach OpenRouter: %w", err)
 	}
