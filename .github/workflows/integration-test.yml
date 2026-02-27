@@ -1,0 +1,36 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Clone Loghub-2.0 dataset
+        run: git clone --depth 1 https://github.com/logpai/Loghub-2.0.git /tmp/Loghub-2.0
+
+      - name: Run integration tests
+        env:
+          LOGHUB_PATH: /tmp/Loghub-2.0/2k_dataset
+          TEMPLATE_OUTPUT_DIR: /tmp/lapp-templates
+        run: go test -v -timeout 15m ./integration_test/
+
+      - name: Upload discovered templates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovered-templates
+          path: /tmp/lapp-templates/
+          retention-days: 14
