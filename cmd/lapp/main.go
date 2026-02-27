@@ -25,6 +25,7 @@ func main() {
 	root.AddCommand(templatesCmd())
 	root.AddCommand(queryCmd())
 	root.AddCommand(analyzeCmd())
+	root.AddCommand(debugCmd())
 
 	if err := root.Execute(); err != nil {
 		os.Exit(1)

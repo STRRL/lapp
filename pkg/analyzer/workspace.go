@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/strrl/lapp/pkg/parser"
 )
+
+//go:embed AGENTS.md
+var agentsMD []byte
 
 var errorPattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
 
@@ -41,7 +45,14 @@ func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error
 	if err := writeErrors(dir, templates, results); err != nil {
 		return fmt.Errorf("write errors.txt: %w", err)
 	}
+	if err := writeAgentsMD(dir); err != nil {
+		return fmt.Errorf("write AGENTS.md: %w", err)
+	}
 	return nil
+}
+
+func writeAgentsMD(dir string) error {
+	return os.WriteFile(filepath.Join(dir, "AGENTS.md"), agentsMD, 0o644)
 }
 
 func writeRawLog(dir string, lines []string) error {

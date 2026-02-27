@@ -18,7 +18,7 @@ import (
 	"github.com/strrl/lapp/pkg/parser"
 )
 
-const defaultModel = "anthropic/claude-sonnet-4.6"
+const defaultModel = "google/gemini-3-flash-preview"
 
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
@@ -48,11 +48,20 @@ type Config struct {
 	Model  string
 }
 
-// Analyze runs the agentic log analysis pipeline.
-func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
-	if config.Model == "" {
-		config.Model = defaultModel
+func resolveModel(model string) string {
+	if model != "" {
+		return model
 	}
+	if env := os.Getenv("MODEL_NAME"); env != "" {
+		return env
+	}
+	return defaultModel
+}
+
+// Analyze runs the full agentic log analysis pipeline:
+// build a workspace, then run the AI agent on it.
+func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
+	config.Model = resolveModel(config.Model)
 
 	// Create temp workspace
 	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
@@ -81,6 +90,18 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
 	if err := BuildWorkspace(absDir, lines, chain); err != nil {
 		return "", fmt.Errorf("build workspace: %w", err)
+	}
+
+	return RunAgent(ctx, config, absDir, question)
+}
+
+// RunAgent runs the AI agent on an existing workspace directory.
+func RunAgent(ctx context.Context, config Config, workDir string, question string) (string, error) {
+	config.Model = resolveModel(config.Model)
+
+	absDir, err := filepath.Abs(workDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve workspace dir: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Analyzing with model %s...\n", config.Model)
