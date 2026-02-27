@@ -12,7 +12,6 @@ import (
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/parser"
 	"github.com/strrl/lapp/pkg/store"
-
 )
 
 func ingestCmd() *cobra.Command {

@@ -43,8 +43,6 @@ go run ./cmd/lapp/ analyze <logfile> [question]
 go run ./cmd/lapp/ debug workspace <logfile> [-o <dir>]
 go run ./cmd/lapp/ debug run <workspace-dir> [question] [--model <model>]
 
-# Read from stdin
-cat logs.txt | go run ./cmd/lapp/ ingest - --db lapp.duckdb
 ```
 
 ## Architecture
