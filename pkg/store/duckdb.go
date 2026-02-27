@@ -24,14 +24,23 @@ func NewDuckDBStore(dsn string) (*DuckDBStore, error) {
 	return &DuckDBStore{db: db}, nil
 }
 
-// Init creates the log_entries and patterns tables if they do not exist,
-// and migrates old schemas from previous versions.
+// Init creates the log_entries and patterns tables if they do not exist.
 func (s *DuckDBStore) Init() error {
-	if err := s.migrateLogEntries(); err != nil {
-		return err
+	_, _ = s.db.Exec(`CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`)
+	_, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS log_entries (
+			id BIGINT DEFAULT nextval('log_entries_id_seq'),
+			line_number INTEGER,
+			timestamp TIMESTAMP,
+			raw VARCHAR,
+			pattern_id VARCHAR
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("create log_entries table: %w", err)
 	}
 
-	_, err := s.db.Exec(`
+	_, err = s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS patterns (
 			pattern_id VARCHAR PRIMARY KEY,
 			pattern_type VARCHAR,
@@ -42,59 +51,6 @@ func (s *DuckDBStore) Init() error {
 	`)
 	if err != nil {
 		return fmt.Errorf("create patterns table: %w", err)
-	}
-
-	return nil
-}
-
-// migrateLogEntries ensures the log_entries table exists with the current schema.
-// If an old table with template_id/template columns exists, it is migrated.
-func (s *DuckDBStore) migrateLogEntries() error {
-	// Check if the table exists at all.
-	var tableExists bool
-	err := s.db.QueryRow(`
-		SELECT COUNT(*) > 0 FROM information_schema.tables
-		WHERE table_name = 'log_entries'
-	`).Scan(&tableExists)
-	if err != nil {
-		return fmt.Errorf("check table existence: %w", err)
-	}
-
-	if !tableExists {
-		_, _ = s.db.Exec(`CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`)
-		_, err := s.db.Exec(`
-			CREATE TABLE log_entries (
-				id BIGINT DEFAULT nextval('log_entries_id_seq'),
-				line_number INTEGER,
-				timestamp TIMESTAMP,
-				raw VARCHAR,
-				pattern_id VARCHAR
-			)
-		`)
-		if err != nil {
-			return fmt.Errorf("create log_entries table: %w", err)
-		}
-		return nil
-	}
-
-	// Table exists — check if it has the old schema (template_id column).
-	var hasOldColumn bool
-	err = s.db.QueryRow(`
-		SELECT COUNT(*) > 0 FROM information_schema.columns
-		WHERE table_name = 'log_entries' AND column_name = 'template_id'
-	`).Scan(&hasOldColumn)
-	if err != nil {
-		return fmt.Errorf("check old schema: %w", err)
-	}
-
-	if hasOldColumn {
-		// Migrate: rename template_id → pattern_id, drop template column.
-		_, err = s.db.Exec(`ALTER TABLE log_entries RENAME COLUMN template_id TO pattern_id`)
-		if err != nil {
-			return fmt.Errorf("rename template_id to pattern_id: %w", err)
-		}
-		// The old schema had a 'template' column — drop it if present.
-		_, _ = s.db.Exec(`ALTER TABLE log_entries DROP COLUMN template`)
 	}
 
 	return nil
