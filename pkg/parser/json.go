@@ -64,10 +64,10 @@ func (p *JSONParser) Parse(content string) Result {
 	}
 
 	return Result{
-		Matched:    true,
-		TemplateID: tid,
-		Template:   tmpl,
-		Params:     params,
+		Matched:   true,
+		PatternID: tid,
+		Pattern:   tmpl,
+		Params:    params,
 	}
 }
 

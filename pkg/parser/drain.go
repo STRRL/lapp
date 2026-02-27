@@ -33,9 +33,9 @@ func (p *DrainParser) Parse(content string) Result {
 	}
 
 	return Result{
-		Matched:    true,
-		TemplateID: fmt.Sprintf("D%d", cluster.ClusterId),
-		Template:   cluster.GetTemplate(),
+		Matched:   true,
+		PatternID: fmt.Sprintf("D%d", cluster.ClusterId),
+		Pattern:   cluster.GetTemplate(),
 	}
 }
 

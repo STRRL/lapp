@@ -15,8 +15,8 @@ func TestGrokParser_Syslog(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected syslog line to match")
 	}
-	if result.TemplateID != "SYSLOG" {
-		t.Errorf("expected template ID 'SYSLOG', got %q", result.TemplateID)
+	if result.PatternID != "SYSLOG" {
+		t.Errorf("expected pattern ID 'SYSLOG', got %q", result.PatternID)
 	}
 	if result.Params["logsource"] != "myhost" {
 		t.Errorf("expected logsource 'myhost', got %q", result.Params["logsource"])

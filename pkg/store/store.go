@@ -8,26 +8,37 @@ type LogEntry struct {
 	LineNumber int
 	Timestamp  time.Time
 	Raw        string
-	TemplateID string
-	Template   string
+	PatternID  string
 }
 
-// TemplateSummary holds a template and its occurrence count.
-type TemplateSummary struct {
-	TemplateID string
-	Template   string
-	Count      int
+// Pattern represents a discovered log pattern with optional semantic labels.
+type Pattern struct {
+	PatternID   string
+	PatternType string
+	RawPattern  string
+	SemanticID  string
+	Description string
+}
+
+// PatternSummary holds a pattern and its occurrence count.
+type PatternSummary struct {
+	PatternID   string
+	Pattern     string
+	Count       int
+	PatternType string
+	SemanticID  string
+	Description string
 }
 
 // QueryOpts specifies filters for querying log entries.
 type QueryOpts struct {
-	TemplateID string
-	From       time.Time
-	To         time.Time
-	Limit      int
+	PatternID string
+	From      time.Time
+	To        time.Time
+	Limit     int
 }
 
-// Store persists log entries and templates.
+// Store persists log entries and patterns.
 type Store interface {
 	// Init creates tables if they don't exist.
 	Init() error
@@ -35,12 +46,18 @@ type Store interface {
 	InsertLog(entry LogEntry) error
 	// InsertLogBatch stores multiple log entries.
 	InsertLogBatch(entries []LogEntry) error
-	// QueryByTemplate returns entries matching a template ID.
-	QueryByTemplate(templateID string) ([]LogEntry, error)
+	// QueryByPattern returns entries matching a pattern ID.
+	QueryByPattern(patternID string) ([]LogEntry, error)
 	// QueryLogs returns entries matching the given options.
 	QueryLogs(opts QueryOpts) ([]LogEntry, error)
-	// TemplateSummaries returns all templates with their counts.
-	TemplateSummaries() ([]TemplateSummary, error)
+	// PatternSummaries returns all patterns with their counts.
+	PatternSummaries() ([]PatternSummary, error)
+	// InsertPatterns upserts patterns into the patterns table.
+	InsertPatterns(patterns []Pattern) error
+	// Patterns returns all patterns.
+	Patterns() ([]Pattern, error)
+	// UpdatePatternLabels updates only semantic_id and description for patterns.
+	UpdatePatternLabels(labels []Pattern) error
 	// Close releases resources.
 	Close() error
 }

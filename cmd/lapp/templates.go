@@ -30,10 +30,43 @@ func runTemplates(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("query: %w", err)
 	}
 
-	fmt.Printf("%-10s %-8s %s\n", "ID", "COUNT", "TEMPLATE")
-	fmt.Println("---------- -------- ----------------------------------------")
+	// Check if any summaries have semantic info
+	hasLabels := false
 	for _, ts := range summaries {
-		fmt.Printf("%-10s %-8d %s\n", ts.TemplateID, ts.Count, ts.Template)
+		if ts.SemanticID != "" {
+			hasLabels = true
+			break
+		}
+	}
+
+	if hasLabels {
+		fmt.Printf("%-12s %-6s %-22s %-6s %s\n", "ID", "TYPE", "SEMANTIC_ID", "COUNT", "DESCRIPTION")
+		fmt.Println("------------ ------ ---------------------- ------ ----------------------------------------")
+		for _, ts := range summaries {
+			semanticID := ts.SemanticID
+			if semanticID == "" {
+				semanticID = "-"
+			}
+			desc := ts.Description
+			if desc == "" {
+				desc = "(not labeled)"
+			}
+			pType := ts.PatternType
+			if pType == "" {
+				pType = "-"
+			}
+			fmt.Printf("%-12s %-6s %-22s %-6d %s\n", ts.PatternID, pType, semanticID, ts.Count, desc)
+		}
+	} else {
+		fmt.Printf("%-12s %-6s %-6s %s\n", "ID", "TYPE", "COUNT", "PATTERN")
+		fmt.Println("------------ ------ ------ ----------------------------------------")
+		for _, ts := range summaries {
+			pType := ts.PatternType
+			if pType == "" {
+				pType = "-"
+			}
+			fmt.Printf("%-12s %-6s %-6d %s\n", ts.PatternID, pType, ts.Count, ts.Pattern)
+		}
 	}
 	return nil
 }

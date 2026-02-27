@@ -20,11 +20,11 @@ func TestDrainParser_Parse(t *testing.T) {
 		if !result.Matched {
 			t.Errorf("expected line to match, got unmatched: %s", line)
 		}
-		if result.TemplateID == "" {
-			t.Error("expected non-empty TemplateID")
+		if result.PatternID == "" {
+			t.Error("expected non-empty PatternID")
 		}
-		if result.Template == "" {
-			t.Error("expected non-empty Template")
+		if result.Pattern == "" {
+			t.Error("expected non-empty Pattern")
 		}
 	}
 

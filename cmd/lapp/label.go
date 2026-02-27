@@ -1,0 +1,112 @@
+package main
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/strrl/lapp/pkg/labeler"
+	"github.com/strrl/lapp/pkg/store"
+)
+
+var labelModel string
+
+func labelCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "label",
+		Short: "Add semantic labels to discovered patterns using an LLM",
+		Long:  "Query the patterns table and use an LLM to generate semantic IDs and descriptions for each pattern.",
+		RunE:  runLabel,
+	}
+	cmd.Flags().StringVar(&labelModel, "model", "", "LLM model to use (default: $MODEL_NAME or google/gemini-3-flash-preview)")
+	return cmd
+}
+
+func runLabel(cmd *cobra.Command, args []string) error {
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+	}
+
+	s, err := store.NewDuckDBStore(dbPath)
+	if err != nil {
+		return fmt.Errorf("store: %w", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	if err := s.Init(); err != nil {
+		return fmt.Errorf("store init: %w", err)
+	}
+
+	patterns, err := s.Patterns()
+	if err != nil {
+		return fmt.Errorf("query patterns: %w", err)
+	}
+
+	if len(patterns) == 0 {
+		fmt.Fprintln(os.Stderr, "No patterns found. Run 'lapp ingest' first.")
+		return nil
+	}
+
+	// Build pattern inputs with sample lines
+	var inputs []labeler.PatternInput
+	for _, p := range patterns {
+		samples, err := sampleLines(s, p.PatternID, 3)
+		if err != nil {
+			return fmt.Errorf("sample lines for %s: %w", p.PatternID, err)
+		}
+		inputs = append(inputs, labeler.PatternInput{
+			PatternID: p.PatternID,
+			Pattern:   p.RawPattern,
+			Samples:   samples,
+		})
+	}
+
+	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
+
+	labels, err := labeler.Label(labeler.Config{
+		APIKey: apiKey,
+		Model:  labelModel,
+	}, inputs)
+	if err != nil {
+		return fmt.Errorf("label: %w", err)
+	}
+
+	// Convert to store.Pattern for update
+	var updates []store.Pattern
+	for _, l := range labels {
+		updates = append(updates, store.Pattern{
+			PatternID:   l.PatternID,
+			SemanticID:  l.SemanticID,
+			Description: l.Description,
+		})
+	}
+
+	if err := s.UpdatePatternLabels(updates); err != nil {
+		return fmt.Errorf("update labels: %w", err)
+	}
+
+	// Print results
+	fmt.Printf("%-12s %-25s %s\n", "ID", "SEMANTIC_ID", "DESCRIPTION")
+	fmt.Println("------------ ------------------------- ----------------------------------------")
+	for _, l := range labels {
+		fmt.Printf("%-12s %-25s %s\n", l.PatternID, l.SemanticID, l.Description)
+	}
+
+	return nil
+}
+
+func sampleLines(s *store.DuckDBStore, patternID string, n int) ([]string, error) {
+	entries, err := s.QueryLogs(store.QueryOpts{
+		PatternID: patternID,
+		Limit:     n,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	for _, e := range entries {
+		lines = append(lines, e.Raw)
+	}
+	return lines, nil
+}

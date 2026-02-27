@@ -15,7 +15,7 @@ func ingestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ingest <logfile>",
 		Short: "Ingest a log file through the parser pipeline into the store",
-		Long:  "Read a log file (or stdin with \"-\"), parse each line through the parser chain (JSON -> Grok -> Drain -> LLM), and store results in DuckDB.",
+		Long:  "Read a log file (or stdin with \"-\"), parse each line through Drain, and store results in DuckDB.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runIngest,
 	}
@@ -30,15 +30,16 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ingest: %w", err)
 	}
 
-	grokParser, err := parser.NewGrokParser()
-	if err != nil {
-		return fmt.Errorf("grok parser: %w", err)
-	}
+	// Only use Drain for pattern discovery.
+	// JSON/Grok parsers were removed because:
+	// - Grok: predefined patterns (SYSLOG, APACHE) match structurally but don't
+	//   produce generalized templates — a single pattern like "SYSLOG" covers all
+	//   syslog lines without distinguishing between different log messages.
+	// - JSON: similar issue — groups by key structure, not by message semantics.
+	// - LLM: stub, not implemented yet.
+	// Drain discovers meaningful patterns by clustering similar lines online.
 	chain := parser.NewChainParser(
-		parser.NewJSONParser(),
-		grokParser,
 		parser.NewDrainParser(),
-		parser.NewLLMParser(),
 	)
 
 	s, err := store.NewDuckDBStore(dbPath)
@@ -59,8 +60,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 			LineNumber: line.LineNumber,
 			Timestamp:  time.Now(),
 			Raw:        line.Content,
-			TemplateID: result.TemplateID,
-			Template:   result.Template,
+			PatternID:  result.PatternID,
 		}
 		batch = append(batch, entry)
 
@@ -79,8 +79,38 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Get final generalized patterns from Drain
 	templates := chain.Templates()
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d templates\n", count, len(templates))
+
+	// Count occurrences per pattern to filter out single-match patterns.
+	// Drain is an online algorithm — a cluster with only 1 log line means
+	// Drain never saw a similar line, so the "pattern" is just the literal
+	// original text with no generalization. Not useful as a pattern.
+	patternCounts, err := s.PatternCounts()
+	if err != nil {
+		return fmt.Errorf("pattern counts: %w", err)
+	}
+
+	var patterns []store.Pattern
+	for _, t := range templates {
+		if patternCounts[t.ID] <= 1 {
+			continue
+		}
+		patterns = append(patterns, store.Pattern{
+			PatternID:   t.ID,
+			PatternType: "drain",
+			RawPattern:  t.Pattern,
+		})
+	}
+	if len(patterns) > 0 {
+		if err := s.InsertPatterns(patterns); err != nil {
+			return fmt.Errorf("insert patterns: %w", err)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches)\n",
+		count, len(templates), len(patterns))
 	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
+	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
 	return nil
 }

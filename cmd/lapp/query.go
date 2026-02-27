@@ -10,21 +10,21 @@ import (
 )
 
 func queryCmd() *cobra.Command {
-	var templateID string
+	var patternID string
 
 	cmd := &cobra.Command{
 		Use:   "query",
-		Short: "Query logs by template",
+		Short: "Query logs by pattern",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQuery(templateID)
+			return runQuery(patternID)
 		},
 	}
-	cmd.Flags().StringVar(&templateID, "template", "", "template ID to filter by (required)")
-	_ = cmd.MarkFlagRequired("template")
+	cmd.Flags().StringVar(&patternID, "pattern", "", "pattern ID to filter by (required)")
+	_ = cmd.MarkFlagRequired("pattern")
 	return cmd
 }
 
-func runQuery(templateID string) error {
+func runQuery(patternID string) error {
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
@@ -32,13 +32,13 @@ func runQuery(templateID string) error {
 	defer func() { _ = s.Close() }()
 
 	q := querier.NewQuerier(s)
-	entries, err := q.ByTemplate(templateID)
+	entries, err := q.ByPattern(patternID)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
 	}
 
 	for _, e := range entries {
-		fmt.Printf("[%s] %s\n", e.TemplateID, e.Raw)
+		fmt.Printf("[%s] %s\n", e.PatternID, e.Raw)
 	}
 	fmt.Fprintf(os.Stderr, "\n%d entries found\n", len(entries))
 	return nil

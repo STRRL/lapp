@@ -18,8 +18,8 @@ var agentsMD []byte
 var errorPattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
 
 type lineResult struct {
-	raw        string
-	templateID string
+	raw       string
+	patternID string
 }
 
 // BuildWorkspace creates pre-processed analysis files in the given directory.
@@ -33,8 +33,8 @@ func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error
 	for _, line := range lines {
 		r := chain.Parse(line)
 		results = append(results, lineResult{
-			raw:        line,
-			templateID: r.TemplateID,
+			raw:       line,
+			patternID: r.PatternID,
 		})
 	}
 
@@ -81,10 +81,10 @@ func writeSummary(dir string, templates []parser.Template, results []lineResult)
 	}
 
 	for _, r := range results {
-		if r.templateID == "" {
+		if r.patternID == "" {
 			continue
 		}
-		s, ok := statsMap[r.templateID]
+		s, ok := statsMap[r.patternID]
 		if !ok {
 			continue
 		}
@@ -139,7 +139,7 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 		count := 0
 		var samples []string
 		for _, r := range results {
-			if r.templateID == t.ID {
+			if r.patternID == t.ID {
 				count++
 				if len(samples) < 3 {
 					samples = append(samples, r.raw)
@@ -156,7 +156,7 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 	// Lines with error keywords but no template match
 	var unmatchedErrors []string
 	for _, r := range results {
-		if r.templateID == "" && errorPattern.MatchString(r.raw) {
+		if r.patternID == "" && errorPattern.MatchString(r.raw) {
 			unmatchedErrors = append(unmatchedErrors, r.raw)
 			if len(unmatchedErrors) >= 50 {
 				break

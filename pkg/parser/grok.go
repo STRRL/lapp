@@ -68,10 +68,10 @@ func (p *GrokParser) Parse(content string) Result {
 		p.mu.Unlock()
 
 		return Result{
-			Matched:    true,
-			TemplateID: pat.id,
-			Template:   pat.id,
-			Params:     fields,
+			Matched:   true,
+			PatternID: pat.id,
+			Pattern:   pat.id,
+			Params:    fields,
 		}
 	}
 	return Result{Matched: false}

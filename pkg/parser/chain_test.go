@@ -15,8 +15,8 @@ func TestChainParser_FirstMatchWins(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match JSON line")
 	}
-	if result.Template != "hello world" {
-		t.Errorf("expected template 'hello world', got %q", result.Template)
+	if result.Pattern != "hello world" {
+		t.Errorf("expected template 'hello world', got %q", result.Pattern)
 	}
 
 	// Non-JSON line should fall through to Drain
@@ -25,8 +25,8 @@ func TestChainParser_FirstMatchWins(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match plain line via Drain")
 	}
-	if result.TemplateID == "" {
-		t.Error("expected non-empty TemplateID from Drain")
+	if result.PatternID == "" {
+		t.Error("expected non-empty PatternID from Drain")
 	}
 }
 
@@ -86,7 +86,7 @@ func TestChainParser_Order(t *testing.T) {
 		t.Fatal("expected chain to match")
 	}
 	// Drain catches everything, so it should match first
-	if result.TemplateID[0] != 'D' {
-		t.Errorf("expected Drain to match first, got template ID %q", result.TemplateID)
+	if result.PatternID[0] != 'D' {
+		t.Errorf("expected Drain to match first, got template ID %q", result.PatternID)
 	}
 }

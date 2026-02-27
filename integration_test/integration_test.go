@@ -58,8 +58,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 					LineNumber: i + 1,
 					Timestamp:  time.Now(),
 					Raw:        entry.Content,
-					TemplateID: result.TemplateID,
-					Template:   result.Template,
+					PatternID:  result.PatternID,
 				})
 			}
 
@@ -79,9 +78,9 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, s := range summaries {
 				tplSummaries[i] = templateSummary{
-					TemplateID: s.TemplateID,
-					Template:   s.Template,
-					Count:      s.Count,
+					PatternID: s.PatternID,
+					Pattern:   s.Pattern,
+					Count:     s.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -101,12 +100,12 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByTemplate(first.TemplateID)
+			matched, err := q.ByPattern(first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}
 			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.TemplateID)
+				t.Fatalf("expected entries for template %s, got none", first.PatternID)
 			}
 			if len(matched) < first.Count {
 				t.Fatalf("query returned %d entries, expected at least %d", len(matched), first.Count)
@@ -141,8 +140,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 					LineNumber: line.LineNumber,
 					Timestamp:  time.Now(),
 					Raw:        line.Content,
-					TemplateID: result.TemplateID,
-					Template:   result.Template,
+					PatternID:  result.PatternID,
 				})
 			}
 
@@ -167,9 +165,9 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, s := range summaries {
 				tplSummaries[i] = templateSummary{
-					TemplateID: s.TemplateID,
-					Template:   s.Template,
-					Count:      s.Count,
+					PatternID: s.PatternID,
+					Pattern:   s.Pattern,
+					Count:     s.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -198,12 +196,12 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByTemplate(first.TemplateID)
+			matched, err := q.ByPattern(first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}
 			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.TemplateID)
+				t.Fatalf("expected entries for template %s, got none", first.PatternID)
 			}
 		})
 	}
