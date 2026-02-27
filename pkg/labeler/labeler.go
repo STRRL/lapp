@@ -165,7 +165,7 @@ func parseResponse(content string) ([]SemanticLabel, error) {
 		// Remove first and last lines (code fences)
 		if len(lines) >= 2 {
 			lines = lines[1 : len(lines)-1]
-			if strings.HasPrefix(lines[len(lines)-1], "```") {
+			if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], "```") {
 				lines = lines[:len(lines)-1]
 			}
 		}
