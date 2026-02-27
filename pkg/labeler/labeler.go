@@ -29,7 +29,7 @@ type PatternInput struct {
 
 // SemanticLabel is the LLM-generated label for a pattern.
 type SemanticLabel struct {
-	PatternID   string `json:"template_id"`
+	PatternID   string `json:"pattern_id"`
 	SemanticID  string `json:"semantic_id"`
 	Description string `json:"description"`
 }
@@ -71,7 +71,7 @@ func buildPrompt(patterns []PatternInput) string {
 	b.WriteString(`You are a log analysis expert. Given the following log patterns and sample lines, generate a short semantic_id (kebab-case, max 30 chars) and a one-line description for each.
 
 Output ONLY a JSON array with no markdown formatting, like:
-[{"template_id": "D1", "semantic_id": "server-startup", "description": "Server process starting on a specific port"}]
+[{"pattern_id": "D1", "semantic_id": "server-startup", "description": "Server process starting on a specific port"}]
 
 Patterns:
 `)

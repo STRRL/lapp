@@ -37,21 +37,21 @@ func TestParseResponse(t *testing.T) {
 	}{
 		{
 			name:  "plain JSON array",
-			input: `[{"template_id":"D1","semantic_id":"server-startup","description":"Server starting on a port"}]`,
+			input: `[{"pattern_id":"D1","semantic_id":"server-startup","description":"Server starting on a port"}]`,
 			want:  1,
 		},
 		{
 			name: "with markdown code fences",
 			input: "```json\n" +
-				`[{"template_id":"D1","semantic_id":"server-startup","description":"Server starting"}]` +
+				`[{"pattern_id":"D1","semantic_id":"server-startup","description":"Server starting"}]` +
 				"\n```",
 			want: 1,
 		},
 		{
 			name: "multiple labels",
 			input: `[
-				{"template_id":"D1","semantic_id":"server-startup","description":"Server starting"},
-				{"template_id":"D2","semantic_id":"conn-timeout","description":"Connection timeout"}
+				{"pattern_id":"D1","semantic_id":"server-startup","description":"Server starting"},
+				{"pattern_id":"D2","semantic_id":"conn-timeout","description":"Connection timeout"}
 			]`,
 			want: 2,
 		},
