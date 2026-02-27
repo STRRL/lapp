@@ -1,4 +1,4 @@
-package analyzer
+package workspace_test
 
 import (
 	"os"
@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	"github.com/strrl/lapp/pkg/parser"
 )
 
-func TestBuildWorkspace(t *testing.T) {
+func TestBuildAll(t *testing.T) {
 	lines := []string{
 		`081109 204655 148 INFO dfs.DataNode$DataXceiver: Receiving block blk_-1608999687919862906 src: /10.251.73.220:42557 dest: /10.251.73.220:50010`,
 		`081109 204655 148 INFO dfs.DataNode$DataXceiver: Receiving block blk_-1608999687919862906 src: /10.251.73.220:42558 dest: /10.251.73.220:50010`,
@@ -31,9 +32,9 @@ func TestBuildWorkspace(t *testing.T) {
 		t.Fatalf("Templates: %v", err)
 	}
 
-	err = BuildWorkspace(dir, lines, templates)
-	if err != nil {
-		t.Fatalf("BuildWorkspace: %v", err)
+	b := workspace.NewBuilder(dir, lines, templates)
+	if err := b.BuildAll(); err != nil {
+		t.Fatalf("BuildAll: %v", err)
 	}
 
 	// Check raw.log exists and has all lines
@@ -72,7 +73,7 @@ func TestBuildWorkspace(t *testing.T) {
 	}
 }
 
-func TestBuildWorkspace_NoErrors(t *testing.T) {
+func TestBuildAll_NoErrors(t *testing.T) {
 	lines := []string{
 		`INFO server started`,
 		`INFO request handled`,
@@ -91,9 +92,9 @@ func TestBuildWorkspace_NoErrors(t *testing.T) {
 		t.Fatalf("Templates: %v", err)
 	}
 
-	err = BuildWorkspace(dir, lines, templates)
-	if err != nil {
-		t.Fatalf("BuildWorkspace: %v", err)
+	b := workspace.NewBuilder(dir, lines, templates)
+	if err := b.BuildAll(); err != nil {
+		t.Fatalf("BuildAll: %v", err)
 	}
 
 	errorsData, err := os.ReadFile(filepath.Join(dir, "errors.txt"))

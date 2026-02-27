@@ -7,6 +7,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/parser"
 )
@@ -82,7 +83,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("drain templates: %w", err)
 	}
 
-	if err := analyzer.BuildWorkspace(outDir, mergedLines, templates); err != nil {
+	if err := workspace.NewBuilder(outDir, mergedLines, templates).BuildAll(); err != nil {
 		return errors.Errorf("build workspace: %w", err)
 	}
 

@@ -1,0 +1,16 @@
+# Error and Warning Patterns
+
+{{range .ErrorTemplates -}}
+[{{.ID}}] "{{.Pattern}}" — {{.Count}} occurrences
+{{range $i, $s := .Samples}}  sample {{add $i 1}}: {{$s}}
+{{end}}
+{{end -}}
+{{if .UnmatchedErrors -}}
+## Unmatched Error Lines
+
+{{range .UnmatchedErrors}}  {{.}}
+{{end}}
+{{end -}}
+{{if not .HasContent -}}
+No error or warning patterns detected.
+{{end -}}

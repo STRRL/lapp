@@ -16,6 +16,7 @@ import (
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/go-errors/errors"
+	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/parser"
 )
@@ -81,7 +82,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 		return "", errors.Errorf("drain templates: %w", err)
 	}
 
-	if err := BuildWorkspace(absDir, lines, templates); err != nil {
+	if err := workspace.NewBuilder(absDir, lines, templates).BuildAll(); err != nil {
 		return "", errors.Errorf("build workspace: %w", err)
 	}
 

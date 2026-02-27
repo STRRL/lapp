@@ -9,9 +9,9 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/ingestor"
-	"github.com/strrl/lapp/pkg/labeler"
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -79,7 +79,7 @@ func runIngest(cmd *cobra.Command, args []string, model string) error {
 	}
 
 	// Discover patterns, label them, and save to patterns table
-	semanticIDMap, patternCount, templateCount, err := discoverAndSavePatterns(ctx, s, drainParser, lines, labeler.Config{
+	semanticIDMap, patternCount, templateCount, err := discoverAndSavePatterns(ctx, s, drainParser, lines, semantic.Config{
 		APIKey: apiKey,
 		Model:  model,
 	})
@@ -119,7 +119,7 @@ func discoverAndSavePatterns(
 	s *store.DuckDBStore,
 	dp *parser.DrainParser,
 	lines []string,
-	labelCfg labeler.Config,
+	labelCfg semantic.Config,
 ) (semanticIDMap map[string]string, patternCount, templateCount int, err error) {
 	if err := dp.Feed(lines); err != nil {
 		return nil, 0, 0, errors.Errorf("drain feed: %w", err)
@@ -150,13 +150,13 @@ func discoverAndSavePatterns(
 
 	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
 
-	labels, err := labeler.Label(ctx, labelCfg, inputs)
+	labels, err := semantic.Label(ctx, labelCfg, inputs)
 	if err != nil {
 		return nil, 0, 0, errors.Errorf("label: %w", err)
 	}
 
 	// Index labels by pattern UUID for lookup
-	labelMap := make(map[string]labeler.SemanticLabel, len(labels))
+	labelMap := make(map[string]semantic.SemanticLabel, len(labels))
 	for _, l := range labels {
 		labelMap[l.PatternUUIDString] = l
 	}
@@ -224,8 +224,8 @@ func storeLogsWithLabels(
 	return nil
 }
 
-func buildLabelInputs(templates []parser.DrainCluster, lines []string) []labeler.PatternInput {
-	var inputs []labeler.PatternInput
+func buildLabelInputs(templates []parser.DrainCluster, lines []string) []semantic.PatternInput {
+	var inputs []semantic.PatternInput
 	for _, t := range templates {
 		var samples []string
 		for _, line := range lines {
@@ -236,7 +236,7 @@ func buildLabelInputs(templates []parser.DrainCluster, lines []string) []labeler
 				}
 			}
 		}
-		inputs = append(inputs, labeler.PatternInput{
+		inputs = append(inputs, semantic.PatternInput{
 			PatternUUIDString: t.ID.String(),
 			Pattern:           t.Pattern,
 			Samples:           samples,

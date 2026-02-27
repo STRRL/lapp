@@ -1,4 +1,4 @@
-package labeler
+package semantic
 
 import (
 	"context"
