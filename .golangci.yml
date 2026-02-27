@@ -67,6 +67,11 @@ linters:
       - linters:
           - revive
         text: "var-naming.*package names"
+      - linters:
+          - gocritic
+          - gocyclo
+          - exhaustive
+        path: pkg/multiline/
     paths:
       - vendor
       - third_party$

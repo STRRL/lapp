@@ -15,7 +15,6 @@ import (
 
 // Config holds configuration for the labeler.
 type Config struct {
-	//nolint:gosec // G117: config field, not a secret value
 	APIKey     string
 	Model      string
 	HTTPClient *http.Client
