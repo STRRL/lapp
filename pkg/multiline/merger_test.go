@@ -134,3 +134,78 @@ func TestMergeSliceMaxEntryBytes(t *testing.T) {
 		t.Fatalf("expected at least 2 entries due to max entry bytes, got %d", len(merged))
 	}
 }
+
+func TestMergeSliceNoTimestamp(t *testing.T) {
+	// Lines with no recognizable timestamps should pass through one per entry
+	lines := []string{
+		"plain log line one",
+		"plain log line two",
+		"plain log line three",
+	}
+
+	d, err := NewDetector(DetectorConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	merged := MergeSlice(lines, d)
+	if len(merged) != 3 {
+		t.Fatalf("expected 3 entries for non-timestamp logs, got %d", len(merged))
+	}
+	for i, m := range merged {
+		if m.StartLine != m.EndLine {
+			t.Errorf("entry %d: expected single-line, got %d-%d", i, m.StartLine, m.EndLine)
+		}
+	}
+}
+
+func TestMergeChannelNoTimestamp(t *testing.T) {
+	d, err := NewDetector(DetectorConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch := make(chan ingestor.Result[*ingestor.LogLine], 10)
+	for i, s := range []string{"foo", "bar", "baz"} {
+		ch <- ingestor.Result[*ingestor.LogLine]{Value: &ingestor.LogLine{LineNumber: i + 1, Content: s}}
+	}
+	close(ch)
+
+	var results []MergedLine
+	for m := range Merge(ch, d) {
+		if m.Err != nil {
+			t.Fatalf("unexpected error: %v", m.Err)
+		}
+		results = append(results, *m.Value)
+	}
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 entries for non-timestamp logs, got %d", len(results))
+	}
+}
+
+func TestMergeSliceOverflowLineRange(t *testing.T) {
+	d, err := NewDetector(DetectorConfig{
+		MaxEntryBytes: 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lines := []string{
+		"2024-03-28 13:45:30 INFO started",
+		"continuation that pushes over the byte limit for this entry easily",
+		"2024-03-28 13:45:31 INFO next entry",
+	}
+
+	merged := MergeSlice(lines, d)
+
+	// Verify no overlapping line ranges
+	for i := 1; i < len(merged); i++ {
+		if merged[i].StartLine <= merged[i-1].EndLine {
+			t.Errorf("entries %d and %d have overlapping line ranges: %d-%d vs %d-%d",
+				i-1, i, merged[i-1].StartLine, merged[i-1].EndLine,
+				merged[i].StartLine, merged[i].EndLine)
+		}
+	}
+}
