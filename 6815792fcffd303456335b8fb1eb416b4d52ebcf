@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.5",
+  "base_commit_sha": "6815792fcffd303456335b8fb1eb416b4d52ebcf",
+  "prompts": {
+    "d5a2a955b1795a35": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9cc2584e-ffbf-4080-93cb-7191301b6319",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 2,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
