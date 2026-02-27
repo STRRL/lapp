@@ -164,7 +164,7 @@ func (s *DuckDBStore) PatternSummaries() ([]PatternSummary, error) {
 		`SELECT le.pattern_id, COALESCE(p.raw_pattern, ''), COUNT(*) as cnt,
 		        COALESCE(p.pattern_type, ''), COALESCE(p.semantic_id, ''), COALESCE(p.description, '')
 		 FROM log_entries le
-		 LEFT JOIN patterns p ON le.pattern_id = p.pattern_id
+		 INNER JOIN patterns p ON le.pattern_id = p.pattern_id
 		 GROUP BY le.pattern_id, p.raw_pattern, p.pattern_type, p.semantic_id, p.description
 		 ORDER BY cnt DESC`,
 	)

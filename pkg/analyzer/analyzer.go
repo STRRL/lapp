@@ -15,10 +15,9 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/parser"
 )
-
-const defaultModel = "google/gemini-3-flash-preview"
 
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
@@ -48,20 +47,10 @@ type Config struct {
 	Model  string
 }
 
-func resolveModel(model string) string {
-	if model != "" {
-		return model
-	}
-	if env := os.Getenv("MODEL_NAME"); env != "" {
-		return env
-	}
-	return defaultModel
-}
-
 // Analyze runs the full agentic log analysis pipeline:
 // build a workspace, then run the AI agent on it.
 func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
-	config.Model = resolveModel(config.Model)
+	config.Model = llmconfig.ResolveModel(config.Model)
 
 	// Create temp workspace
 	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
@@ -101,7 +90,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 
 // RunAgent runs the AI agent on an existing workspace directory.
 func RunAgent(ctx context.Context, config Config, workDir string, question string) (string, error) {
-	config.Model = resolveModel(config.Model)
+	config.Model = llmconfig.ResolveModel(config.Model)
 
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {

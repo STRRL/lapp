@@ -3,6 +3,8 @@ package labeler
 import (
 	"strings"
 	"testing"
+
+	llmconfig "github.com/strrl/lapp/pkg/config"
 )
 
 func TestBuildPrompt(t *testing.T) {
@@ -95,28 +97,28 @@ func TestParseResponse(t *testing.T) {
 
 func TestResolveModel(t *testing.T) {
 	// Explicit model takes priority
-	got := resolveModel("my-model")
+	got := llmconfig.ResolveModel("my-model")
 	if got != "my-model" {
 		t.Errorf("got %q, want %q", got, "my-model")
 	}
 
 	// MODEL_NAME env var takes priority over default
 	t.Setenv("MODEL_NAME", "env-model")
-	got = resolveModel("")
+	got = llmconfig.ResolveModel("")
 	if got != "env-model" {
 		t.Errorf("got %q, want %q", got, "env-model")
 	}
 
 	// Explicit model still wins over env var
-	got = resolveModel("explicit")
+	got = llmconfig.ResolveModel("explicit")
 	if got != "explicit" {
 		t.Errorf("got %q, want %q", got, "explicit")
 	}
 
 	// Falls back to default when env is unset
 	t.Setenv("MODEL_NAME", "")
-	got = resolveModel("")
-	if got != defaultModel {
-		t.Errorf("got %q, want %q", got, defaultModel)
+	got = llmconfig.ResolveModel("")
+	if got != llmconfig.DefaultModel {
+		t.Errorf("got %q, want %q", got, llmconfig.DefaultModel)
 	}
 }

@@ -171,6 +171,15 @@ func TestQueryLogs(t *testing.T) {
 func TestPatternSummaries(t *testing.T) {
 	s := newTestStore(t)
 
+	patterns := []Pattern{
+		{PatternID: "a", PatternType: "drain", RawPattern: "pattern a"},
+		{PatternID: "b", PatternType: "drain", RawPattern: "pattern b"},
+		{PatternID: "c", PatternType: "drain", RawPattern: "pattern c"},
+	}
+	if err := s.InsertPatterns(patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
+
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
 		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternID: "a"},
@@ -284,12 +293,12 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PatternSummaries: %v", err)
 	}
-	if len(summaries) != 2 {
-		t.Fatalf("expected 2 summaries, got %d", len(summaries))
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 summary (only persisted patterns), got %d", len(summaries))
 	}
 
 	if summaries[0].PatternID != "D1" {
-		t.Fatalf("expected D1 first (higher count), got %s", summaries[0].PatternID)
+		t.Fatalf("expected D1 first, got %s", summaries[0].PatternID)
 	}
 	if summaries[0].PatternType != "drain" {
 		t.Errorf("D1 PatternType: got %q, want %q", summaries[0].PatternType, "drain")
@@ -300,10 +309,8 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 	if summaries[0].Pattern != "Starting <*> on port <*>" {
 		t.Errorf("D1 Pattern: got %q, want from patterns table", summaries[0].Pattern)
 	}
-
-	// X1 has no matching pattern row
-	if summaries[1].PatternType != "" {
-		t.Errorf("X1 PatternType: got %q, want empty", summaries[1].PatternType)
+	if summaries[0].Count != 2 {
+		t.Errorf("D1 Count: got %d, want 2", summaries[0].Count)
 	}
 }
 

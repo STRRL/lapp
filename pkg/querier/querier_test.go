@@ -18,6 +18,14 @@ func setupQuerier(t *testing.T) *Querier {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	patterns := []store.Pattern{
+		{PatternID: "login", PatternType: "drain", RawPattern: "login user=<*>"},
+		{PatternID: "error", PatternType: "drain", RawPattern: "error <*>"},
+	}
+	if err := s.InsertPatterns(patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
+
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []store.LogEntry{
 		{LineNumber: 1, Timestamp: ts, Raw: "login user=alice", PatternID: "login"},

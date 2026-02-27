@@ -17,21 +17,31 @@ type LogLine struct {
 }
 
 // Ingest reads log lines from a file path.
+// Pass "-" to read from stdin.
 // Cancel the context to stop reading early; the goroutine will exit promptly.
 func Ingest(ctx context.Context, filePath string) (<-chan LogLine, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("open log file: %w", err)
+	var f *os.File
+	if filePath == "-" {
+		f = os.Stdin
+	} else {
+		var err error
+		f, err = os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("open log file: %w", err)
+		}
 	}
 
+	ownFile := filePath != "-"
 	ch := make(chan LogLine, 100)
 	go func() {
 		defer close(ch)
 
 		var fileErr error
 		defer func() {
-			if cerr := f.Close(); cerr != nil {
-				fileErr = errors.Join(fileErr, fmt.Errorf("close log file: %w", cerr))
+			if ownFile {
+				if cerr := f.Close(); cerr != nil {
+					fileErr = errors.Join(fileErr, fmt.Errorf("close log file: %w", cerr))
+				}
 			}
 			if fileErr != nil {
 				select {

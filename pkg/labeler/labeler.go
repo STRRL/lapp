@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
-)
 
-const defaultModel = "google/gemini-3-flash-preview"
+	llmconfig "github.com/strrl/lapp/pkg/config"
+)
 
 // Config holds configuration for the labeler.
 type Config struct {
@@ -35,23 +34,13 @@ type SemanticLabel struct {
 	Description string `json:"description"`
 }
 
-func resolveModel(model string) string {
-	if model != "" {
-		return model
-	}
-	if env := os.Getenv("MODEL_NAME"); env != "" {
-		return env
-	}
-	return defaultModel
-}
-
 // Label sends all patterns to the LLM in a single call and returns semantic labels.
 func Label(ctx context.Context, config Config, patterns []PatternInput) ([]SemanticLabel, error) {
 	if len(patterns) == 0 {
 		return nil, nil
 	}
 
-	config.Model = resolveModel(config.Model)
+	config.Model = llmconfig.ResolveModel(config.Model)
 
 	prompt := buildPrompt(patterns)
 	resp, err := callLLM(ctx, config, prompt)
@@ -71,8 +60,8 @@ func buildPrompt(patterns []PatternInput) string {
 	var b strings.Builder
 	b.WriteString(`You are a log analysis expert. Given the following log patterns and sample lines, generate a short semantic_id (kebab-case, max 30 chars) and a one-line description for each.
 
-Output ONLY a JSON array with no markdown formatting, like:
-[{"pattern_id": "D1", "semantic_id": "server-startup", "description": "Server process starting on a specific port"}]
+Output ONLY a JSON array with no markdown formatting. Use the exact pattern_id values provided below, like:
+[{"pattern_id": "<actual-pattern-id>", "semantic_id": "server-startup", "description": "Server process starting on a specific port"}]
 
 Patterns:
 `)
