@@ -135,7 +135,7 @@ func (b *Builder) WriteSummary() error {
 	})
 
 	var buf bytes.Buffer
-	if err := templates.ExecuteTemplate(&buf, "templates/summary.txt.tmpl", summaryData{Stats: statsList}); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "summary.txt.tmpl", summaryData{Stats: statsList}); err != nil {
 		return errors.Errorf("render summary template: %w", err)
 	}
 
@@ -185,7 +185,7 @@ func (b *Builder) WriteErrors() error {
 		UnmatchedErrors: unmatchedErrors,
 		HasContent:      hasContent,
 	}
-	if err := templates.ExecuteTemplate(&buf, "templates/errors.txt.tmpl", data); err != nil {
+	if err := templates.ExecuteTemplate(&buf, "errors.txt.tmpl", data); err != nil {
 		return errors.Errorf("render errors template: %w", err)
 	}
 
