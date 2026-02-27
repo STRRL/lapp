@@ -21,23 +21,17 @@ func loghubPath(t *testing.T) string {
 	return p
 }
 
-// newChainParser creates a fresh JSON→Grok→Drain→LLM chain parser.
+// newChainParser creates a fresh JSON→Drain chain parser.
 // Each call returns independent state (important because DrainParser is stateful).
 func newChainParser(t *testing.T) *parser.ChainParser {
 	t.Helper()
-	grokParser, err := parser.NewGrokParser()
-	if err != nil {
-		t.Fatalf("create grok parser: %v", err)
-	}
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		t.Fatalf("create drain parser: %v", err)
 	}
 	return parser.NewChainParser(
 		parser.NewJSONParser(),
-		grokParser,
 		drainParser,
-		parser.NewLLMParser(),
 	)
 }
 

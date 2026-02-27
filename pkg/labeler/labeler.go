@@ -1,26 +1,32 @@
 package labeler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/cloudwego/eino-ext/components/model/openrouter"
+	"github.com/cloudwego/eino/schema"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 )
 
 // Config holds configuration for the labeler.
 type Config struct {
-	APIKey     string //nolint:gosec // G117: config field, not a secret value
+	//nolint:gosec // G117: config field, not a secret value
+	APIKey     string
 	Model      string
 	HTTPClient *http.Client
 }
 
-// PatternInput represents a pattern to be labeled.
+// PatternInput represents a log pattern to be labeled.
+//
+// Fields come from the Drain log parsing algorithm:
+//   - PatternID: a UUID assigned to each Drain cluster (group of similar log lines)
+//   - Pattern: the Drain template string where variable tokens are replaced with <*>
+//     Example: "Starting <*> on port <*>"
+//   - Samples: representative raw log lines from this cluster, used as LLM context
 type PatternInput struct {
 	PatternID string
 	Pattern   string
@@ -79,76 +85,23 @@ Patterns:
 	return b.String()
 }
 
-type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-}
-
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-}
-
 func callLLM(ctx context.Context, config Config, prompt string) (string, error) {
-	reqBody := chatRequest{
-		Model: config.Model,
-		Messages: []chatMessage{
-			{Role: "user", Content: prompt},
-		},
-	}
-
-	body, err := json.Marshal(reqBody)
+	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
+		APIKey:     config.APIKey,
+		Model:      config.Model,
+		HTTPClient: config.HTTPClient,
+	})
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return "", fmt.Errorf("create chat model: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
+	resp, err := chatModel.Generate(ctx, []*schema.Message{
+		{Role: schema.User, Content: prompt},
+	})
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+		return "", fmt.Errorf("generate: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-
-	client := config.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
-	if err != nil {
-		return "", fmt.Errorf("HTTP request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var chatResp chatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return "", fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("no choices in response")
-	}
-
-	return chatResp.Choices[0].Message.Content, nil
+	return resp.Content, nil
 }
 
 func parseResponse(content string) ([]SemanticLabel, error) {

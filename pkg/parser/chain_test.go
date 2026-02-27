@@ -36,12 +36,12 @@ func TestChainParser_FirstMatchWins(t *testing.T) {
 }
 
 func TestChainParser_NoMatch(t *testing.T) {
-	lp := NewLLMParser()
-	chain := NewChainParser(lp)
+	// An empty chain should never match.
+	chain := NewChainParser()
 
 	result := chain.Parse("any log line")
 	if result.Matched {
-		t.Error("expected chain with only LLM stub to not match")
+		t.Error("expected empty chain to not match")
 	}
 }
 

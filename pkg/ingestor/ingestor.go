@@ -9,54 +9,68 @@ import (
 )
 
 // LogLine represents a single raw log line read from input.
-// If Err is non-nil, the line signals a read error and Content is empty.
 type LogLine struct {
 	LineNumber int
 	Content    string
-	Err        error
 }
 
-// Ingest reads log lines from a file path.
-// Pass "-" to read from stdin.
+// ReadResult wraps either a successfully read LogLine or a read error,
+// similar to Result<T, E> in Rust.
+type ReadResult struct {
+	Line *LogLine
+	Err  error
+}
+
+// Ingestor reads log lines from a source and streams them as ReadResults.
+type Ingestor interface {
+	Ingest(ctx context.Context) (<-chan ReadResult, error)
+}
+
+// FileIngestor reads log lines from a file path or stdin.
+type FileIngestor struct {
+	Path string
+}
+
+// Ingest reads log lines from the file (or stdin if Path is "-").
 // Cancel the context to stop reading early; the goroutine will exit promptly.
-func Ingest(ctx context.Context, filePath string) (<-chan LogLine, error) {
-	var f *os.File
-	if filePath == "-" {
-		f = os.Stdin
+func (f *FileIngestor) Ingest(ctx context.Context) (<-chan ReadResult, error) {
+	var file *os.File
+	if f.Path == "-" {
+		file = os.Stdin
 	} else {
 		var err error
-		f, err = os.Open(filePath)
+		file, err = os.Open(f.Path)
 		if err != nil {
 			return nil, fmt.Errorf("open log file: %w", err)
 		}
 	}
 
-	ownFile := filePath != "-"
-	ch := make(chan LogLine, 100)
+	ownFile := f.Path != "-"
+	ch := make(chan ReadResult, 100)
 	go func() {
 		defer close(ch)
 
 		var fileErr error
 		defer func() {
 			if ownFile {
-				if cerr := f.Close(); cerr != nil {
+				if cerr := file.Close(); cerr != nil {
 					fileErr = errors.Join(fileErr, fmt.Errorf("close log file: %w", cerr))
 				}
 			}
 			if fileErr != nil {
 				select {
-				case ch <- LogLine{Err: fileErr}:
+				case ch <- ReadResult{Err: fileErr}:
 				case <-ctx.Done():
 				}
 			}
 		}()
 
-		scanner := bufio.NewScanner(f)
+		scanner := bufio.NewScanner(file)
 		lineNum := 0
 		for scanner.Scan() {
 			lineNum++
 			select {
-			case ch <- LogLine{LineNumber: lineNum, Content: scanner.Text()}:
+			case ch <- ReadResult{Line: &LogLine{LineNumber: lineNum, Content: scanner.Text()}}:
 			case <-ctx.Done():
 				return
 			}
@@ -67,4 +81,10 @@ func Ingest(ctx context.Context, filePath string) (<-chan LogLine, error) {
 	}()
 
 	return ch, nil
+}
+
+// Ingest is a convenience function that creates a FileIngestor and reads from it.
+// Pass "-" to read from stdin.
+func Ingest(ctx context.Context, filePath string) (<-chan ReadResult, error) {
+	return (&FileIngestor{Path: filePath}).Ingest(ctx)
 }

@@ -43,7 +43,8 @@ Be concise and actionable. Focus on what matters.`,
 
 // Config holds configuration for the analyzer.
 type Config struct {
-	APIKey string //nolint:gosec // G117: config field, not a secret value
+	//nolint:gosec // G117: config field, not a secret value
+	APIKey string
 	Model  string
 }
 
@@ -66,17 +67,12 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	}
 
 	// Build parser chain and workspace
-	grokParser, err := parser.NewGrokParser()
-	if err != nil {
-		return "", fmt.Errorf("grok parser: %w", err)
-	}
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		return "", fmt.Errorf("drain parser: %w", err)
 	}
 	chain := parser.NewChainParser(
 		parser.NewJSONParser(),
-		grokParser,
 		drainParser,
 	)
 

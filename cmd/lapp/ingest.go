@@ -77,18 +77,18 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.LogLine, chain *parser.ChainParser) (int, error) {
+func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.ReadResult, chain *parser.ChainParser) (int, error) {
 	var count int
 	var batch []store.LogEntry
-	for line := range ch {
-		if line.Err != nil {
-			return 0, fmt.Errorf("read log: %w", line.Err)
+	for rr := range ch {
+		if rr.Err != nil {
+			return 0, fmt.Errorf("read log: %w", rr.Err)
 		}
-		result := chain.Parse(line.Content)
+		result := chain.Parse(rr.Line.Content)
 		entry := store.LogEntry{
-			LineNumber: line.LineNumber,
+			LineNumber: rr.Line.LineNumber,
 			Timestamp:  time.Now(),
-			Raw:        line.Content,
+			Raw:        rr.Line.Content,
 			PatternID:  result.PatternID,
 		}
 		batch = append(batch, entry)
