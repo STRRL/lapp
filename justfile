@@ -9,13 +9,16 @@ build:
 run *args:
     go run ./cmd/lapp/ {{args}}
 
-# Run all unit tests
-test:
-    go test ./...
+# Run unit tests only
+unit-test:
+    go test ./pkg/...
 
-# Run integration test (requires LOGHUB_PATH)
-test-integration:
+# Run integration tests (requires LOGHUB_PATH)
+integration-test:
     go test -v -timeout 15m -count=1 ./integration_test/
+
+# Run all tests (unit + integration)
+test: unit-test integration-test
 
 # Format Go code
 fmt:
@@ -30,7 +33,7 @@ lint:
     golangci-lint run
 
 # Run all CI checks (same as pre-commit)
-ci: fmt vet build lint test
+ci: fmt vet build lint unit-test
 
 # Tidy go modules
 tidy:

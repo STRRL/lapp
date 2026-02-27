@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
 	"github.com/strrl/lapp/pkg/parser"
@@ -41,7 +42,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Reading logs...\n")
 	lines, err := readLines(logFile)
 	if err != nil {
-		return fmt.Errorf("read log file: %w", err)
+		return errors.Errorf("read log file: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "Read %d lines\n", len(lines))
 
@@ -49,11 +50,11 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	if outDir == "" {
 		outDir, err = os.MkdirTemp("", "lapp-workspace-*")
 		if err != nil {
-			return fmt.Errorf("create output dir: %w", err)
+			return errors.Errorf("create output dir: %w", err)
 		}
 	} else {
 		if err := os.MkdirAll(outDir, 0o755); err != nil {
-			return fmt.Errorf("create output dir: %w", err)
+			return errors.Errorf("create output dir: %w", err)
 		}
 	}
 
@@ -64,7 +65,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
 	if err := analyzer.BuildWorkspace(outDir, lines, chain); err != nil {
-		return fmt.Errorf("build workspace: %w", err)
+		return errors.Errorf("build workspace: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Workspace created at: %s\n", outDir)
@@ -91,7 +92,7 @@ Requires OPENROUTER_API_KEY environment variable to be set.`,
 func runDebugRun(cmd *cobra.Command, args []string) error {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+		return errors.Errorf("OPENROUTER_API_KEY environment variable is required")
 	}
 
 	workDir := args[0]
@@ -102,7 +103,7 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 
 	// Verify workspace exists
 	if _, err := os.Stat(workDir); os.IsNotExist(err) {
-		return fmt.Errorf("workspace directory does not exist: %s", workDir)
+		return errors.Errorf("workspace directory does not exist: %s", workDir)
 	}
 
 	config := analyzer.Config{
@@ -120,14 +121,14 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// buildParserChain creates a JSON → Drain parser chain for workspace analysis.
 func buildParserChain() (*parser.ChainParser, error) {
-	grokParser, err := parser.NewGrokParser()
+	drainParser, err := parser.NewDrainParser()
 	if err != nil {
-		return nil, fmt.Errorf("grok parser: %w", err)
+		return nil, errors.Errorf("drain parser: %w", err)
 	}
 	return parser.NewChainParser(
 		parser.NewJSONParser(),
-		grokParser,
-		parser.NewDrainParser(),
+		drainParser,
 	), nil
 }

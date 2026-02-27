@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
@@ -17,23 +18,62 @@ func templatesCmd() *cobra.Command {
 	return cmd
 }
 
-func runTemplates(cmd *cobra.Command, args []string) error {
+func runTemplates(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("store: %w", err)
+		return errors.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
-	q := querier.NewQuerier(s)
-	summaries, err := q.Summary()
-	if err != nil {
-		return fmt.Errorf("query: %w", err)
+	if err := s.Init(ctx); err != nil {
+		return errors.Errorf("init store: %w", err)
 	}
 
-	fmt.Printf("%-10s %-8s %s\n", "ID", "COUNT", "TEMPLATE")
-	fmt.Println("---------- -------- ----------------------------------------")
+	q := querier.NewQuerier(s)
+	summaries, err := q.Summary(ctx)
+	if err != nil {
+		return errors.Errorf("query: %w", err)
+	}
+
+	// Check if any summaries have semantic info
+	hasLabels := false
 	for _, ts := range summaries {
-		fmt.Printf("%-10s %-8d %s\n", ts.TemplateID, ts.Count, ts.Template)
+		if ts.SemanticID != "" {
+			hasLabels = true
+			break
+		}
+	}
+
+	if hasLabels {
+		fmt.Printf("%-12s %-6s %-22s %-6s %s\n", "ID", "TYPE", "SEMANTIC_ID", "COUNT", "DESCRIPTION")
+		fmt.Println("------------ ------ ---------------------- ------ ----------------------------------------")
+		for _, ts := range summaries {
+			semanticID := ts.SemanticID
+			if semanticID == "" {
+				semanticID = "-"
+			}
+			desc := ts.Description
+			if desc == "" {
+				desc = "(not labeled)"
+			}
+			pType := ts.PatternType
+			if pType == "" {
+				pType = "-"
+			}
+			fmt.Printf("%-12s %-6s %-22s %-6d %s\n", ts.PatternID, pType, semanticID, ts.Count, desc)
+		}
+	} else {
+		fmt.Printf("%-12s %-6s %-6s %s\n", "ID", "TYPE", "COUNT", "PATTERN")
+		fmt.Println("------------ ------ ------ ----------------------------------------")
+		for _, ts := range summaries {
+			pType := ts.PatternType
+			if pType == "" {
+				pType = "-"
+			}
+			fmt.Printf("%-12s %-6s %-6d %s\n", ts.PatternID, pType, ts.Count, ts.Pattern)
+		}
 	}
 	return nil
 }

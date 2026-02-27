@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 	for _, ds := range datasets {
 		t.Run(ds, func(t *testing.T) {
 			t.Parallel()
+			ctx := context.Background()
 
 			csvPath := filepath.Join(basePath, ds, ds+"_2k.log_structured_corrected.csv")
 			entries, err := loghub.LoadDataset(csvPath)
@@ -58,17 +60,29 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 					LineNumber: i + 1,
 					Timestamp:  time.Now(),
 					Raw:        entry.Content,
-					TemplateID: result.TemplateID,
-					Template:   result.Template,
+					PatternID:  result.PatternID,
 				})
 			}
 
-			if err := s.InsertLogBatch(batch); err != nil {
+			if err := s.InsertLogBatch(ctx, batch); err != nil {
 				t.Fatalf("insert batch: %v", err)
 			}
 
+			// Insert discovered patterns into the patterns table
+			templates := chain.Templates()
+			patterns := make([]store.Pattern, len(templates))
+			for i, tpl := range templates {
+				patterns[i] = store.Pattern{
+					PatternID:  tpl.ID,
+					RawPattern: tpl.Pattern,
+				}
+			}
+			if err := s.InsertPatterns(ctx, patterns); err != nil {
+				t.Fatalf("insert patterns: %v", err)
+			}
+
 			q := querier.NewQuerier(s)
-			summaries, err := q.Summary()
+			summaries, err := q.Summary(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -79,9 +93,9 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, s := range summaries {
 				tplSummaries[i] = templateSummary{
-					TemplateID: s.TemplateID,
-					Template:   s.Template,
-					Count:      s.Count,
+					PatternID: s.PatternID,
+					Pattern:   s.Pattern,
+					Count:     s.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -101,12 +115,12 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByTemplate(first.TemplateID)
+			matched, err := q.ByPattern(ctx, first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}
 			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.TemplateID)
+				t.Fatalf("expected entries for template %s, got none", first.PatternID)
 			}
 			if len(matched) < first.Count {
 				t.Fatalf("query returned %d entries, expected at least %d", len(matched), first.Count)
@@ -124,9 +138,10 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 	for _, ds := range datasets {
 		t.Run(ds, func(t *testing.T) {
 			t.Parallel()
+			ctx := context.Background()
 
 			logPath := filepath.Join(basePath, ds, ds+"_2k.log")
-			ch, err := ingestor.Ingest(logPath)
+			ch, err := ingestor.Ingest(ctx, logPath)
 			if err != nil {
 				t.Fatalf("ingest: %v", err)
 			}
@@ -135,14 +150,16 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			s := newStore(t)
 
 			var batch []store.LogEntry
-			for line := range ch {
-				result := chain.Parse(line.Content)
+			for rr := range ch {
+				if rr.Err != nil {
+					t.Fatalf("ingest read error: %v", rr.Err)
+				}
+				result := chain.Parse(rr.Value.Content)
 				batch = append(batch, store.LogEntry{
-					LineNumber: line.LineNumber,
+					LineNumber: rr.Value.LineNumber,
 					Timestamp:  time.Now(),
-					Raw:        line.Content,
-					TemplateID: result.TemplateID,
-					Template:   result.Template,
+					Raw:        rr.Value.Content,
+					PatternID:  result.PatternID,
 				})
 			}
 
@@ -150,13 +167,26 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				t.Fatal("expected at least 1 ingested line, got 0")
 			}
 
-			if err := s.InsertLogBatch(batch); err != nil {
+			if err := s.InsertLogBatch(ctx, batch); err != nil {
 				t.Fatalf("insert batch: %v", err)
 			}
 			t.Logf("Ingested and stored %d lines", len(batch))
 
+			// Insert discovered patterns into the patterns table
+			templates := chain.Templates()
+			patterns := make([]store.Pattern, len(templates))
+			for i, tpl := range templates {
+				patterns[i] = store.Pattern{
+					PatternID:  tpl.ID,
+					RawPattern: tpl.Pattern,
+				}
+			}
+			if err := s.InsertPatterns(ctx, patterns); err != nil {
+				t.Fatalf("insert patterns: %v", err)
+			}
+
 			q := querier.NewQuerier(s)
-			summaries, err := q.Summary()
+			summaries, err := q.Summary(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -167,9 +197,9 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, s := range summaries {
 				tplSummaries[i] = templateSummary{
-					TemplateID: s.TemplateID,
-					Template:   s.Template,
-					Count:      s.Count,
+					PatternID: s.PatternID,
+					Pattern:   s.Pattern,
+					Count:     s.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -188,7 +218,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			}
 
 			// Verify total stored entries match ingested count
-			allEntries, err := q.Search(store.QueryOpts{})
+			allEntries, err := q.Search(ctx, store.QueryOpts{})
 			if err != nil {
 				t.Fatalf("search all: %v", err)
 			}
@@ -198,12 +228,12 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByTemplate(first.TemplateID)
+			matched, err := q.ByPattern(ctx, first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}
 			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.TemplateID)
+				t.Fatalf("expected entries for template %s, got none", first.PatternID)
 			}
 		})
 	}

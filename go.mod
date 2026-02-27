@@ -7,10 +7,11 @@ require (
 	github.com/cloudwego/eino-ext/adk/backend/local v0.1.1
 	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2
 	github.com/duckdb/duckdb-go/v2 v2.5.5
+	github.com/go-errors/errors v1.5.1
+	github.com/google/uuid v1.6.0
 	github.com/jaeyo/go-drain3 v0.1.2
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
-	github.com/trivago/grok v1.0.0
 )
 
 require (
@@ -34,7 +35,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -56,7 +56,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
-	github.com/trivago/tgo v1.0.7 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/yargevad/filepathx v1.0.0 // indirect

@@ -19,11 +19,15 @@ func TestBuildWorkspace(t *testing.T) {
 
 	dir := t.TempDir()
 
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := parser.NewChainParser(
-		parser.NewDrainParser(),
+		drainParser,
 	)
 
-	err := BuildWorkspace(dir, lines, chain)
+	err = BuildWorkspace(dir, lines, chain)
 	if err != nil {
 		t.Fatalf("BuildWorkspace: %v", err)
 	}
@@ -71,11 +75,15 @@ func TestBuildWorkspace_NoErrors(t *testing.T) {
 	}
 
 	dir := t.TempDir()
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := parser.NewChainParser(
-		parser.NewDrainParser(),
+		drainParser,
 	)
 
-	err := BuildWorkspace(dir, lines, chain)
+	err = BuildWorkspace(dir, lines, chain)
 	if err != nil {
 		t.Fatalf("BuildWorkspace: %v", err)
 	}

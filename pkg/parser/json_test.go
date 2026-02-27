@@ -12,12 +12,12 @@ func TestJSONParser_ValidJSON(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected JSON line to match")
 	}
-	if result.TemplateID == "" {
-		t.Error("expected non-empty TemplateID")
+	if result.PatternID == "" {
+		t.Error("expected non-empty PatternID")
 	}
 	// Should extract "message" field as template
-	if result.Template != "server started" {
-		t.Errorf("expected template 'server started', got %q", result.Template)
+	if result.Pattern != "server started" {
+		t.Errorf("expected pattern 'server started', got %q", result.Pattern)
 	}
 	if result.Params == nil {
 		t.Fatal("expected non-nil Params")
@@ -35,8 +35,8 @@ func TestJSONParser_MsgField(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected JSON line to match")
 	}
-	if result.Template != "request handled" {
-		t.Errorf("expected template 'request handled', got %q", result.Template)
+	if result.Pattern != "request handled" {
+		t.Errorf("expected pattern 'request handled', got %q", result.Pattern)
 	}
 }
 
@@ -49,8 +49,8 @@ func TestJSONParser_NoMessageField(t *testing.T) {
 		t.Fatal("expected JSON line to match")
 	}
 	// Without message/msg, template should be the key list
-	if result.Template != "cpu, host" {
-		t.Errorf("expected template 'cpu, host', got %q", result.Template)
+	if result.Pattern != "cpu, host" {
+		t.Errorf("expected pattern 'cpu, host', got %q", result.Pattern)
 	}
 }
 

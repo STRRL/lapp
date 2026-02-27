@@ -2,9 +2,10 @@ package ingestor
 
 import (
 	"bufio"
-	"fmt"
-	"io"
+	"context"
 	"os"
+
+	"github.com/go-errors/errors"
 )
 
 // LogLine represents a single raw log line read from input.
@@ -13,37 +14,79 @@ type LogLine struct {
 	Content    string
 }
 
-// Ingest reads log lines from a file path.
-// Use "-" to read from stdin.
-func Ingest(filePath string) (<-chan LogLine, error) {
-	var reader io.Reader
+// Result wraps either a successfully read value or a read error,
+// similar to Result<T, E> in Rust.
+type Result[T any] struct {
+	Value T
+	Err   error
+}
 
-	if filePath == "-" {
-		reader = os.Stdin
+// Ingestor reads log lines from a source and streams them as Results.
+type Ingestor interface {
+	Ingest(ctx context.Context) (<-chan Result[*LogLine], error)
+}
+
+var _ Ingestor = (*FileIngestor)(nil)
+
+// FileIngestor reads log lines from a file path or stdin.
+type FileIngestor struct {
+	Path string
+}
+
+// Ingest reads log lines from the file (or stdin if Path is "-").
+// Cancel the context to stop reading early; the goroutine will exit promptly.
+func (f *FileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], error) {
+	var file *os.File
+	if f.Path == "-" {
+		file = os.Stdin
 	} else {
-		f, err := os.Open(filePath)
+		var err error
+		file, err = os.Open(f.Path)
 		if err != nil {
-			return nil, fmt.Errorf("open log file: %w", err)
+			return nil, errors.Errorf("open log file: %w", err)
 		}
-		reader = f
 	}
 
-	ch := make(chan LogLine, 100)
+	ownFile := f.Path != "-"
+	ch := make(chan Result[*LogLine], 100)
 	go func() {
 		defer close(ch)
-		if closer, ok := reader.(io.Closer); ok && filePath != "-" {
-			defer func() { _ = closer.Close() }()
-		}
-		scanner := bufio.NewScanner(reader)
+
+		var fileErr error
+		defer func() {
+			if ownFile {
+				if cerr := file.Close(); cerr != nil {
+					fileErr = errors.Join(fileErr, errors.Errorf("close log file: %w", cerr))
+				}
+			}
+			if fileErr != nil {
+				select {
+				case ch <- Result[*LogLine]{Err: fileErr}:
+				case <-ctx.Done():
+				}
+			}
+		}()
+
+		scanner := bufio.NewScanner(file)
 		lineNum := 0
 		for scanner.Scan() {
 			lineNum++
-			ch <- LogLine{
-				LineNumber: lineNum,
-				Content:    scanner.Text(),
+			select {
+			case ch <- Result[*LogLine]{Value: &LogLine{LineNumber: lineNum, Content: scanner.Text()}}:
+			case <-ctx.Done():
+				return
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			fileErr = errors.Errorf("read log file: %w", err)
 		}
 	}()
 
 	return ch, nil
+}
+
+// Ingest is a convenience function that creates a FileIngestor and reads from it.
+// Pass "-" to read from stdin.
+func Ingest(ctx context.Context, filePath string) (<-chan Result[*LogLine], error) {
+	return (&FileIngestor{Path: filePath}).Ingest(ctx)
 }

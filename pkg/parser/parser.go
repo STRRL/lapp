@@ -8,10 +8,10 @@ type Template struct {
 
 // Result holds the outcome of parsing a single log line.
 type Result struct {
-	Matched    bool
-	TemplateID string
-	Template   string
-	Params     map[string]string
+	Matched   bool
+	PatternID string
+	Pattern   string
+	Params    map[string]string
 }
 
 // Parser discovers and matches log templates.

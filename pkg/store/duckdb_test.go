@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ func newTestStore(t *testing.T) *DuckDBStore {
 	if err != nil {
 		t.Fatalf("NewDuckDBStore: %v", err)
 	}
-	if err := s.Init(); err != nil {
+	if err := s.Init(context.Background()); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
@@ -39,25 +40,25 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func TestInsertAndQueryByTemplate(t *testing.T) {
+func TestInsertAndQueryByPattern(t *testing.T) {
 	s := newTestStore(t)
+	ctx := context.Background()
 
 	ts := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	entry := LogEntry{
 		LineNumber: 1,
 		Timestamp:  ts,
 		Raw:        "INFO Starting server on port 8080",
-		TemplateID: "tpl-001",
-		Template:   "INFO Starting server on port <*>",
+		PatternID:  "D1",
 	}
 
-	if err := s.InsertLog(entry); err != nil {
+	if err := s.InsertLog(ctx, entry); err != nil {
 		t.Fatalf("InsertLog: %v", err)
 	}
 
-	results, err := s.QueryByTemplate("tpl-001")
+	results, err := s.QueryByPattern(ctx, "D1")
 	if err != nil {
-		t.Fatalf("QueryByTemplate: %v", err)
+		t.Fatalf("QueryByPattern: %v", err)
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
@@ -70,79 +71,78 @@ func TestInsertAndQueryByTemplate(t *testing.T) {
 	if r.Raw != entry.Raw {
 		t.Errorf("Raw: got %q, want %q", r.Raw, entry.Raw)
 	}
-	if r.TemplateID != "tpl-001" {
-		t.Errorf("TemplateID: got %q, want %q", r.TemplateID, "tpl-001")
-	}
-	if r.Template != entry.Template {
-		t.Errorf("Template: got %q, want %q", r.Template, entry.Template)
+	if r.PatternID != "D1" {
+		t.Errorf("PatternID: got %q, want %q", r.PatternID, "D1")
 	}
 
-	// Query non-existent template returns empty
-	empty, err := s.QueryByTemplate("no-such-template")
+	// Query non-existent pattern returns empty
+	empty, err := s.QueryByPattern(ctx, "no-such-pattern")
 	if err != nil {
-		t.Fatalf("QueryByTemplate empty: %v", err)
+		t.Fatalf("QueryByPattern empty: %v", err)
 	}
 	if len(empty) != 0 {
-		t.Errorf("expected 0 results for missing template, got %d", len(empty))
+		t.Errorf("expected 0 results for missing pattern, got %d", len(empty))
 	}
 }
 
 func TestInsertLogBatch(t *testing.T) {
 	s := newTestStore(t)
+	ctx := context.Background()
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 2, Timestamp: ts.Add(time.Second), Raw: "line 2", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 3, Timestamp: ts.Add(2 * time.Second), Raw: "line 3", TemplateID: "b", Template: "tpl b"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternID: "a"},
+		{LineNumber: 2, Timestamp: ts.Add(time.Second), Raw: "line 2", PatternID: "a"},
+		{LineNumber: 3, Timestamp: ts.Add(2 * time.Second), Raw: "line 3", PatternID: "b"},
 	}
 
-	if err := s.InsertLogBatch(entries); err != nil {
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
-	aResults, err := s.QueryByTemplate("a")
+	aResults, err := s.QueryByPattern(ctx, "a")
 	if err != nil {
-		t.Fatalf("QueryByTemplate a: %v", err)
+		t.Fatalf("QueryByPattern a: %v", err)
 	}
 	if len(aResults) != 2 {
-		t.Errorf("expected 2 results for template a, got %d", len(aResults))
+		t.Errorf("expected 2 results for pattern a, got %d", len(aResults))
 	}
 
-	bResults, err := s.QueryByTemplate("b")
+	bResults, err := s.QueryByPattern(ctx, "b")
 	if err != nil {
-		t.Fatalf("QueryByTemplate b: %v", err)
+		t.Fatalf("QueryByPattern b: %v", err)
 	}
 	if len(bResults) != 1 {
-		t.Errorf("expected 1 result for template b, got %d", len(bResults))
+		t.Errorf("expected 1 result for pattern b, got %d", len(bResults))
 	}
 }
 
 func TestQueryLogs(t *testing.T) {
 	s := newTestStore(t)
+	ctx := context.Background()
 
 	base := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: base, Raw: "line 1", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 2, Timestamp: base.Add(time.Minute), Raw: "line 2", TemplateID: "b", Template: "tpl b"},
-		{LineNumber: 3, Timestamp: base.Add(2 * time.Minute), Raw: "line 3", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 4, Timestamp: base.Add(3 * time.Minute), Raw: "line 4", TemplateID: "c", Template: "tpl c"},
+		{LineNumber: 1, Timestamp: base, Raw: "line 1", PatternID: "a"},
+		{LineNumber: 2, Timestamp: base.Add(time.Minute), Raw: "line 2", PatternID: "b"},
+		{LineNumber: 3, Timestamp: base.Add(2 * time.Minute), Raw: "line 3", PatternID: "a"},
+		{LineNumber: 4, Timestamp: base.Add(3 * time.Minute), Raw: "line 4", PatternID: "c"},
 	}
-	if err := s.InsertLogBatch(entries); err != nil {
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
-	// Filter by template
-	results, err := s.QueryLogs(QueryOpts{TemplateID: "a"})
+	// Filter by pattern
+	results, err := s.QueryLogs(ctx, QueryOpts{PatternID: "a"})
 	if err != nil {
-		t.Fatalf("QueryLogs template filter: %v", err)
+		t.Fatalf("QueryLogs pattern filter: %v", err)
 	}
 	if len(results) != 2 {
-		t.Errorf("template filter: expected 2, got %d", len(results))
+		t.Errorf("pattern filter: expected 2, got %d", len(results))
 	}
 
 	// Filter by time range
-	results, err = s.QueryLogs(QueryOpts{
+	results, err = s.QueryLogs(ctx, QueryOpts{
 		From: base.Add(30 * time.Second),
 		To:   base.Add(2*time.Minute + 30*time.Second),
 	})
@@ -154,7 +154,7 @@ func TestQueryLogs(t *testing.T) {
 	}
 
 	// Limit
-	results, err = s.QueryLogs(QueryOpts{Limit: 2})
+	results, err = s.QueryLogs(ctx, QueryOpts{Limit: 2})
 	if err != nil {
 		t.Fatalf("QueryLogs limit: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestQueryLogs(t *testing.T) {
 	}
 
 	// No filters returns all
-	results, err = s.QueryLogs(QueryOpts{})
+	results, err = s.QueryLogs(ctx, QueryOpts{})
 	if err != nil {
 		t.Fatalf("QueryLogs no filter: %v", err)
 	}
@@ -172,38 +172,179 @@ func TestQueryLogs(t *testing.T) {
 	}
 }
 
-func TestTemplateSummaries(t *testing.T) {
+func TestPatternSummaries(t *testing.T) {
 	s := newTestStore(t)
+	ctx := context.Background()
+
+	patterns := []Pattern{
+		{PatternID: "a", PatternType: "drain", RawPattern: "pattern a"},
+		{PatternID: "b", PatternType: "drain", RawPattern: "pattern b"},
+		{PatternID: "c", PatternType: "drain", RawPattern: "pattern c"},
+	}
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", TemplateID: "a", Template: "tpl a"},
-		{LineNumber: 4, Timestamp: ts, Raw: "line 4", TemplateID: "b", Template: "tpl b"},
-		{LineNumber: 5, Timestamp: ts, Raw: "line 5", TemplateID: "b", Template: "tpl b"},
-		{LineNumber: 6, Timestamp: ts, Raw: "line 6", TemplateID: "c", Template: "tpl c"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternID: "a"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternID: "a"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternID: "a"},
+		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternID: "b"},
+		{LineNumber: 5, Timestamp: ts, Raw: "line 5", PatternID: "b"},
+		{LineNumber: 6, Timestamp: ts, Raw: "line 6", PatternID: "c"},
 	}
-	if err := s.InsertLogBatch(entries); err != nil {
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
-	summaries, err := s.TemplateSummaries()
+	summaries, err := s.PatternSummaries(ctx)
 	if err != nil {
-		t.Fatalf("TemplateSummaries: %v", err)
+		t.Fatalf("PatternSummaries: %v", err)
 	}
 	if len(summaries) != 3 {
 		t.Fatalf("expected 3 summaries, got %d", len(summaries))
 	}
 
 	// Ordered by count desc
-	if summaries[0].TemplateID != "a" || summaries[0].Count != 3 {
-		t.Errorf("first summary: got %+v, want template a with count 3", summaries[0])
+	if summaries[0].PatternID != "a" || summaries[0].Count != 3 {
+		t.Errorf("first summary: got %+v, want pattern a with count 3", summaries[0])
 	}
-	if summaries[1].TemplateID != "b" || summaries[1].Count != 2 {
-		t.Errorf("second summary: got %+v, want template b with count 2", summaries[1])
+	if summaries[1].PatternID != "b" || summaries[1].Count != 2 {
+		t.Errorf("second summary: got %+v, want pattern b with count 2", summaries[1])
 	}
-	if summaries[2].TemplateID != "c" || summaries[2].Count != 1 {
-		t.Errorf("third summary: got %+v, want template c with count 1", summaries[2])
+	if summaries[2].PatternID != "c" || summaries[2].Count != 1 {
+		t.Errorf("third summary: got %+v, want pattern c with count 1", summaries[2])
+	}
+}
+
+func TestInsertAndQueryPatterns(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	patterns := []Pattern{
+		{PatternID: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
+		{PatternID: "D2", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
+	}
+
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
+
+	got, err := s.Patterns(ctx)
+	if err != nil {
+		t.Fatalf("Patterns: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 patterns, got %d", len(got))
+	}
+
+	if got[0].PatternID != "D1" || got[0].PatternType != "drain" {
+		t.Errorf("first pattern: got %+v", got[0])
+	}
+}
+
+func TestUpdatePatternLabels(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	patterns := []Pattern{
+		{PatternID: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
+		{PatternID: "D2", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
+	}
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
+
+	labels := []Pattern{
+		{PatternID: "D1", SemanticID: "server-startup", Description: "Server starting on a port"},
+		{PatternID: "D2", SemanticID: "conn-timeout", Description: "Connection timeout"},
+	}
+	if err := s.UpdatePatternLabels(ctx, labels); err != nil {
+		t.Fatalf("UpdatePatternLabels: %v", err)
+	}
+
+	got, err := s.Patterns(ctx)
+	if err != nil {
+		t.Fatalf("Patterns: %v", err)
+	}
+	if got[0].SemanticID != "server-startup" {
+		t.Errorf("D1 semantic_id: got %q, want %q", got[0].SemanticID, "server-startup")
+	}
+	if got[1].SemanticID != "conn-timeout" {
+		t.Errorf("D2 semantic_id: got %q, want %q", got[1].SemanticID, "conn-timeout")
+	}
+}
+
+func TestPatternSummariesWithPatterns(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	patterns := []Pattern{
+		{PatternID: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>", SemanticID: "server-startup", Description: "Server starting"},
+	}
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		t.Fatalf("InsertPatterns: %v", err)
+	}
+
+	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	entries := []LogEntry{
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternID: "D1"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternID: "D1"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternID: "X1"},
+	}
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
+		t.Fatalf("InsertLogBatch: %v", err)
+	}
+
+	summaries, err := s.PatternSummaries(ctx)
+	if err != nil {
+		t.Fatalf("PatternSummaries: %v", err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("expected 1 summary (only persisted patterns), got %d", len(summaries))
+	}
+
+	if summaries[0].PatternID != "D1" {
+		t.Fatalf("expected D1 first, got %s", summaries[0].PatternID)
+	}
+	if summaries[0].PatternType != "drain" {
+		t.Errorf("D1 PatternType: got %q, want %q", summaries[0].PatternType, "drain")
+	}
+	if summaries[0].SemanticID != "server-startup" {
+		t.Errorf("D1 SemanticID: got %q, want %q", summaries[0].SemanticID, "server-startup")
+	}
+	if summaries[0].Pattern != "Starting <*> on port <*>" {
+		t.Errorf("D1 Pattern: got %q, want from patterns table", summaries[0].Pattern)
+	}
+	if summaries[0].Count != 2 {
+		t.Errorf("D1 Count: got %d, want 2", summaries[0].Count)
+	}
+}
+
+func TestPatternCounts(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	entries := []LogEntry{
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternID: "D1"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternID: "D1"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternID: "D1"},
+		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternID: "D2"},
+	}
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
+		t.Fatalf("InsertLogBatch: %v", err)
+	}
+
+	counts, err := s.PatternCounts(ctx)
+	if err != nil {
+		t.Fatalf("PatternCounts: %v", err)
+	}
+	if counts["D1"] != 3 {
+		t.Errorf("D1 count: got %d, want 3", counts["D1"])
+	}
+	if counts["D2"] != 1 {
+		t.Errorf("D2 count: got %d, want 1", counts["D2"])
 	}
 }

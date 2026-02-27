@@ -2,11 +2,16 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestChainParser_FirstMatchWins(t *testing.T) {
 	jp := NewJSONParser()
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := NewChainParser(jp, dp)
 
 	// JSON line should be caught by JSONParser first
@@ -15,8 +20,8 @@ func TestChainParser_FirstMatchWins(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match JSON line")
 	}
-	if result.Template != "hello world" {
-		t.Errorf("expected template 'hello world', got %q", result.Template)
+	if result.Pattern != "hello world" {
+		t.Errorf("expected template 'hello world', got %q", result.Pattern)
 	}
 
 	// Non-JSON line should fall through to Drain
@@ -25,24 +30,27 @@ func TestChainParser_FirstMatchWins(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match plain line via Drain")
 	}
-	if result.TemplateID == "" {
-		t.Error("expected non-empty TemplateID from Drain")
+	if result.PatternID == "" {
+		t.Error("expected non-empty PatternID from Drain")
 	}
 }
 
 func TestChainParser_NoMatch(t *testing.T) {
-	lp := NewLLMParser()
-	chain := NewChainParser(lp)
+	// An empty chain should never match.
+	chain := NewChainParser()
 
 	result := chain.Parse("any log line")
 	if result.Matched {
-		t.Error("expected chain with only LLM stub to not match")
+		t.Error("expected empty chain to not match")
 	}
 }
 
 func TestChainParser_Templates(t *testing.T) {
 	jp := NewJSONParser()
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := NewChainParser(jp, dp)
 
 	// Feed some data so templates are generated
@@ -59,10 +67,10 @@ func TestChainParser_Templates(t *testing.T) {
 	hasJSON := false
 	hasDrain := false
 	for _, tmpl := range templates {
-		if len(tmpl.ID) > 0 && tmpl.ID[0] == 'J' {
+		if tmpl.ID != "" && tmpl.ID[0] == 'J' {
 			hasJSON = true
 		}
-		if len(tmpl.ID) > 0 && tmpl.ID[0] == 'D' {
+		if _, err := uuid.Parse(tmpl.ID); err == nil {
 			hasDrain = true
 		}
 	}
@@ -70,13 +78,16 @@ func TestChainParser_Templates(t *testing.T) {
 		t.Error("expected at least one JSON template in chain")
 	}
 	if !hasDrain {
-		t.Error("expected at least one Drain template in chain")
+		t.Error("expected at least one Drain (UUID) template in chain")
 	}
 }
 
 func TestChainParser_Order(t *testing.T) {
 	// Drain first, JSON second - Drain should catch JSON lines too
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	jp := NewJSONParser()
 	chain := NewChainParser(dp, jp)
 
@@ -85,8 +96,8 @@ func TestChainParser_Order(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match")
 	}
-	// Drain catches everything, so it should match first
-	if result.TemplateID[0] != 'D' {
-		t.Errorf("expected Drain to match first, got template ID %q", result.TemplateID)
+	// Drain catches everything, so it should match first (UUID format)
+	if _, err := uuid.Parse(result.PatternID); err != nil {
+		t.Errorf("expected Drain to match first with UUID pattern ID, got %q", result.PatternID)
 	}
 }
