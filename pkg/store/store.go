@@ -7,11 +7,12 @@ import (
 
 // LogEntry represents a single stored log line.
 type LogEntry struct {
-	ID         int64
-	LineNumber int
-	Timestamp  time.Time
-	Raw        string
-	PatternID  string
+	ID            int64
+	LineNumber    int
+	EndLineNumber int
+	Timestamp     time.Time
+	Raw           string
+	PatternID     string
 }
 
 // Pattern represents a discovered log pattern with optional semantic labels.

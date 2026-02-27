@@ -1,0 +1,11 @@
+2024-03-28 15:00:01 INFO Server listening on :8080
+2024-03-28 15:00:05 INFO Received request GET /api/users
+2024-03-28 15:00:05 FATAL panic: runtime error: index out of range [5] with length 3
+goroutine 42 [running]:
+main.handleUsers(0xc000120000)
+	/app/handlers.go:78 +0x1a4
+net/http.HandlerFunc.ServeHTTP(0xc0001a0000, 0xc000120000)
+	/usr/local/go/src/net/http/server.go:2166 +0x2f
+net/http.(*ServeMux).ServeHTTP(0xc0000a0000, 0xc0001a0000, 0xc000120000)
+	/usr/local/go/src/net/http/server.go:2424 +0x149
+2024-03-28 15:00:06 INFO Server recovered from panic

@@ -1,0 +1,8 @@
+This project includes code derived from:
+
+Datadog Agent (https://github.com/DataDog/datadog-agent)
+Copyright 2016-present Datadog, Inc.
+Licensed under the Apache License, Version 2.0
+See: https://www.apache.org/licenses/LICENSE-2.0
+Files: pkg/multiline/token.go, pkg/multiline/tokenizer.go,
+       pkg/multiline/tokengraph.go, pkg/multiline/detector.go (partial)

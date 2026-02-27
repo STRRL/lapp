@@ -38,6 +38,7 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 		CREATE TABLE IF NOT EXISTS log_entries (
 			id BIGINT DEFAULT nextval('log_entries_id_seq'),
 			line_number INTEGER,
+			end_line_number INTEGER,
 			timestamp TIMESTAMP,
 			raw VARCHAR,
 			pattern_id VARCHAR
@@ -66,9 +67,10 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 // InsertLog stores a single log entry.
 func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO log_entries (line_number, timestamp, raw, pattern_id)
-		 VALUES (?, ?, ?, ?)`,
+		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, pattern_id)
+		 VALUES (?, ?, ?, ?, ?)`,
 		entry.LineNumber,
+		entry.EndLineNumber,
 		entry.Timestamp,
 		entry.Raw,
 		entry.PatternID,
@@ -88,8 +90,8 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO log_entries (line_number, timestamp, raw, pattern_id)
-		 VALUES (?, ?, ?, ?)`,
+		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, pattern_id)
+		 VALUES (?, ?, ?, ?, ?)`,
 	)
 	if err != nil {
 		return errors.Errorf("prepare: %w", err)
@@ -97,7 +99,7 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	defer func() { _ = stmt.Close() }()
 
 	for _, e := range entries {
-		_, err = stmt.ExecContext(ctx, e.LineNumber, e.Timestamp, e.Raw, e.PatternID)
+		_, err = stmt.ExecContext(ctx, e.LineNumber, e.EndLineNumber, e.Timestamp, e.Raw, e.PatternID)
 		if err != nil {
 			return errors.Errorf("exec: %w", err)
 		}
@@ -112,7 +114,7 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 // QueryByPattern returns log entries matching the given pattern ID.
 func (s *DuckDBStore) QueryByPattern(ctx context.Context, patternID string) ([]LogEntry, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, line_number, timestamp, raw, pattern_id
+		`SELECT id, line_number, end_line_number, timestamp, raw, pattern_id
 		 FROM log_entries WHERE pattern_id = ?`,
 		patternID,
 	)
@@ -141,7 +143,7 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 		args = append(args, opts.To)
 	}
 
-	query := "SELECT id, line_number, timestamp, raw, pattern_id FROM log_entries"
+	query := "SELECT id, line_number, end_line_number, timestamp, raw, pattern_id FROM log_entries"
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -333,7 +335,7 @@ func scanEntries(rows *sql.Rows) ([]LogEntry, error) {
 	for rows.Next() {
 		var e LogEntry
 		var ts time.Time
-		if err := rows.Scan(&e.ID, &e.LineNumber, &ts, &e.Raw, &e.PatternID); err != nil {
+		if err := rows.Scan(&e.ID, &e.LineNumber, &e.EndLineNumber, &ts, &e.Raw, &e.PatternID); err != nil {
 			return nil, errors.Errorf("scan entry: %w", err)
 		}
 		e.Timestamp = ts

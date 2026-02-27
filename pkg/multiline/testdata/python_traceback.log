@@ -1,0 +1,10 @@
+2024-03-28 14:00:01 INFO Starting batch processing
+2024-03-28 14:00:02 ERROR Unhandled exception in worker thread
+Traceback (most recent call last):
+  File "/app/worker.py", line 45, in process_task
+    result = compute(data)
+  File "/app/compute.py", line 12, in compute
+    return data["key"] / data["divisor"]
+ZeroDivisionError: division by zero
+2024-03-28 14:00:03 INFO Worker thread restarted
+2024-03-28 14:00:04 DEBUG Processing next batch of 50 items
