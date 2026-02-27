@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -20,23 +21,17 @@ func loghubPath(t *testing.T) string {
 	return p
 }
 
-// newChainParser creates a fresh JSON→Grok→Drain→LLM chain parser.
+// newChainParser creates a fresh JSON→Drain chain parser.
 // Each call returns independent state (important because DrainParser is stateful).
 func newChainParser(t *testing.T) *parser.ChainParser {
 	t.Helper()
-	grokParser, err := parser.NewGrokParser()
-	if err != nil {
-		t.Fatalf("create grok parser: %v", err)
-	}
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
 		t.Fatalf("create drain parser: %v", err)
 	}
 	return parser.NewChainParser(
 		parser.NewJSONParser(),
-		grokParser,
 		drainParser,
-		parser.NewLLMParser(),
 	)
 }
 
@@ -49,7 +44,7 @@ func newStore(t *testing.T) *store.DuckDBStore {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
-	if err := s.Init(); err != nil {
+	if err := s.Init(context.Background()); err != nil {
 		t.Fatalf("init store: %v", err)
 	}
 	return s
@@ -68,7 +63,7 @@ func outputDir(t *testing.T) string {
 			t.Fatalf("create temp dir: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G703: path from env var, expected
 			t.Fatalf("create output dir: %v", err)
 		}
 	}
@@ -101,7 +96,7 @@ func saveTemplates(t *testing.T, dir string, result templateResult) {
 	if err != nil {
 		t.Fatalf("marshal templates: %v", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // G306: test output files
 		t.Fatalf("write templates: %v", err)
 	}
 	t.Logf("Saved %d templates to %s", result.TemplateCount, path)

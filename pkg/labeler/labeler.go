@@ -1,26 +1,33 @@
 package labeler
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/cloudwego/eino-ext/components/model/openrouter"
+	"github.com/cloudwego/eino/schema"
+	"github.com/go-errors/errors"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 )
 
 // Config holds configuration for the labeler.
 type Config struct {
+	//nolint:gosec // G117: config field, not a secret value
 	APIKey     string
 	Model      string
 	HTTPClient *http.Client
 }
 
-// PatternInput represents a pattern to be labeled.
+// PatternInput represents a log pattern to be labeled.
+//
+// Fields come from the Drain log parsing algorithm:
+//   - PatternID: a UUID assigned to each Drain cluster (group of similar log lines)
+//   - Pattern: the Drain template string where variable tokens are replaced with <*>
+//     Example: "Starting <*> on port <*>"
+//   - Samples: representative raw log lines from this cluster, used as LLM context
 type PatternInput struct {
 	PatternID string
 	Pattern   string
@@ -45,12 +52,12 @@ func Label(ctx context.Context, config Config, patterns []PatternInput) ([]Seman
 	prompt := buildPrompt(patterns)
 	resp, err := callLLM(ctx, config, prompt)
 	if err != nil {
-		return nil, fmt.Errorf("call LLM: %w", err)
+		return nil, errors.Errorf("call LLM: %w", err)
 	}
 
 	labels, err := parseResponse(resp)
 	if err != nil {
-		return nil, fmt.Errorf("parse LLM response: %w", err)
+		return nil, errors.Errorf("parse LLM response: %w", err)
 	}
 
 	return labels, nil
@@ -79,97 +86,34 @@ Patterns:
 	return b.String()
 }
 
-type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-}
-
-type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type chatResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
-}
-
 func callLLM(ctx context.Context, config Config, prompt string) (string, error) {
-	reqBody := chatRequest{
-		Model: config.Model,
-		Messages: []chatMessage{
-			{Role: "user", Content: prompt},
+	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
+		APIKey:     config.APIKey,
+		Model:      config.Model,
+		HTTPClient: config.HTTPClient,
+		ResponseFormat: &openrouter.ChatCompletionResponseFormat{
+			Type: openrouter.ChatCompletionResponseFormatTypeJSONObject,
 		},
-	}
-
-	body, err := json.Marshal(reqBody)
+	})
 	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
+		return "", errors.Errorf("create chat model: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
+	resp, err := chatModel.Generate(ctx, []*schema.Message{
+		{Role: schema.User, Content: prompt},
+	})
 	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+		return "", errors.Errorf("generate: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
-
-	client := config.HTTPClient
-	if client == nil {
-		client = http.DefaultClient
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("HTTP request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var chatResp chatResponse
-	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return "", fmt.Errorf("unmarshal response: %w", err)
-	}
-
-	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("no choices in response")
-	}
-
-	return chatResp.Choices[0].Message.Content, nil
+	return resp.Content, nil
 }
 
 func parseResponse(content string) ([]SemanticLabel, error) {
-	// Strip markdown code fences if present
 	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```") {
-		lines := strings.Split(content, "\n")
-		if len(lines) >= 2 {
-			// Strip the opening fence line
-			lines = lines[1:]
-			// Strip the closing fence line if present
-			if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], "```") {
-				lines = lines[:len(lines)-1]
-			}
-		}
-		content = strings.Join(lines, "\n")
-	}
 
 	var labels []SemanticLabel
 	if err := json.Unmarshal([]byte(content), &labels); err != nil {
-		return nil, fmt.Errorf("JSON decode (content=%q): %w", content[:min(len(content), 200)], err)
+		return nil, errors.Errorf("JSON decode (content=%q): %w", content[:min(len(content), 200)], err)
 	}
 	return labels, nil
 }

@@ -48,7 +48,7 @@ func TestLoadDatasetInlineCSV(t *testing.T) {
 2,"Shutting down NameNode at host/10.0.0.1",E2,Shutting down NameNode at <*>
 `
 
-	err := os.WriteFile(csvFile, []byte(content), 0644)
+	err := os.WriteFile(csvFile, []byte(content), 0o644)
 	if err != nil {
 		t.Fatalf("failed to write test csv: %v", err)
 	}

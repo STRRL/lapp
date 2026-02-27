@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // LogEntry represents a single stored log line.
 type LogEntry struct {
@@ -41,28 +44,28 @@ type QueryOpts struct {
 // Store persists log entries and patterns.
 type Store interface {
 	// Init creates tables if they don't exist.
-	Init() error
+	Init(ctx context.Context) error
 	// InsertLog stores a parsed log entry.
-	InsertLog(entry LogEntry) error
+	InsertLog(ctx context.Context, entry LogEntry) error
 	// InsertLogBatch stores multiple log entries.
-	InsertLogBatch(entries []LogEntry) error
+	InsertLogBatch(ctx context.Context, entries []LogEntry) error
 	// QueryByPattern returns entries matching a pattern ID.
-	QueryByPattern(patternID string) ([]LogEntry, error)
+	QueryByPattern(ctx context.Context, patternID string) ([]LogEntry, error)
 	// QueryLogs returns entries matching the given options.
-	QueryLogs(opts QueryOpts) ([]LogEntry, error)
+	QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry, error)
 	// PatternSummaries returns all patterns with their counts.
-	PatternSummaries() ([]PatternSummary, error)
+	PatternSummaries(ctx context.Context) ([]PatternSummary, error)
 	// InsertPatterns upserts patterns into the patterns table.
-	InsertPatterns(patterns []Pattern) error
+	InsertPatterns(ctx context.Context, patterns []Pattern) error
 	// Patterns returns all patterns.
-	Patterns() ([]Pattern, error)
+	Patterns(ctx context.Context) ([]Pattern, error)
 	// UpdatePatternLabels updates only semantic_id and description for patterns.
-	UpdatePatternLabels(labels []Pattern) error
+	UpdatePatternLabels(ctx context.Context, labels []Pattern) error
 	// ClearOrphanPatternIDs sets pattern_id to empty for log entries
 	// whose pattern_id does not exist in the patterns table.
-	ClearOrphanPatternIDs() (int64, error)
+	ClearOrphanPatternIDs(ctx context.Context) (int64, error)
 	// PatternCounts returns the number of log entries per pattern_id.
-	PatternCounts() (map[string]int, error)
+	PatternCounts(ctx context.Context) (map[string]int, error)
 	// Close releases resources.
 	Close() error
 }

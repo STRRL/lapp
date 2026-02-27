@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
 )
@@ -35,7 +36,7 @@ Examples:
 func runAnalyze(cmd *cobra.Command, args []string) error {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+		return errors.New("OPENROUTER_API_KEY environment variable is required")
 	}
 
 	logFile := args[0]
@@ -48,7 +49,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	fmt.Fprintf(os.Stderr, "Reading logs...\n")
 	lines, err := readLines(logFile)
 	if err != nil {
-		return fmt.Errorf("read log file: %w", err)
+		return errors.Errorf("read log file: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "Read %d lines\n", len(lines))
 

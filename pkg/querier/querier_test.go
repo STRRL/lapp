@@ -1,6 +1,7 @@
 package querier
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,11 +10,12 @@ import (
 
 func setupQuerier(t *testing.T) *Querier {
 	t.Helper()
+	ctx := context.Background()
 	s, err := store.NewDuckDBStore("")
 	if err != nil {
 		t.Fatalf("NewDuckDBStore: %v", err)
 	}
-	if err := s.Init(); err != nil {
+	if err := s.Init(ctx); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 	t.Cleanup(func() { _ = s.Close() })
@@ -22,7 +24,7 @@ func setupQuerier(t *testing.T) *Querier {
 		{PatternID: "login", PatternType: "drain", RawPattern: "login user=<*>"},
 		{PatternID: "error", PatternType: "drain", RawPattern: "error <*>"},
 	}
-	if err := s.InsertPatterns(patterns); err != nil {
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
 		t.Fatalf("InsertPatterns: %v", err)
 	}
 
@@ -33,7 +35,7 @@ func setupQuerier(t *testing.T) *Querier {
 		{LineNumber: 3, Timestamp: ts.Add(2 * time.Second), Raw: "error timeout", PatternID: "error"},
 		{LineNumber: 4, Timestamp: ts.Add(3 * time.Second), Raw: "login user=carol", PatternID: "login"},
 	}
-	if err := s.InsertLogBatch(entries); err != nil {
+	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
@@ -42,8 +44,9 @@ func setupQuerier(t *testing.T) *Querier {
 
 func TestByPattern(t *testing.T) {
 	q := setupQuerier(t)
+	ctx := context.Background()
 
-	results, err := q.ByPattern("login")
+	results, err := q.ByPattern(ctx, "login")
 	if err != nil {
 		t.Fatalf("ByPattern: %v", err)
 	}
@@ -51,7 +54,7 @@ func TestByPattern(t *testing.T) {
 		t.Errorf("expected 3 login entries, got %d", len(results))
 	}
 
-	results, err = q.ByPattern("error")
+	results, err = q.ByPattern(ctx, "error")
 	if err != nil {
 		t.Fatalf("ByPattern error: %v", err)
 	}
@@ -62,8 +65,9 @@ func TestByPattern(t *testing.T) {
 
 func TestSummary(t *testing.T) {
 	q := setupQuerier(t)
+	ctx := context.Background()
 
-	summaries, err := q.Summary()
+	summaries, err := q.Summary(ctx)
 	if err != nil {
 		t.Fatalf("Summary: %v", err)
 	}
@@ -81,8 +85,9 @@ func TestSummary(t *testing.T) {
 
 func TestSearch(t *testing.T) {
 	q := setupQuerier(t)
+	ctx := context.Background()
 
-	results, err := q.Search(store.QueryOpts{Limit: 2})
+	results, err := q.Search(ctx, store.QueryOpts{Limit: 2})
 	if err != nil {
 		t.Fatalf("Search limit: %v", err)
 	}
@@ -90,7 +95,7 @@ func TestSearch(t *testing.T) {
 		t.Errorf("expected 2 results with limit, got %d", len(results))
 	}
 
-	results, err = q.Search(store.QueryOpts{PatternID: "error"})
+	results, err = q.Search(ctx, store.QueryOpts{PatternID: "error"})
 	if err != nil {
 		t.Fatalf("Search pattern: %v", err)
 	}

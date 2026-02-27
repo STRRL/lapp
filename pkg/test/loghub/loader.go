@@ -2,8 +2,9 @@ package loghub
 
 import (
 	"encoding/csv"
-	"fmt"
 	"os"
+
+	"github.com/go-errors/errors"
 )
 
 // LogEntry represents a single parsed log entry from a Loghub CSV file.
@@ -16,9 +17,9 @@ type LogEntry struct {
 // LoadDataset reads a Loghub structured CSV file and returns parsed entries.
 // Column indices are determined dynamically from the header row.
 func LoadDataset(csvPath string) ([]LogEntry, error) {
-	f, err := os.Open(csvPath)
+	f, err := os.Open(csvPath) //nolint:gosec // G703: path from caller, expected
 	if err != nil {
-		return nil, fmt.Errorf("open csv: %w", err)
+		return nil, errors.Errorf("open csv: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -27,11 +28,11 @@ func LoadDataset(csvPath string) ([]LogEntry, error) {
 
 	records, err := reader.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("read csv: %w", err)
+		return nil, errors.Errorf("read csv: %w", err)
 	}
 
 	if len(records) < 2 {
-		return nil, fmt.Errorf("csv has fewer than 2 rows (header + data)")
+		return nil, errors.Errorf("csv has fewer than 2 rows (header + data)")
 	}
 
 	header := records[0]
@@ -51,13 +52,13 @@ func LoadDataset(csvPath string) ([]LogEntry, error) {
 	}
 
 	if colContent == -1 {
-		return nil, fmt.Errorf("missing required column: Content")
+		return nil, errors.Errorf("missing required column: Content")
 	}
 	if colTemplate == -1 {
-		return nil, fmt.Errorf("missing required column: EventTemplate")
+		return nil, errors.Errorf("missing required column: EventTemplate")
 	}
 	if colEventID == -1 {
-		return nil, fmt.Errorf("missing required column: EventId")
+		return nil, errors.Errorf("missing required column: EventId")
 	}
 
 	entries := make([]LogEntry, 0, len(records)-1)

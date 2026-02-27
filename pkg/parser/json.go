@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+var _ Parser = (*JSONParser)(nil)
+
 // JSONParser detects JSON-formatted log lines and extracts structure.
 type JSONParser struct {
 	mu   sync.Mutex
@@ -25,7 +27,7 @@ func NewJSONParser() *JSONParser {
 // Parse checks if the content is valid JSON and extracts template info.
 func (p *JSONParser) Parse(content string) Result {
 	trimmed := strings.TrimSpace(content)
-	if len(trimmed) == 0 || trimmed[0] != '{' {
+	if trimmed == "" || trimmed[0] != '{' {
 		return Result{Matched: false}
 	}
 

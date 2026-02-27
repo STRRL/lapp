@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
@@ -17,21 +18,23 @@ func templatesCmd() *cobra.Command {
 	return cmd
 }
 
-func runTemplates(cmd *cobra.Command, args []string) error {
+func runTemplates(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("store: %w", err)
+		return errors.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
-	if err := s.Init(); err != nil {
-		return fmt.Errorf("init store: %w", err)
+	if err := s.Init(ctx); err != nil {
+		return errors.Errorf("init store: %w", err)
 	}
 
 	q := querier.NewQuerier(s)
-	summaries, err := q.Summary()
+	summaries, err := q.Summary(ctx)
 	if err != nil {
-		return fmt.Errorf("query: %w", err)
+		return errors.Errorf("query: %w", err)
 	}
 
 	// Check if any summaries have semantic info

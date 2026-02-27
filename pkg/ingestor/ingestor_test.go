@@ -34,8 +34,11 @@ func TestIngest(t *testing.T) {
 	}
 
 	var got []LogLine
-	for ll := range ch {
-		got = append(got, ll)
+	for rr := range ch {
+		if rr.Err != nil {
+			t.Fatalf("unexpected error: %v", rr.Err)
+		}
+		got = append(got, *rr.Value)
 	}
 
 	if len(got) != len(lines) {
