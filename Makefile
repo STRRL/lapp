@@ -10,7 +10,7 @@ unit-test:
 
 # Run integration tests (requires LOGHUB_PATH)
 integration-test:
-	go test -v -timeout 15m -count=1 ./integration_test/
+	go test -v -timeout 15m -count=1 ./integration_test/...
 
 # Run all tests (unit + integration)
 test: unit-test integration-test
