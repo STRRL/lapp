@@ -267,6 +267,19 @@ func (s *DuckDBStore) UpdatePatternLabels(labels []Pattern) error {
 	return nil
 }
 
+// ClearOrphanPatternIDs sets pattern_id to empty for log entries
+// whose pattern_id does not exist in the patterns table.
+func (s *DuckDBStore) ClearOrphanPatternIDs() (int64, error) {
+	result, err := s.db.Exec(
+		`UPDATE log_entries SET pattern_id = ''
+		 WHERE pattern_id != '' AND pattern_id NOT IN (SELECT pattern_id FROM patterns)`,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("clear orphan pattern IDs: %w", err)
+	}
+	return result.RowsAffected()
+}
+
 // PatternCounts returns the number of log entries per pattern_id.
 func (s *DuckDBStore) PatternCounts() (map[string]int, error) {
 	rows, err := s.db.Query(

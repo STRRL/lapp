@@ -108,8 +108,13 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches)\n",
-		count, len(templates), len(patterns))
+	cleared, err := s.ClearOrphanPatternIDs()
+	if err != nil {
+		return fmt.Errorf("clear orphan pattern IDs: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches, %d orphan entries cleared)\n",
+		count, len(templates), len(patterns), cleared)
 	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
 	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
 	return nil
