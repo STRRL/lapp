@@ -49,14 +49,14 @@ func TestInsertAndQueryByPattern(t *testing.T) {
 		LineNumber:        1,
 		Timestamp:         ts,
 		Raw:               "INFO Starting server on port 8080",
-		PatternUUIDString: "D1",
+		PatternUUIDString: "00000000-0000-0000-0000-000000000001",
 	}
 
 	if err := s.InsertLog(ctx, entry); err != nil {
 		t.Fatalf("InsertLog: %v", err)
 	}
 
-	results, err := s.QueryByPattern(ctx, "D1")
+	results, err := s.QueryByPattern(ctx, "00000000-0000-0000-0000-000000000001")
 	if err != nil {
 		t.Fatalf("QueryByPattern: %v", err)
 	}
@@ -71,12 +71,12 @@ func TestInsertAndQueryByPattern(t *testing.T) {
 	if r.Raw != entry.Raw {
 		t.Errorf("Raw: got %q, want %q", r.Raw, entry.Raw)
 	}
-	if r.PatternUUIDString != "D1" {
-		t.Errorf("PatternUUIDString: got %q, want %q", r.PatternUUIDString, "D1")
+	if r.PatternUUIDString != "00000000-0000-0000-0000-000000000001" {
+		t.Errorf("PatternUUIDString: got %q, want %q", r.PatternUUIDString, "00000000-0000-0000-0000-000000000001")
 	}
 
 	// Query non-existent pattern returns empty
-	empty, err := s.QueryByPattern(ctx, "no-such-pattern")
+	empty, err := s.QueryByPattern(ctx, "00000000-0000-0000-0000-ffffffffffff")
 	if err != nil {
 		t.Fatalf("QueryByPattern empty: %v", err)
 	}
@@ -91,16 +91,16 @@ func TestInsertLogBatch(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "a"},
-		{LineNumber: 2, Timestamp: ts.Add(time.Second), Raw: "line 2", PatternUUIDString: "a"},
-		{LineNumber: 3, Timestamp: ts.Add(2 * time.Second), Raw: "line 3", PatternUUIDString: "b"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 2, Timestamp: ts.Add(time.Second), Raw: "line 2", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 3, Timestamp: ts.Add(2 * time.Second), Raw: "line 3", PatternUUIDString: "00000000-0000-0000-0000-00000000000b"},
 	}
 
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
-	aResults, err := s.QueryByPattern(ctx, "a")
+	aResults, err := s.QueryByPattern(ctx, "00000000-0000-0000-0000-00000000000a")
 	if err != nil {
 		t.Fatalf("QueryByPattern a: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestInsertLogBatch(t *testing.T) {
 		t.Errorf("expected 2 results for pattern a, got %d", len(aResults))
 	}
 
-	bResults, err := s.QueryByPattern(ctx, "b")
+	bResults, err := s.QueryByPattern(ctx, "00000000-0000-0000-0000-00000000000b")
 	if err != nil {
 		t.Fatalf("QueryByPattern b: %v", err)
 	}
@@ -123,17 +123,17 @@ func TestQueryLogs(t *testing.T) {
 
 	base := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: base, Raw: "line 1", PatternUUIDString: "a"},
-		{LineNumber: 2, Timestamp: base.Add(time.Minute), Raw: "line 2", PatternUUIDString: "b"},
-		{LineNumber: 3, Timestamp: base.Add(2 * time.Minute), Raw: "line 3", PatternUUIDString: "a"},
-		{LineNumber: 4, Timestamp: base.Add(3 * time.Minute), Raw: "line 4", PatternUUIDString: "c"},
+		{LineNumber: 1, Timestamp: base, Raw: "line 1", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 2, Timestamp: base.Add(time.Minute), Raw: "line 2", PatternUUIDString: "00000000-0000-0000-0000-00000000000b"},
+		{LineNumber: 3, Timestamp: base.Add(2 * time.Minute), Raw: "line 3", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 4, Timestamp: base.Add(3 * time.Minute), Raw: "line 4", PatternUUIDString: "00000000-0000-0000-0000-00000000000c"},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
 	}
 
 	// Filter by pattern
-	results, err := s.QueryLogs(ctx, QueryOpts{PatternUUIDString: "a"})
+	results, err := s.QueryLogs(ctx, QueryOpts{PatternUUIDString: "00000000-0000-0000-0000-00000000000a"})
 	if err != nil {
 		t.Fatalf("QueryLogs pattern filter: %v", err)
 	}
@@ -177,9 +177,9 @@ func TestPatternSummaries(t *testing.T) {
 	ctx := context.Background()
 
 	patterns := []Pattern{
-		{PatternUUIDString: "a", PatternType: "drain", RawPattern: "pattern a"},
-		{PatternUUIDString: "b", PatternType: "drain", RawPattern: "pattern b"},
-		{PatternUUIDString: "c", PatternType: "drain", RawPattern: "pattern c"},
+		{PatternUUIDString: "00000000-0000-0000-0000-00000000000a", PatternType: "drain", RawPattern: "pattern a"},
+		{PatternUUIDString: "00000000-0000-0000-0000-00000000000b", PatternType: "drain", RawPattern: "pattern b"},
+		{PatternUUIDString: "00000000-0000-0000-0000-00000000000c", PatternType: "drain", RawPattern: "pattern c"},
 	}
 	if err := s.InsertPatterns(ctx, patterns); err != nil {
 		t.Fatalf("InsertPatterns: %v", err)
@@ -187,12 +187,12 @@ func TestPatternSummaries(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "a"},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "a"},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "a"},
-		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternUUIDString: "b"},
-		{LineNumber: 5, Timestamp: ts, Raw: "line 5", PatternUUIDString: "b"},
-		{LineNumber: 6, Timestamp: ts, Raw: "line 6", PatternUUIDString: "c"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "00000000-0000-0000-0000-00000000000a"},
+		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternUUIDString: "00000000-0000-0000-0000-00000000000b"},
+		{LineNumber: 5, Timestamp: ts, Raw: "line 5", PatternUUIDString: "00000000-0000-0000-0000-00000000000b"},
+		{LineNumber: 6, Timestamp: ts, Raw: "line 6", PatternUUIDString: "00000000-0000-0000-0000-00000000000c"},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
@@ -207,13 +207,13 @@ func TestPatternSummaries(t *testing.T) {
 	}
 
 	// Ordered by count desc
-	if summaries[0].PatternUUIDString != "a" || summaries[0].Count != 3 {
+	if summaries[0].PatternUUIDString != "00000000-0000-0000-0000-00000000000a" || summaries[0].Count != 3 {
 		t.Errorf("first summary: got %+v, want pattern a with count 3", summaries[0])
 	}
-	if summaries[1].PatternUUIDString != "b" || summaries[1].Count != 2 {
+	if summaries[1].PatternUUIDString != "00000000-0000-0000-0000-00000000000b" || summaries[1].Count != 2 {
 		t.Errorf("second summary: got %+v, want pattern b with count 2", summaries[1])
 	}
-	if summaries[2].PatternUUIDString != "c" || summaries[2].Count != 1 {
+	if summaries[2].PatternUUIDString != "00000000-0000-0000-0000-00000000000c" || summaries[2].Count != 1 {
 		t.Errorf("third summary: got %+v, want pattern c with count 1", summaries[2])
 	}
 }
@@ -223,8 +223,8 @@ func TestInsertAndQueryPatterns(t *testing.T) {
 	ctx := context.Background()
 
 	patterns := []Pattern{
-		{PatternUUIDString: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
-		{PatternUUIDString: "D2", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000001", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000002", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
 	}
 
 	if err := s.InsertPatterns(ctx, patterns); err != nil {
@@ -239,7 +239,7 @@ func TestInsertAndQueryPatterns(t *testing.T) {
 		t.Fatalf("expected 2 patterns, got %d", len(got))
 	}
 
-	if got[0].PatternUUIDString != "D1" || got[0].PatternType != "drain" {
+	if got[0].PatternUUIDString != "00000000-0000-0000-0000-000000000001" || got[0].PatternType != "drain" {
 		t.Errorf("first pattern: got %+v", got[0])
 	}
 }
@@ -249,16 +249,16 @@ func TestUpdatePatternLabels(t *testing.T) {
 	ctx := context.Background()
 
 	patterns := []Pattern{
-		{PatternUUIDString: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
-		{PatternUUIDString: "D2", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000001", PatternType: "drain", RawPattern: "Starting <*> on port <*>"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000002", PatternType: "drain", RawPattern: "Connection timeout after <*> ms"},
 	}
 	if err := s.InsertPatterns(ctx, patterns); err != nil {
 		t.Fatalf("InsertPatterns: %v", err)
 	}
 
 	labels := []Pattern{
-		{PatternUUIDString: "D1", SemanticID: "server-startup", Description: "Server starting on a port"},
-		{PatternUUIDString: "D2", SemanticID: "conn-timeout", Description: "Connection timeout"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000001", SemanticID: "server-startup", Description: "Server starting on a port"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000002", SemanticID: "conn-timeout", Description: "Connection timeout"},
 	}
 	if err := s.UpdatePatternLabels(ctx, labels); err != nil {
 		t.Fatalf("UpdatePatternLabels: %v", err)
@@ -281,7 +281,7 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 	ctx := context.Background()
 
 	patterns := []Pattern{
-		{PatternUUIDString: "D1", PatternType: "drain", RawPattern: "Starting <*> on port <*>", SemanticID: "server-startup", Description: "Server starting"},
+		{PatternUUIDString: "00000000-0000-0000-0000-000000000001", PatternType: "drain", RawPattern: "Starting <*> on port <*>", SemanticID: "server-startup", Description: "Server starting"},
 	}
 	if err := s.InsertPatterns(ctx, patterns); err != nil {
 		t.Fatalf("InsertPatterns: %v", err)
@@ -289,9 +289,9 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "D1"},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "D1"},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "X1"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "00000000-0000-0000-0000-000000000001"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "00000000-0000-0000-0000-000000000001"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "00000000-0000-0000-0000-0000000000f1"},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
@@ -305,8 +305,8 @@ func TestPatternSummariesWithPatterns(t *testing.T) {
 		t.Fatalf("expected 1 summary (only persisted patterns), got %d", len(summaries))
 	}
 
-	if summaries[0].PatternUUIDString != "D1" {
-		t.Fatalf("expected D1 first, got %s", summaries[0].PatternUUIDString)
+	if summaries[0].PatternUUIDString != "00000000-0000-0000-0000-000000000001" {
+		t.Fatalf("expected 00000000-0000-0000-0000-000000000001 first, got %s", summaries[0].PatternUUIDString)
 	}
 	if summaries[0].PatternType != "drain" {
 		t.Errorf("D1 PatternType: got %q, want %q", summaries[0].PatternType, "drain")
@@ -328,10 +328,10 @@ func TestPatternCounts(t *testing.T) {
 
 	ts := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	entries := []LogEntry{
-		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "D1"},
-		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "D1"},
-		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "D1"},
-		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternUUIDString: "D2"},
+		{LineNumber: 1, Timestamp: ts, Raw: "line 1", PatternUUIDString: "00000000-0000-0000-0000-000000000001"},
+		{LineNumber: 2, Timestamp: ts, Raw: "line 2", PatternUUIDString: "00000000-0000-0000-0000-000000000001"},
+		{LineNumber: 3, Timestamp: ts, Raw: "line 3", PatternUUIDString: "00000000-0000-0000-0000-000000000001"},
+		{LineNumber: 4, Timestamp: ts, Raw: "line 4", PatternUUIDString: "00000000-0000-0000-0000-000000000002"},
 	}
 	if err := s.InsertLogBatch(ctx, entries); err != nil {
 		t.Fatalf("InsertLogBatch: %v", err)
@@ -341,10 +341,10 @@ func TestPatternCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PatternCounts: %v", err)
 	}
-	if counts["D1"] != 3 {
-		t.Errorf("D1 count: got %d, want 3", counts["D1"])
+	if counts["00000000-0000-0000-0000-000000000001"] != 3 {
+		t.Errorf("pattern 1 count: got %d, want 3", counts["00000000-0000-0000-0000-000000000001"])
 	}
-	if counts["D2"] != 1 {
-		t.Errorf("D2 count: got %d, want 1", counts["D2"])
+	if counts["00000000-0000-0000-0000-000000000002"] != 1 {
+		t.Errorf("pattern 2 count: got %d, want 1", counts["00000000-0000-0000-0000-000000000002"])
 	}
 }
