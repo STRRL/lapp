@@ -1,0 +1,34 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.5",
+  "base_commit_sha": "6fb137ca0c594b9d14523f705c43aa5febd31626",
+  "prompts": {
+    "7fddbe20b00f2936": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "879cb8c8-e5f8-4b2d-96ac-0334f85d5b91",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 45,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    },
+    "8f2d9078ce1d0c80": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84c69ebd-eba4-435c-8a53-4348c755725e",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 14,
+      "total_deletions": 8,
+      "accepted_lines": 12,
+      "overriden_lines": 1
+    }
+  }
+}
