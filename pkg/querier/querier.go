@@ -1,6 +1,8 @@
 package querier
 
 import (
+	"context"
+
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -15,16 +17,16 @@ func NewQuerier(s store.Store) *Querier {
 }
 
 // ByPattern returns log entries matching the given pattern ID.
-func (q *Querier) ByPattern(patternID string) ([]store.LogEntry, error) {
-	return q.store.QueryByPattern(patternID)
+func (q *Querier) ByPattern(ctx context.Context, patternID string) ([]store.LogEntry, error) {
+	return q.store.QueryByPattern(ctx, patternID)
 }
 
 // Summary returns all patterns with their occurrence counts.
-func (q *Querier) Summary() ([]store.PatternSummary, error) {
-	return q.store.PatternSummaries()
+func (q *Querier) Summary(ctx context.Context) ([]store.PatternSummary, error) {
+	return q.store.PatternSummaries(ctx)
 }
 
 // Search returns log entries matching the given query options.
-func (q *Querier) Search(opts store.QueryOpts) ([]store.LogEntry, error) {
-	return q.store.QueryLogs(opts)
+func (q *Querier) Search(ctx context.Context, opts store.QueryOpts) ([]store.LogEntry, error) {
+	return q.store.QueryLogs(ctx, opts)
 }

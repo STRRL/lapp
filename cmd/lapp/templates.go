@@ -17,19 +17,21 @@ func templatesCmd() *cobra.Command {
 	return cmd
 }
 
-func runTemplates(cmd *cobra.Command, args []string) error {
+func runTemplates(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
+
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
-	if err := s.Init(); err != nil {
+	if err := s.Init(ctx); err != nil {
 		return fmt.Errorf("init store: %w", err)
 	}
 
 	q := querier.NewQuerier(s)
-	summaries, err := q.Summary()
+	summaries, err := q.Summary(ctx)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
 	}

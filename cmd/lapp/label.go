@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -15,15 +16,17 @@ func labelCmd() *cobra.Command {
 		Use:   "label",
 		Short: "Add semantic labels to discovered patterns using an LLM",
 		Long:  "Query the patterns table and use an LLM to generate semantic IDs and descriptions for each pattern.",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLabel(cmd, args, model)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runLabel(cmd, model)
 		},
 	}
 	cmd.Flags().StringVar(&model, "model", "", "LLM model to use (default: $MODEL_NAME or google/gemini-3-flash-preview)")
 	return cmd
 }
 
-func runLabel(cmd *cobra.Command, args []string, model string) error {
+func runLabel(cmd *cobra.Command, model string) error {
+	ctx := cmd.Context()
+
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
@@ -35,11 +38,11 @@ func runLabel(cmd *cobra.Command, args []string, model string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	if err := s.Init(); err != nil {
+	if err := s.Init(ctx); err != nil {
 		return fmt.Errorf("store init: %w", err)
 	}
 
-	patterns, err := s.Patterns()
+	patterns, err := s.Patterns(ctx)
 	if err != nil {
 		return fmt.Errorf("query patterns: %w", err)
 	}
@@ -52,7 +55,7 @@ func runLabel(cmd *cobra.Command, args []string, model string) error {
 	// Build pattern inputs with sample lines
 	var inputs []labeler.PatternInput
 	for _, p := range patterns {
-		samples, err := sampleLines(s, p.PatternID, 3)
+		samples, err := sampleLines(ctx, s, p.PatternID, 3)
 		if err != nil {
 			return fmt.Errorf("sample lines for %s: %w", p.PatternID, err)
 		}
@@ -65,7 +68,7 @@ func runLabel(cmd *cobra.Command, args []string, model string) error {
 
 	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
 
-	labels, err := labeler.Label(cmd.Context(), labeler.Config{
+	labels, err := labeler.Label(ctx, labeler.Config{
 		APIKey: apiKey,
 		Model:  model,
 	}, inputs)
@@ -88,7 +91,7 @@ func runLabel(cmd *cobra.Command, args []string, model string) error {
 		return nil
 	}
 
-	if err := s.UpdatePatternLabels(updates); err != nil {
+	if err := s.UpdatePatternLabels(ctx, updates); err != nil {
 		return fmt.Errorf("update labels: %w", err)
 	}
 
@@ -102,8 +105,8 @@ func runLabel(cmd *cobra.Command, args []string, model string) error {
 	return nil
 }
 
-func sampleLines(s store.Store, patternID string, n int) ([]string, error) {
-	entries, err := s.QueryLogs(store.QueryOpts{
+func sampleLines(ctx context.Context, s store.Store, patternID string, n int) ([]string, error) {
+	entries, err := s.QueryLogs(ctx, store.QueryOpts{
 		PatternID: patternID,
 		Limit:     n,
 	})

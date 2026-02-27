@@ -67,7 +67,7 @@ func TestChainParser_Templates(t *testing.T) {
 	hasJSON := false
 	hasDrain := false
 	for _, tmpl := range templates {
-		if len(tmpl.ID) > 0 && tmpl.ID[0] == 'J' {
+		if tmpl.ID != "" && tmpl.ID[0] == 'J' {
 			hasJSON = true
 		}
 		if _, err := uuid.Parse(tmpl.ID); err == nil {

@@ -56,15 +56,33 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = s.Close() }()
 
-	if err := s.Init(); err != nil {
+	if err := s.Init(ctx); err != nil {
 		return fmt.Errorf("store init: %w", err)
 	}
 
+	count, err := ingestLines(ctx, s, ch, chain)
+	if err != nil {
+		return err
+	}
+
+	templates, patternCount, cleared, err := saveDiscoveredPatterns(ctx, s, chain)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches, %d orphan entries cleared)\n",
+		count, templates, patternCount, cleared)
+	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
+	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
+	return nil
+}
+
+func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.LogLine, chain *parser.ChainParser) (int, error) {
 	var count int
 	var batch []store.LogEntry
 	for line := range ch {
 		if line.Err != nil {
-			return fmt.Errorf("read log: %w", line.Err)
+			return 0, fmt.Errorf("read log: %w", line.Err)
 		}
 		result := chain.Parse(line.Content)
 		entry := store.LogEntry{
@@ -76,8 +94,8 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		batch = append(batch, entry)
 
 		if len(batch) >= 500 {
-			if err := s.InsertLogBatch(batch); err != nil {
-				return fmt.Errorf("insert batch: %w", err)
+			if err := s.InsertLogBatch(ctx, batch); err != nil {
+				return 0, fmt.Errorf("insert batch: %w", err)
 			}
 			batch = batch[:0]
 		}
@@ -85,21 +103,23 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(batch) > 0 {
-		if err := s.InsertLogBatch(batch); err != nil {
-			return fmt.Errorf("insert batch: %w", err)
+		if err := s.InsertLogBatch(ctx, batch); err != nil {
+			return 0, fmt.Errorf("insert batch: %w", err)
 		}
 	}
+	return count, nil
+}
 
-	// Get final generalized patterns from Drain
+func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *parser.ChainParser) (templateCount, patternCount int, cleared int64, err error) {
 	templates := chain.Templates()
 
 	// Count occurrences per pattern to filter out single-match patterns.
 	// Drain is an online algorithm — a cluster with only 1 log line means
 	// Drain never saw a similar line, so the "pattern" is just the literal
 	// original text with no generalization. Not useful as a pattern.
-	patternCounts, err := s.PatternCounts()
+	patternCounts, err := s.PatternCounts(ctx)
 	if err != nil {
-		return fmt.Errorf("pattern counts: %w", err)
+		return 0, 0, 0, fmt.Errorf("pattern counts: %w", err)
 	}
 
 	var patterns []store.Pattern
@@ -114,19 +134,15 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		})
 	}
 	if len(patterns) > 0 {
-		if err := s.InsertPatterns(patterns); err != nil {
-			return fmt.Errorf("insert patterns: %w", err)
+		if err := s.InsertPatterns(ctx, patterns); err != nil {
+			return 0, 0, 0, fmt.Errorf("insert patterns: %w", err)
 		}
 	}
 
-	cleared, err := s.ClearOrphanPatternIDs()
+	cleared, err = s.ClearOrphanPatternIDs(ctx)
 	if err != nil {
-		return fmt.Errorf("clear orphan pattern IDs: %w", err)
+		return 0, 0, 0, fmt.Errorf("clear orphan pattern IDs: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches, %d orphan entries cleared)\n",
-		count, len(templates), len(patterns), cleared)
-	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
-	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
-	return nil
+	return len(templates), len(patterns), cleared, nil
 }

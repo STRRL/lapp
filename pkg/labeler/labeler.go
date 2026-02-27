@@ -15,7 +15,7 @@ import (
 
 // Config holds configuration for the labeler.
 type Config struct {
-	APIKey     string
+	APIKey     string //nolint:gosec // G117: config field, not a secret value
 	Model      string
 	HTTPClient *http.Client
 }
@@ -113,7 +113,7 @@ func callLLM(ctx context.Context, config Config, prompt string) (string, error) 
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
 	}
@@ -124,7 +124,7 @@ func callLLM(ctx context.Context, config Config, prompt string) (string, error) 
 	if client == nil {
 		client = http.DefaultClient
 	}
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
 	if err != nil {
 		return "", fmt.Errorf("HTTP request: %w", err)
 	}

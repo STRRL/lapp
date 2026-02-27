@@ -52,11 +52,11 @@ func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error
 }
 
 func writeAgentsMD(dir string) error {
-	return os.WriteFile(filepath.Join(dir, "AGENTS.md"), agentsMD, 0o644)
+	return os.WriteFile(filepath.Join(dir, "AGENTS.md"), agentsMD, 0o644) //nolint:gosec // G306: workspace files for local analysis
 }
 
 func writeRawLog(dir string, lines []string) error {
-	return os.WriteFile(
+	return os.WriteFile( //nolint:gosec // G306: workspace files for local analysis
 		filepath.Join(dir, "raw.log"),
 		[]byte(strings.Join(lines, "\n")),
 		0o644,
@@ -113,7 +113,7 @@ func writeSummary(dir string, templates []parser.Template, results []lineResult)
 		buf.WriteString("\n")
 	}
 
-	return os.WriteFile(filepath.Join(dir, "summary.txt"), []byte(buf.String()), 0o644)
+	return os.WriteFile(filepath.Join(dir, "summary.txt"), []byte(buf.String()), 0o644) //nolint:gosec // G306: workspace files for local analysis
 }
 
 func writeErrors(dir string, templates []parser.Template, results []lineResult) error {
@@ -125,11 +125,29 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 		}
 	}
 
-	// Also collect raw lines matching error patterns
 	var buf strings.Builder
 	buf.WriteString("# Error and Warning Patterns\n\n")
 
-	// Error template section
+	hasContent := writeErrorTemplates(&buf, templates, errorTemplates, results)
+
+	// Lines with error keywords but no template match
+	unmatchedErrors := collectUnmatchedErrors(results, 50)
+	if len(unmatchedErrors) > 0 {
+		hasContent = true
+		buf.WriteString("## Unmatched Error Lines\n\n")
+		for _, line := range unmatchedErrors {
+			fmt.Fprintf(&buf, "  %s\n", line)
+		}
+	}
+
+	if !hasContent {
+		buf.WriteString("No error or warning patterns detected.\n")
+	}
+
+	return os.WriteFile(filepath.Join(dir, "errors.txt"), []byte(buf.String()), 0o644) //nolint:gosec // G306: workspace files for local analysis
+}
+
+func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, errorTemplates map[string]bool, results []lineResult) bool {
 	hasContent := false
 	for _, t := range templates {
 		if !errorTemplates[t.ID] {
@@ -146,34 +164,24 @@ func writeErrors(dir string, templates []parser.Template, results []lineResult) 
 				}
 			}
 		}
-		fmt.Fprintf(&buf, "[%s] \"%s\" — %d occurrences\n", t.ID, t.Pattern, count)
+		fmt.Fprintf(buf, "[%s] \"%s\" — %d occurrences\n", t.ID, t.Pattern, count)
 		for i, sample := range samples {
-			fmt.Fprintf(&buf, "  sample %d: %s\n", i+1, sample)
+			fmt.Fprintf(buf, "  sample %d: %s\n", i+1, sample)
 		}
 		buf.WriteString("\n")
 	}
+	return hasContent
+}
 
-	// Lines with error keywords but no template match
-	var unmatchedErrors []string
+func collectUnmatchedErrors(results []lineResult, limit int) []string {
+	var errors []string
 	for _, r := range results {
 		if r.patternID == "" && errorPattern.MatchString(r.raw) {
-			unmatchedErrors = append(unmatchedErrors, r.raw)
-			if len(unmatchedErrors) >= 50 {
+			errors = append(errors, r.raw)
+			if len(errors) >= limit {
 				break
 			}
 		}
 	}
-	if len(unmatchedErrors) > 0 {
-		hasContent = true
-		buf.WriteString("## Unmatched Error Lines\n\n")
-		for _, line := range unmatchedErrors {
-			fmt.Fprintf(&buf, "  %s\n", line)
-		}
-	}
-
-	if !hasContent {
-		buf.WriteString("No error or warning patterns detected.\n")
-	}
-
-	return os.WriteFile(filepath.Join(dir, "errors.txt"), []byte(buf.String()), 0o644)
+	return errors
 }

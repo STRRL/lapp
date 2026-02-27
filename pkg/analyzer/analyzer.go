@@ -43,7 +43,7 @@ Be concise and actionable. Focus on what matters.`,
 
 // Config holds configuration for the analyzer.
 type Config struct {
-	APIKey string
+	APIKey string //nolint:gosec // G117: config field, not a secret value
 	Model  string
 }
 
@@ -89,7 +89,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 }
 
 // RunAgent runs the AI agent on an existing workspace directory.
-func RunAgent(ctx context.Context, config Config, workDir string, question string) (string, error) {
+func RunAgent(ctx context.Context, config Config, workDir, question string) (string, error) {
 	config.Model = llmconfig.ResolveModel(config.Model)
 
 	absDir, err := filepath.Abs(workDir)
@@ -144,7 +144,7 @@ func RunAgent(ctx context.Context, config Config, workDir string, question strin
 	// Build user message
 	userMessage := "Analyze the log files in the workspace."
 	if question != "" {
-		userMessage = fmt.Sprintf("Analyze the log files in the workspace. The user's question: %s", question)
+		userMessage = "Analyze the log files in the workspace. The user's question: " + question
 	}
 
 	// Run agent
@@ -184,7 +184,7 @@ func (rt *fixupRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// Patch tool messages missing "content" field before sending to OpenRouter.
 	// eino omits "content" when a tool returns empty results (e.g. grep with no matches),
 	// which causes the Anthropic API to return 500.
-	if req.Body != nil && req.Method == "POST" {
+	if req.Body != nil && req.Method == http.MethodPost {
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err != nil {
 			return nil, fmt.Errorf("read request body: %w", err)
@@ -238,13 +238,13 @@ func fixToolMessages(body []byte) []byte {
 // preflightCheck does a quick API call to verify the key works.
 func preflightCheck(ctx context.Context, config Config) error {
 	apiURL := "https://openrouter.ai/api/v1/models"
-	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("preflight: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
 	if err != nil {
 		return fmt.Errorf("preflight: cannot reach OpenRouter: %w", err)
 	}

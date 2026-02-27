@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -15,8 +16,8 @@ func queryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
 		Short: "Query logs by pattern",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runQuery(patternID)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return runQuery(cmd.Context(), patternID)
 		},
 	}
 	cmd.Flags().StringVar(&patternID, "pattern", "", "pattern ID to filter by (required)")
@@ -24,7 +25,7 @@ func queryCmd() *cobra.Command {
 	return cmd
 }
 
-func runQuery(patternID string) error {
+func runQuery(ctx context.Context, patternID string) error {
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
 		return fmt.Errorf("store: %w", err)
@@ -32,7 +33,7 @@ func runQuery(patternID string) error {
 	defer func() { _ = s.Close() }()
 
 	q := querier.NewQuerier(s)
-	entries, err := q.ByPattern(patternID)
+	entries, err := q.ByPattern(ctx, patternID)
 	if err != nil {
 		return fmt.Errorf("query: %w", err)
 	}
