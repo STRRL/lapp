@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -15,7 +16,7 @@ func ingestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ingest <logfile>",
 		Short: "Ingest a log file through the parser pipeline into the store",
-		Long:  "Read a log file (or stdin with \"-\"), parse each line through Drain, and store results in DuckDB.",
+		Long:  "Read a log file, parse each line through Drain, and store results in DuckDB.",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runIngest,
 	}
@@ -25,7 +26,10 @@ func ingestCmd() *cobra.Command {
 func runIngest(cmd *cobra.Command, args []string) error {
 	logFile := args[0]
 
-	ch, err := ingestor.Ingest(logFile)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+
+	ch, err := ingestor.Ingest(ctx, logFile)
 	if err != nil {
 		return fmt.Errorf("ingest: %w", err)
 	}
@@ -38,8 +42,12 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	// - JSON: similar issue — groups by key structure, not by message semantics.
 	// - LLM: stub, not implemented yet.
 	// Drain discovers meaningful patterns by clustering similar lines online.
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		return fmt.Errorf("drain parser: %w", err)
+	}
 	chain := parser.NewChainParser(
-		parser.NewDrainParser(),
+		drainParser,
 	)
 
 	s, err := store.NewDuckDBStore(dbPath)
@@ -55,6 +63,9 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	var count int
 	var batch []store.LogEntry
 	for line := range ch {
+		if line.Err != nil {
+			return fmt.Errorf("read log: %w", line.Err)
+		}
 		result := chain.Parse(line.Content)
 		entry := store.LogEntry{
 			LineNumber: line.LineNumber,

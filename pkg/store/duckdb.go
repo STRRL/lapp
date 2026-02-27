@@ -9,6 +9,8 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
+var _ Store = (*DuckDBStore)(nil)
+
 // DuckDBStore implements Store using DuckDB.
 type DuckDBStore struct {
 	db *sql.DB
@@ -26,7 +28,9 @@ func NewDuckDBStore(dsn string) (*DuckDBStore, error) {
 
 // Init creates the log_entries and patterns tables if they do not exist.
 func (s *DuckDBStore) Init() error {
-	_, _ = s.db.Exec(`CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`)
+	if _, err := s.db.Exec(`CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`); err != nil {
+		return fmt.Errorf("create sequence: %w", err)
+	}
 	_, err := s.db.Exec(`
 		CREATE TABLE IF NOT EXISTS log_entries (
 			id BIGINT DEFAULT nextval('log_entries_id_seq'),
@@ -140,6 +144,8 @@ func (s *DuckDBStore) QueryLogs(opts QueryOpts) ([]LogEntry, error) {
 	}
 	query += " ORDER BY line_number"
 	if opts.Limit > 0 {
+		// DuckDB's database/sql driver does not reliably bind LIMIT via placeholder,
+		// so we interpolate the int directly. This is safe as opts.Limit is an int.
 		query += fmt.Sprintf(" LIMIT %d", opts.Limit)
 	}
 
@@ -189,9 +195,14 @@ func (s *DuckDBStore) InsertPatterns(patterns []Pattern) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// ON CONFLICT: update only structural fields; preserve semantic_id and description
+	// set by 'lapp label' so that re-ingestion does not wipe LLM-generated labels.
 	stmt, err := tx.Prepare(
-		`INSERT OR REPLACE INTO patterns (pattern_id, pattern_type, raw_pattern, semantic_id, description)
-		 VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO patterns (pattern_id, pattern_type, raw_pattern, semantic_id, description)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(pattern_id) DO UPDATE SET
+		     pattern_type = excluded.pattern_type,
+		     raw_pattern  = excluded.raw_pattern`,
 	)
 	if err != nil {
 		return fmt.Errorf("prepare: %w", err)
@@ -240,6 +251,10 @@ func (s *DuckDBStore) Patterns() ([]Pattern, error) {
 
 // UpdatePatternLabels updates only semantic_id and description for the given patterns.
 func (s *DuckDBStore) UpdatePatternLabels(labels []Pattern) error {
+	if len(labels) == 0 {
+		return nil
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -283,7 +298,7 @@ func (s *DuckDBStore) ClearOrphanPatternIDs() (int64, error) {
 // PatternCounts returns the number of log entries per pattern_id.
 func (s *DuckDBStore) PatternCounts() (map[string]int, error) {
 	rows, err := s.db.Query(
-		`SELECT pattern_id, COUNT(*) FROM log_entries GROUP BY pattern_id`,
+		`SELECT pattern_id, COUNT(*) FROM log_entries WHERE pattern_id != '' GROUP BY pattern_id`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("pattern counts: %w", err)

@@ -120,14 +120,20 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// buildParserChain creates the full JSON → Grok → Drain parser chain for workspace
+// analysis. The ingest path intentionally uses only Drain — see ingest.go.
 func buildParserChain() (*parser.ChainParser, error) {
 	grokParser, err := parser.NewGrokParser()
 	if err != nil {
 		return nil, fmt.Errorf("grok parser: %w", err)
 	}
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		return nil, fmt.Errorf("drain parser: %w", err)
+	}
 	return parser.NewChainParser(
 		parser.NewJSONParser(),
 		grokParser,
-		parser.NewDrainParser(),
+		drainParser,
 	), nil
 }

@@ -81,10 +81,14 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	if err != nil {
 		return "", fmt.Errorf("grok parser: %w", err)
 	}
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		return "", fmt.Errorf("drain parser: %w", err)
+	}
 	chain := parser.NewChainParser(
 		parser.NewJSONParser(),
 		grokParser,
-		parser.NewDrainParser(),
+		drainParser,
 	)
 
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
@@ -107,7 +111,7 @@ func RunAgent(ctx context.Context, config Config, workDir string, question strin
 	fmt.Fprintf(os.Stderr, "Analyzing with model %s...\n", config.Model)
 
 	// Preflight check: verify API key works
-	if err := preflightCheck(config); err != nil {
+	if err := preflightCheck(ctx, config); err != nil {
 		return "", err
 	}
 
@@ -192,7 +196,10 @@ func (rt *fixupRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	// eino omits "content" when a tool returns empty results (e.g. grep with no matches),
 	// which causes the Anthropic API to return 500.
 	if req.Body != nil && req.Method == "POST" {
-		bodyBytes, _ := io.ReadAll(req.Body)
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read request body: %w", err)
+		}
 		bodyBytes = fixToolMessages(bodyBytes)
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 		req.ContentLength = int64(len(bodyBytes))
@@ -240,9 +247,9 @@ func fixToolMessages(body []byte) []byte {
 }
 
 // preflightCheck does a quick API call to verify the key works.
-func preflightCheck(config Config) error {
+func preflightCheck(ctx context.Context, config Config) error {
 	apiURL := "https://openrouter.ai/api/v1/models"
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return fmt.Errorf("preflight: %w", err)
 	}

@@ -2,46 +2,57 @@ package ingestor
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 )
 
 // LogLine represents a single raw log line read from input.
+// If Err is non-nil, the line signals a read error and Content is empty.
 type LogLine struct {
 	LineNumber int
 	Content    string
+	Err        error
 }
 
 // Ingest reads log lines from a file path.
-// Use "-" to read from stdin.
-func Ingest(filePath string) (<-chan LogLine, error) {
-	var reader io.Reader
-
-	if filePath == "-" {
-		reader = os.Stdin
-	} else {
-		f, err := os.Open(filePath)
-		if err != nil {
-			return nil, fmt.Errorf("open log file: %w", err)
-		}
-		reader = f
+// Cancel the context to stop reading early; the goroutine will exit promptly.
+func Ingest(ctx context.Context, filePath string) (<-chan LogLine, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open log file: %w", err)
 	}
 
 	ch := make(chan LogLine, 100)
 	go func() {
 		defer close(ch)
-		if closer, ok := reader.(io.Closer); ok && filePath != "-" {
-			defer func() { _ = closer.Close() }()
-		}
-		scanner := bufio.NewScanner(reader)
+
+		var fileErr error
+		defer func() {
+			if cerr := f.Close(); cerr != nil {
+				fileErr = errors.Join(fileErr, fmt.Errorf("close log file: %w", cerr))
+			}
+			if fileErr != nil {
+				select {
+				case ch <- LogLine{Err: fileErr}:
+				case <-ctx.Done():
+				}
+			}
+		}()
+
+		scanner := bufio.NewScanner(f)
 		lineNum := 0
 		for scanner.Scan() {
 			lineNum++
-			ch <- LogLine{
-				LineNumber: lineNum,
-				Content:    scanner.Text(),
+			select {
+			case ch <- LogLine{LineNumber: lineNum, Content: scanner.Text()}:
+			case <-ctx.Done():
+				return
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			fileErr = fmt.Errorf("read log file: %w", err)
 		}
 	}()
 

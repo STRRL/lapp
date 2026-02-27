@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -125,7 +126,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			t.Parallel()
 
 			logPath := filepath.Join(basePath, ds, ds+"_2k.log")
-			ch, err := ingestor.Ingest(logPath)
+			ch, err := ingestor.Ingest(context.Background(), logPath)
 			if err != nil {
 				t.Fatalf("ingest: %v", err)
 			}
@@ -135,6 +136,9 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			var batch []store.LogEntry
 			for line := range ch {
+				if line.Err != nil {
+					t.Fatalf("ingest read error: %v", line.Err)
+				}
 				result := chain.Parse(line.Content)
 				batch = append(batch, store.LogEntry{
 					LineNumber: line.LineNumber,

@@ -1,6 +1,7 @@
 package ingestor
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +28,7 @@ func TestIngest(t *testing.T) {
 	}
 	_ = f.Close()
 
-	ch, err := Ingest(tmpFile)
+	ch, err := Ingest(context.Background(), tmpFile)
 	if err != nil {
 		t.Fatalf("Ingest returned error: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestIngest(t *testing.T) {
 }
 
 func TestIngestFileNotFound(t *testing.T) {
-	_, err := Ingest("/nonexistent/path/to/file.log")
+	_, err := Ingest(context.Background(), "/nonexistent/path/to/file.log")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file, got nil")
 	}

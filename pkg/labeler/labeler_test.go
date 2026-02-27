@@ -1,6 +1,7 @@
 package labeler
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,11 @@ func TestBuildPrompt(t *testing.T) {
 	}
 	if len(prompt) < 50 {
 		t.Errorf("prompt too short: %d chars", len(prompt))
+	}
+	for _, want := range []string{"D1", "D2", "Starting <*> on port <*>", "Connection timeout", "Starting myapp on port 8080"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("prompt missing expected content %q", want)
+		}
 	}
 }
 
@@ -60,6 +66,12 @@ func TestParseResponse(t *testing.T) {
 			input:   `not json`,
 			wantErr: true,
 		},
+		{
+			name:    "code fence without closing fence",
+			input:   "```json\n" + `[{"pattern_id":"D1","semantic_id":"test","description":"test"}]`,
+			wantErr: false,
+			want:    1,
+		},
 	}
 
 	for _, tt := range tests {
@@ -88,9 +100,23 @@ func TestResolveModel(t *testing.T) {
 		t.Errorf("got %q, want %q", got, "my-model")
 	}
 
-	// Empty falls back to default
+	// MODEL_NAME env var takes priority over default
+	t.Setenv("MODEL_NAME", "env-model")
 	got = resolveModel("")
-	if got == "" {
-		t.Error("expected non-empty default model")
+	if got != "env-model" {
+		t.Errorf("got %q, want %q", got, "env-model")
+	}
+
+	// Explicit model still wins over env var
+	got = resolveModel("explicit")
+	if got != "explicit" {
+		t.Errorf("got %q, want %q", got, "explicit")
+	}
+
+	// Falls back to default when env is unset
+	t.Setenv("MODEL_NAME", "")
+	got = resolveModel("")
+	if got != defaultModel {
+		t.Errorf("got %q, want %q", got, defaultModel)
 	}
 }

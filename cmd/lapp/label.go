@@ -9,20 +9,21 @@ import (
 	"github.com/strrl/lapp/pkg/store"
 )
 
-var labelModel string
-
 func labelCmd() *cobra.Command {
+	var model string
 	cmd := &cobra.Command{
 		Use:   "label",
 		Short: "Add semantic labels to discovered patterns using an LLM",
 		Long:  "Query the patterns table and use an LLM to generate semantic IDs and descriptions for each pattern.",
-		RunE:  runLabel,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runLabel(cmd, args, model)
+		},
 	}
-	cmd.Flags().StringVar(&labelModel, "model", "", "LLM model to use (default: $MODEL_NAME or google/gemini-3-flash-preview)")
+	cmd.Flags().StringVar(&model, "model", "", "LLM model to use (default: $MODEL_NAME or google/gemini-3-flash-preview)")
 	return cmd
 }
 
-func runLabel(cmd *cobra.Command, args []string) error {
+func runLabel(cmd *cobra.Command, args []string, model string) error {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
@@ -64,9 +65,9 @@ func runLabel(cmd *cobra.Command, args []string) error {
 
 	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
 
-	labels, err := labeler.Label(labeler.Config{
+	labels, err := labeler.Label(cmd.Context(), labeler.Config{
 		APIKey: apiKey,
-		Model:  labelModel,
+		Model:  model,
 	}, inputs)
 	if err != nil {
 		return fmt.Errorf("label: %w", err)
@@ -80,6 +81,11 @@ func runLabel(cmd *cobra.Command, args []string) error {
 			SemanticID:  l.SemanticID,
 			Description: l.Description,
 		})
+	}
+
+	if len(updates) == 0 {
+		fmt.Fprintln(os.Stderr, "No labels returned by LLM.")
+		return nil
 	}
 
 	if err := s.UpdatePatternLabels(updates); err != nil {
@@ -96,13 +102,13 @@ func runLabel(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func sampleLines(s *store.DuckDBStore, patternID string, n int) ([]string, error) {
+func sampleLines(s store.Store, patternID string, n int) ([]string, error) {
 	entries, err := s.QueryLogs(store.QueryOpts{
 		PatternID: patternID,
 		Limit:     n,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query logs: %w", err)
 	}
 	var lines []string
 	for _, e := range entries {

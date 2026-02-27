@@ -58,6 +58,11 @@ type Store interface {
 	Patterns() ([]Pattern, error)
 	// UpdatePatternLabels updates only semantic_id and description for patterns.
 	UpdatePatternLabels(labels []Pattern) error
+	// ClearOrphanPatternIDs sets pattern_id to empty for log entries
+	// whose pattern_id does not exist in the patterns table.
+	ClearOrphanPatternIDs() (int64, error)
+	// PatternCounts returns the number of log entries per pattern_id.
+	PatternCounts() (map[string]int, error)
 	// Close releases resources.
 	Close() error
 }

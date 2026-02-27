@@ -8,7 +8,10 @@ import (
 
 func TestChainParser_FirstMatchWins(t *testing.T) {
 	jp := NewJSONParser()
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := NewChainParser(jp, dp)
 
 	// JSON line should be caught by JSONParser first
@@ -44,7 +47,10 @@ func TestChainParser_NoMatch(t *testing.T) {
 
 func TestChainParser_Templates(t *testing.T) {
 	jp := NewJSONParser()
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	chain := NewChainParser(jp, dp)
 
 	// Feed some data so templates are generated
@@ -78,7 +84,10 @@ func TestChainParser_Templates(t *testing.T) {
 
 func TestChainParser_Order(t *testing.T) {
 	// Drain first, JSON second - Drain should catch JSON lines too
-	dp := NewDrainParser()
+	dp, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 	jp := NewJSONParser()
 	chain := NewChainParser(dp, jp)
 

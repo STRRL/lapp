@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/google/uuid"
@@ -15,15 +16,18 @@ type DrainParser struct {
 }
 
 // NewDrainParser creates a DrainParser with default Drain parameters.
-func NewDrainParser() *DrainParser {
-	d, _ := drain3.NewDrain(
+func NewDrainParser() (*DrainParser, error) {
+	d, err := drain3.NewDrain(
 		drain3.WithDepth(4),
 		drain3.WithSimTh(0.4),
 	)
+	if err != nil {
+		return nil, fmt.Errorf("create drain: %w", err)
+	}
 	return &DrainParser{
 		drain:        d,
 		clusterUUIDs: make(map[int64]string),
-	}
+	}, nil
 }
 
 // Parse feeds a log line into Drain and returns the matching cluster info.
@@ -59,8 +63,8 @@ func (p *DrainParser) Templates() []Template {
 	for _, c := range clusters {
 		id, ok := p.clusterUUIDs[c.ClusterId]
 		if !ok {
-			id = uuid.New().String()
-			p.clusterUUIDs[c.ClusterId] = id
+			// Skip clusters not seen during Parse — they have no matching log_entries rows
+			continue
 		}
 		templates = append(templates, Template{
 			ID:      id,

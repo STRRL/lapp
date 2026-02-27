@@ -16,8 +16,9 @@ const defaultModel = "google/gemini-3-flash-preview"
 
 // Config holds configuration for the labeler.
 type Config struct {
-	APIKey string
-	Model  string
+	APIKey     string
+	Model      string
+	HTTPClient *http.Client
 }
 
 // PatternInput represents a pattern to be labeled.
@@ -45,7 +46,7 @@ func resolveModel(model string) string {
 }
 
 // Label sends all patterns to the LLM in a single call and returns semantic labels.
-func Label(config Config, patterns []PatternInput) ([]SemanticLabel, error) {
+func Label(ctx context.Context, config Config, patterns []PatternInput) ([]SemanticLabel, error) {
 	if len(patterns) == 0 {
 		return nil, nil
 	}
@@ -53,7 +54,7 @@ func Label(config Config, patterns []PatternInput) ([]SemanticLabel, error) {
 	config.Model = resolveModel(config.Model)
 
 	prompt := buildPrompt(patterns)
-	resp, err := callLLM(config, prompt)
+	resp, err := callLLM(ctx, config, prompt)
 	if err != nil {
 		return nil, fmt.Errorf("call LLM: %w", err)
 	}
@@ -107,7 +108,7 @@ type chatResponse struct {
 	} `json:"choices"`
 }
 
-func callLLM(config Config, prompt string) (string, error) {
+func callLLM(ctx context.Context, config Config, prompt string) (string, error) {
 	reqBody := chatRequest{
 		Model: config.Model,
 		Messages: []chatMessage{
@@ -120,7 +121,7 @@ func callLLM(config Config, prompt string) (string, error) {
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
@@ -130,7 +131,11 @@ func callLLM(config Config, prompt string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := config.HTTPClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("HTTP request: %w", err)
 	}
@@ -162,9 +167,10 @@ func parseResponse(content string) ([]SemanticLabel, error) {
 	content = strings.TrimSpace(content)
 	if strings.HasPrefix(content, "```") {
 		lines := strings.Split(content, "\n")
-		// Remove first and last lines (code fences)
 		if len(lines) >= 2 {
-			lines = lines[1 : len(lines)-1]
+			// Strip the opening fence line
+			lines = lines[1:]
+			// Strip the closing fence line if present
 			if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], "```") {
 				lines = lines[:len(lines)-1]
 			}

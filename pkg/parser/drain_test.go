@@ -7,7 +7,10 @@ import (
 )
 
 func TestDrainParser_Parse(t *testing.T) {
-	p := NewDrainParser()
+	p, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 
 	lines := []string{
 		"081109 203615 148 INFO dfs.DataNode$PacketResponder: PacketResponder 1 for block blk_38865049064139660 terminating",
@@ -61,7 +64,10 @@ func TestDrainParser_Parse(t *testing.T) {
 }
 
 func TestDrainParser_EmptyInput(t *testing.T) {
-	p := NewDrainParser()
+	p, err := NewDrainParser()
+	if err != nil {
+		t.Fatalf("NewDrainParser: %v", err)
+	}
 
 	templates := p.Templates()
 	if len(templates) != 0 {

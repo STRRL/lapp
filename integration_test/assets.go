@@ -28,10 +28,14 @@ func newChainParser(t *testing.T) *parser.ChainParser {
 	if err != nil {
 		t.Fatalf("create grok parser: %v", err)
 	}
+	drainParser, err := parser.NewDrainParser()
+	if err != nil {
+		t.Fatalf("create drain parser: %v", err)
+	}
 	return parser.NewChainParser(
 		parser.NewJSONParser(),
 		grokParser,
-		parser.NewDrainParser(),
+		drainParser,
 		parser.NewLLMParser(),
 	)
 }
