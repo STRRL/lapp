@@ -61,9 +61,9 @@ func runLabel(cmd *cobra.Command, model string) error {
 			return errors.Errorf("sample lines for %s: %w", p.PatternID, err)
 		}
 		inputs = append(inputs, labeler.PatternInput{
-			PatternID: p.PatternID,
-			Pattern:   p.RawPattern,
-			Samples:   samples,
+			PatternUUID: p.PatternID,
+			Pattern:     p.RawPattern,
+			Samples:     samples,
 		})
 	}
 

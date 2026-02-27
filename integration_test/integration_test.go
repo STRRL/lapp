@@ -8,7 +8,6 @@ import (
 
 	"github.com/strrl/lapp/integration_test/loghub"
 	"github.com/strrl/lapp/pkg/ingestor"
-	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -81,8 +80,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 				t.Fatalf("insert patterns: %v", err)
 			}
 
-			q := querier.NewQuerier(s)
-			summaries, err := q.Summary(ctx)
+			summaries, err := s.PatternSummaries(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -91,11 +89,11 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 
 			// Save discovered templates
 			tplSummaries := make([]templateSummary, len(summaries))
-			for i, s := range summaries {
+			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: s.PatternID,
-					Pattern:   s.Pattern,
-					Count:     s.Count,
+					PatternID: sm.PatternID,
+					Pattern:   sm.Pattern,
+					Count:     sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -115,7 +113,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByPattern(ctx, first.PatternID)
+			matched, err := s.QueryByPattern(ctx, first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}
@@ -185,8 +183,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				t.Fatalf("insert patterns: %v", err)
 			}
 
-			q := querier.NewQuerier(s)
-			summaries, err := q.Summary(ctx)
+			summaries, err := s.PatternSummaries(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -195,11 +192,11 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			// Save discovered templates
 			tplSummaries := make([]templateSummary, len(summaries))
-			for i, s := range summaries {
+			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: s.PatternID,
-					Pattern:   s.Pattern,
-					Count:     s.Count,
+					PatternID: sm.PatternID,
+					Pattern:   sm.Pattern,
+					Count:     sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -218,7 +215,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			}
 
 			// Verify total stored entries match ingested count
-			allEntries, err := q.Search(ctx, store.QueryOpts{})
+			allEntries, err := s.QueryLogs(ctx, store.QueryOpts{})
 			if err != nil {
 				t.Fatalf("search all: %v", err)
 			}
@@ -228,7 +225,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			// Verify query-by-template roundtrip
 			first := summaries[0]
-			matched, err := q.ByPattern(ctx, first.PatternID)
+			matched, err := s.QueryByPattern(ctx, first.PatternID)
 			if err != nil {
 				t.Fatalf("query by template: %v", err)
 			}

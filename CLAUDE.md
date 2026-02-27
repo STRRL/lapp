@@ -36,7 +36,6 @@ make ci
 ```bash
 go run ./cmd/lapp/ ingest <logfile> [--db <path>]
 go run ./cmd/lapp/ templates [--db <path>]
-go run ./cmd/lapp/ query --template <id> [--db <path>]
 go run ./cmd/lapp/ analyze <logfile> [question]
 
 # Debug subcommands (build workspace without LLM, or run agent on existing workspace)
@@ -54,14 +53,13 @@ cmd/lapp/           CLI entrypoint (cobra commands)
 pkg/ingestor/       Read log files → stream of LogLine
 pkg/parser/         Multi-strategy parser chain: JSON → Drain
 pkg/store/          DuckDB storage for log entries and templates
-pkg/querier/        Query layer over store
 pkg/analyzer/       Agentic log analysis: builds workspace files, runs LLM agent via eino ADK
 integration_test/   Integration tests and test assets (Loghub-2.0 CSV loader)
 ```
 
 **Parser Chain:** JSON → Drain (first match wins, via `ChainParser`)
 
-**Data Flow:** CLI → Ingestor → Parser Chain → Store → Querier
+**Data Flow:** CLI → Ingestor → Parser Chain → Store
 
 **Analyzer Flow:** Logs → Parser Chain → Workspace (raw.log, summary.txt, errors.txt) → eino ADK agent with filesystem tools → analysis result
 

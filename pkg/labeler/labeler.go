@@ -28,9 +28,9 @@ type Config struct {
 //     Example: "Starting <*> on port <*>"
 //   - Samples: representative raw log lines from this cluster, used as LLM context
 type PatternInput struct {
-	PatternID string
-	Pattern   string
-	Samples   []string
+	PatternUUID string
+	Pattern     string
+	Samples     []string
 }
 
 // SemanticLabel is the LLM-generated label for a pattern.
@@ -73,7 +73,7 @@ Patterns:
 `)
 
 	for _, p := range patterns {
-		fmt.Fprintf(&b, "\nPattern %s: %q\n", p.PatternID, p.Pattern)
+		fmt.Fprintf(&b, "\nPattern %s: %q\n", p.PatternUUID, p.Pattern)
 		if len(p.Samples) > 0 {
 			b.WriteString("Samples:\n")
 			for _, s := range p.Samples {

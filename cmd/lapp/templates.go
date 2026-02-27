@@ -5,7 +5,6 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
-	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -31,8 +30,7 @@ func runTemplates(cmd *cobra.Command, _ []string) error {
 		return errors.Errorf("init store: %w", err)
 	}
 
-	q := querier.NewQuerier(s)
-	summaries, err := q.Summary(ctx)
+	summaries, err := s.PatternSummaries(ctx)
 	if err != nil {
 		return errors.Errorf("query: %w", err)
 	}

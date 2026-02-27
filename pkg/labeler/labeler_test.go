@@ -10,14 +10,14 @@ import (
 func TestBuildPrompt(t *testing.T) {
 	patterns := []PatternInput{
 		{
-			PatternID: "D1",
-			Pattern:   "Starting <*> on port <*>",
-			Samples:   []string{"Starting myapp on port 8080", "Starting worker on port 3000"},
+			PatternUUID: "D1",
+			Pattern:     "Starting <*> on port <*>",
+			Samples:     []string{"Starting myapp on port 8080", "Starting worker on port 3000"},
 		},
 		{
-			PatternID: "D2",
-			Pattern:   "Connection timeout after <*> ms",
-			Samples:   []string{"Connection timeout after 5000 ms"},
+			PatternUUID: "D2",
+			Pattern:     "Connection timeout after <*> ms",
+			Samples:     []string{"Connection timeout after 5000 ms"},
 		},
 	}
 
