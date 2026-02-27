@@ -68,6 +68,19 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 				t.Fatalf("insert batch: %v", err)
 			}
 
+			// Insert discovered patterns into the patterns table
+			templates := chain.Templates()
+			patterns := make([]store.Pattern, len(templates))
+			for i, tpl := range templates {
+				patterns[i] = store.Pattern{
+					PatternID:  tpl.ID,
+					RawPattern: tpl.Pattern,
+				}
+			}
+			if err := s.InsertPatterns(ctx, patterns); err != nil {
+				t.Fatalf("insert patterns: %v", err)
+			}
+
 			q := querier.NewQuerier(s)
 			summaries, err := q.Summary(ctx)
 			if err != nil {
@@ -158,6 +171,19 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				t.Fatalf("insert batch: %v", err)
 			}
 			t.Logf("Ingested and stored %d lines", len(batch))
+
+			// Insert discovered patterns into the patterns table
+			templates := chain.Templates()
+			patterns := make([]store.Pattern, len(templates))
+			for i, tpl := range templates {
+				patterns[i] = store.Pattern{
+					PatternID:  tpl.ID,
+					RawPattern: tpl.Pattern,
+				}
+			}
+			if err := s.InsertPatterns(ctx, patterns); err != nil {
+				t.Fatalf("insert patterns: %v", err)
+			}
 
 			q := querier.NewQuerier(s)
 			summaries, err := q.Summary(ctx)
