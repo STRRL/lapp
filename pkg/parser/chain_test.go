@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestChainParser_FirstMatchWins(t *testing.T) {
@@ -62,7 +64,7 @@ func TestChainParser_Templates(t *testing.T) {
 		if len(tmpl.ID) > 0 && tmpl.ID[0] == 'J' {
 			hasJSON = true
 		}
-		if len(tmpl.ID) > 0 && tmpl.ID[0] == 'D' {
+		if _, err := uuid.Parse(tmpl.ID); err == nil {
 			hasDrain = true
 		}
 	}
@@ -70,7 +72,7 @@ func TestChainParser_Templates(t *testing.T) {
 		t.Error("expected at least one JSON template in chain")
 	}
 	if !hasDrain {
-		t.Error("expected at least one Drain template in chain")
+		t.Error("expected at least one Drain (UUID) template in chain")
 	}
 }
 
@@ -85,8 +87,8 @@ func TestChainParser_Order(t *testing.T) {
 	if !result.Matched {
 		t.Fatal("expected chain to match")
 	}
-	// Drain catches everything, so it should match first
-	if result.PatternID[0] != 'D' {
-		t.Errorf("expected Drain to match first, got template ID %q", result.PatternID)
+	// Drain catches everything, so it should match first (UUID format)
+	if _, err := uuid.Parse(result.PatternID); err != nil {
+		t.Errorf("expected Drain to match first with UUID pattern ID, got %q", result.PatternID)
 	}
 }

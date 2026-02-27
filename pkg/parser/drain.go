@@ -1,16 +1,17 @@
 package parser
 
 import (
-	"fmt"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/jaeyo/go-drain3/pkg/drain3"
 )
 
 // DrainParser uses the Drain algorithm to discover log templates online.
 type DrainParser struct {
-	mu    sync.Mutex
-	drain *drain3.Drain
+	mu           sync.Mutex
+	drain        *drain3.Drain
+	clusterUUIDs map[int64]string
 }
 
 // NewDrainParser creates a DrainParser with default Drain parameters.
@@ -19,7 +20,10 @@ func NewDrainParser() *DrainParser {
 		drain3.WithDepth(4),
 		drain3.WithSimTh(0.4),
 	)
-	return &DrainParser{drain: d}
+	return &DrainParser{
+		drain:        d,
+		clusterUUIDs: make(map[int64]string),
+	}
 }
 
 // Parse feeds a log line into Drain and returns the matching cluster info.
@@ -32,9 +36,15 @@ func (p *DrainParser) Parse(content string) Result {
 		return Result{Matched: false}
 	}
 
+	id, ok := p.clusterUUIDs[cluster.ClusterId]
+	if !ok {
+		id = uuid.New().String()
+		p.clusterUUIDs[cluster.ClusterId] = id
+	}
+
 	return Result{
 		Matched:   true,
-		PatternID: fmt.Sprintf("D%d", cluster.ClusterId),
+		PatternID: id,
 		Pattern:   cluster.GetTemplate(),
 	}
 }
@@ -47,8 +57,13 @@ func (p *DrainParser) Templates() []Template {
 	clusters := p.drain.GetClusters()
 	templates := make([]Template, 0, len(clusters))
 	for _, c := range clusters {
+		id, ok := p.clusterUUIDs[c.ClusterId]
+		if !ok {
+			id = uuid.New().String()
+			p.clusterUUIDs[c.ClusterId] = id
+		}
 		templates = append(templates, Template{
-			ID:      fmt.Sprintf("D%d", c.ClusterId),
+			ID:      id,
 			Pattern: c.GetTemplate(),
 		})
 	}

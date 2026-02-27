@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestDrainParser_Parse(t *testing.T) {
@@ -15,6 +17,7 @@ func TestDrainParser_Parse(t *testing.T) {
 		"081109 204005 36 INFO dfs.FSNamesystem: BLOCK* NameSystem.allocateBlock: /mnt/hadoop/mapred/system/job_200811092030_0002/job.jar. blk_5260569883199042858",
 	}
 
+	patternIDs := make(map[string]string)
 	for _, line := range lines {
 		result := p.Parse(line)
 		if !result.Matched {
@@ -23,8 +26,20 @@ func TestDrainParser_Parse(t *testing.T) {
 		if result.PatternID == "" {
 			t.Error("expected non-empty PatternID")
 		}
+		if _, err := uuid.Parse(result.PatternID); err != nil {
+			t.Errorf("expected PatternID to be a valid UUID, got %q: %v", result.PatternID, err)
+		}
 		if result.Pattern == "" {
 			t.Error("expected non-empty Pattern")
+		}
+		patternIDs[line] = result.PatternID
+	}
+
+	// Verify stability: re-parsing the same line yields the same PatternID
+	for _, line := range lines {
+		result := p.Parse(line)
+		if result.PatternID != patternIDs[line] {
+			t.Errorf("unstable PatternID for %q: first=%s, second=%s", line, patternIDs[line], result.PatternID)
 		}
 	}
 
@@ -36,6 +51,12 @@ func TestDrainParser_Parse(t *testing.T) {
 	// Similar lines should cluster together, so we expect fewer templates than lines
 	if len(templates) >= len(lines) {
 		t.Errorf("expected fewer templates than lines, got %d templates for %d lines", len(templates), len(lines))
+	}
+
+	for _, tmpl := range templates {
+		if _, err := uuid.Parse(tmpl.ID); err != nil {
+			t.Errorf("expected template ID to be a valid UUID, got %q: %v", tmpl.ID, err)
+		}
 	}
 }
 

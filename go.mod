@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/eino-ext/adk/backend/local v0.1.1
 	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2
 	github.com/duckdb/duckdb-go/v2 v2.5.5
+	github.com/google/uuid v1.6.0
 	github.com/jaeyo/go-drain3 v0.1.2
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
@@ -34,7 +35,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/goph/emperror v0.17.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
