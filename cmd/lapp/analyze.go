@@ -1,0 +1,99 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/strrl/lapp/pkg/analyzer"
+)
+
+var analyzeModel string
+
+func analyzeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "analyze <logfile> [question]",
+		Short: "Analyze a log file using an AI agent to find root causes",
+		Long: `Read a log file, parse it through the template pipeline, then use an AI agent
+to autonomously explore the processed logs and provide analysis.
+
+Requires OPENROUTER_API_KEY environment variable to be set.
+
+Examples:
+  lapp analyze app.log
+  lapp analyze app.log "why is my service returning 502?"
+  cat logs.txt | lapp analyze - "what caused the crash?"`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: runAnalyze,
+	}
+	cmd.Flags().StringVar(&analyzeModel, "model", "", "override LLM model (default: anthropic/claude-sonnet-4-6)")
+	return cmd
+}
+
+func runAnalyze(cmd *cobra.Command, args []string) error {
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	if apiKey == "" {
+		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+	}
+
+	logFile := args[0]
+	var question string
+	if len(args) > 1 {
+		question = args[1]
+	}
+
+	// Read all lines
+	fmt.Fprintf(os.Stderr, "Reading logs...\n")
+	lines, err := readLines(logFile)
+	if err != nil {
+		return fmt.Errorf("read log file: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "Read %d lines\n", len(lines))
+
+	config := analyzer.Config{
+		APIKey: apiKey,
+		Model:  analyzeModel,
+	}
+
+	result, err := analyzer.Analyze(cmd.Context(), config, lines, question)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(result)
+	return nil
+}
+
+func readLines(path string) ([]string, error) {
+	var reader *os.File
+	if path == "-" {
+		reader = os.Stdin
+	} else {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = f.Close() }()
+		reader = f
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(reader)
+	// Increase buffer for long lines
+	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// Trim trailing empty lines
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines, nil
+}

@@ -4,52 +4,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LAPP (Log Auto Pattern Pipeline) is a CLI tool that uses LLM to automatically discover regex patterns from log streams and split them into semantic substreams. It reads logs from stdin, uses Gemini via OpenRouter to identify patterns, and applies regex matching to categorize logs.
+LAPP (Log Auto Pattern Pipeline) is a tool that automatically discovers log templates from log streams using multi-strategy parsing (JSON, Grok, Drain, LLM) and stores structured results in DuckDB for querying.
 
-## Commands
+## Go Commands
 
 ```bash
-# Install dependencies
-bun install
+# Build
+go build ./cmd/lapp/
 
-# Discover patterns from logs
-cat logs.txt | bun run src/index.ts discover
-kubectl logs deploy/xxx | bun run src/index.ts discover
+# Run all unit tests
+go test ./pkg/...
 
-# Apply saved patterns to logs
-cat logs.txt | bun run src/index.ts apply patterns.json
+# Run integration test (requires Loghub-2.0 dataset)
+LOGHUB_PATH=/path/to/Loghub-2.0/2k_dataset go test -v -run TestIntegration .
 
-# Or use pnpm scripts
-pnpm start        # defaults to discover
-pnpm discover     # explicit discover
-pnpm apply        # apply (requires patterns.json arg)
+# CLI usage
+go run ./cmd/lapp/ ingest <logfile> [--db <path>]
+go run ./cmd/lapp/ templates [--db <path>]
+go run ./cmd/lapp/ query --template <id> [--db <path>]
+
+# Read from stdin
+cat logs.txt | go run ./cmd/lapp/ ingest - --db lapp.duckdb
 ```
-
-## Environment Setup
-
-Requires `OPENROUTER_API_KEY` environment variable. See `.env.example`.
 
 ## Architecture
 
+See `ARCHITECTURE.md` for full module design. Key modules:
+
 ```
-src/
-├── index.ts      # CLI entrypoint - reads stdin, dispatches commands
-├── types.ts      # Zod schemas for Pattern and DiscoverResult
-├── discover.ts   # LLM integration - calls OpenRouter/Gemini for pattern discovery
-└── pipeline.ts   # Regex matching logic - applies patterns to log lines
+cmd/lapp/           CLI entrypoint
+pkg/ingestor/       Read log files → stream of LogLine
+pkg/parser/         Multi-strategy parser chain: JSON → Grok → Drain → LLM
+pkg/store/          DuckDB storage for log entries and templates
+pkg/querier/        Query layer over store
+pkg/loghub/         Loghub-2.0 CSV loader (integration tests only)
 ```
 
-**Data Flow:**
-1. `index.ts` reads log lines from stdin
-2. `discover` command: samples first 50 lines → LLM generates patterns → applies pipeline → outputs results
-3. `apply` command: loads patterns from JSON file → applies pipeline → outputs results
+**Parser Chain:** JSON → Grok → Drain → LLM (first match wins)
 
-**Key Types:**
-- `Pattern`: `{ regex: string, description: string }`
-- `PipelineResult`: `{ streams: Map<description, lines[]>, leftover: string[] }`
+**Data Flow:** CLI → Ingestor → Parser Chain → Store → Querier
 
 ## Tech Stack
 
-- Runtime: Bun
-- LLM: Vercel AI SDK with OpenRouter (google/gemini-2.0-flash-001)
-- Schema validation: Zod (for structured LLM output)
+- Language: Go
+- Parser: go-drain3, trivago/grok
+- Storage: DuckDB (via duckdb-go/v2)
+- LLM: stub for now (interface ready)

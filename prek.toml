@@ -1,0 +1,20 @@
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "check-toml" },
+  { id = "check-yaml" },
+  { id = "check-merge-conflict" },
+  { id = "check-added-large-files" },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "go-mod-tidy", name = "go mod tidy", language = "system", entry = "go mod tidy", pass_filenames = false, always_run = true },
+  { id = "gofmt", name = "gofmt", language = "system", entry = "gofmt -l -w", files = '\.go$', types = ["go"] },
+  { id = "go-vet", name = "go vet", language = "system", entry = "go vet ./...", pass_filenames = false, always_run = true },
+  { id = "golangci-lint", name = "golangci-lint", language = "system", entry = "golangci-lint run", pass_filenames = false, always_run = true },
+  { id = "go-test", name = "go test", language = "system", entry = "go test ./...", pass_filenames = false, always_run = true, stages = ["manual"] },
+]
