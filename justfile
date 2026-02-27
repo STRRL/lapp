@@ -15,7 +15,7 @@ test:
 
 # Run integration test (requires LOGHUB_PATH)
 test-integration:
-    go test -v -run TestIntegration -count=1 .
+    go test -v -timeout 15m -count=1 ./integration_test/
 
 # Format Go code
 fmt:
