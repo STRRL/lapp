@@ -68,7 +68,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 				t.Fatalf("templates: %v", err)
 			}
 
-			// Store log entries with pattern IDs assigned via MatchTemplate
+			// Store log entries with labels assigned via MatchTemplate
 			batch := make([]store.LogEntry, len(entries))
 			for i, entry := range entries {
 				le := store.LogEntry{
@@ -77,7 +77,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 					Raw:        entry.Content,
 				}
 				if tpl, ok := parser.MatchTemplate(entry.Content, templates); ok {
-					le.PatternUUIDString = tpl.ID.String()
+					le.Labels = map[string]string{"pattern": tpl.ID.String()}
 				}
 				batch[i] = le
 			}
@@ -91,6 +91,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 				patterns[i] = store.Pattern{
 					PatternUUIDString: tpl.ID.String(),
 					RawPattern:        tpl.Pattern,
+					SemanticID:        tpl.ID.String(),
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {
@@ -184,7 +185,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				t.Fatalf("templates: %v", err)
 			}
 
-			// Store log entries with pattern IDs assigned via MatchTemplate
+			// Store log entries with labels assigned via MatchTemplate
 			batch := make([]store.LogEntry, len(collected))
 			for i, ll := range collected {
 				le := store.LogEntry{
@@ -193,7 +194,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 					Raw:        ll.content,
 				}
 				if tpl, ok := parser.MatchTemplate(ll.content, templates); ok {
-					le.PatternUUIDString = tpl.ID.String()
+					le.Labels = map[string]string{"pattern": tpl.ID.String()}
 				}
 				batch[i] = le
 			}
@@ -208,6 +209,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				patterns[i] = store.Pattern{
 					PatternUUIDString: tpl.ID.String(),
 					RawPattern:        tpl.Pattern,
+					SemanticID:        tpl.ID.String(),
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {

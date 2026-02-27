@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -41,7 +42,7 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 			end_line_number INTEGER,
 			timestamp TIMESTAMP,
 			raw VARCHAR,
-			pattern_id VARCHAR
+			labels JSON
 		)
 	`)
 	if err != nil {
@@ -64,16 +65,31 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 	return nil
 }
 
+func marshalLabels(labels map[string]string) (string, error) {
+	if labels == nil {
+		return "{}", nil
+	}
+	b, err := json.Marshal(labels)
+	if err != nil {
+		return "", errors.Errorf("marshal labels: %w", err)
+	}
+	return string(b), nil
+}
+
 // InsertLog stores a single log entry.
 func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, pattern_id)
-		 VALUES (?, ?, ?, ?, ?)`,
+	labelsJSON, err := marshalLabels(entry.Labels)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, labels)
+		 VALUES (?, ?, ?, ?, ?::JSON)`,
 		entry.LineNumber,
 		entry.EndLineNumber,
 		entry.Timestamp,
 		entry.Raw,
-		entry.PatternUUIDString,
+		labelsJSON,
 	)
 	if err != nil {
 		return errors.Errorf("insert log: %w", err)
@@ -90,8 +106,8 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx,
-		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, pattern_id)
-		 VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO log_entries (line_number, end_line_number, timestamp, raw, labels)
+		 VALUES (?, ?, ?, ?, ?::JSON)`,
 	)
 	if err != nil {
 		return errors.Errorf("prepare: %w", err)
@@ -99,7 +115,11 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	defer func() { _ = stmt.Close() }()
 
 	for _, e := range entries {
-		_, err = stmt.ExecContext(ctx, e.LineNumber, e.EndLineNumber, e.Timestamp, e.Raw, e.PatternUUIDString)
+		labelsJSON, err := marshalLabels(e.Labels)
+		if err != nil {
+			return err
+		}
+		_, err = stmt.ExecContext(ctx, e.LineNumber, e.EndLineNumber, e.Timestamp, e.Raw, labelsJSON)
 		if err != nil {
 			return errors.Errorf("exec: %w", err)
 		}
@@ -111,12 +131,12 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	return nil
 }
 
-// QueryByPattern returns log entries matching the given pattern ID.
-func (s *DuckDBStore) QueryByPattern(ctx context.Context, patternID string) ([]LogEntry, error) {
+// QueryByPattern returns log entries matching the given pattern semantic ID via labels.
+func (s *DuckDBStore) QueryByPattern(ctx context.Context, pattern string) ([]LogEntry, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, line_number, end_line_number, timestamp, raw, pattern_id
-		 FROM log_entries WHERE pattern_id = ?`,
-		patternID,
+		`SELECT id, line_number, end_line_number, timestamp, raw, CAST(labels AS VARCHAR)
+		 FROM log_entries WHERE json_extract_string(labels, '$.pattern') = ?`,
+		pattern,
 	)
 	if err != nil {
 		return nil, errors.Errorf("query by pattern: %w", err)
@@ -130,9 +150,9 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 	var conditions []string
 	var args []any
 
-	if opts.PatternUUIDString != "" {
-		conditions = append(conditions, "pattern_id = ?")
-		args = append(args, opts.PatternUUIDString)
+	if opts.Pattern != "" {
+		conditions = append(conditions, "json_extract_string(labels, '$.pattern') = ?")
+		args = append(args, opts.Pattern)
 	}
 	if !opts.From.IsZero() {
 		conditions = append(conditions, "timestamp >= ?")
@@ -143,7 +163,7 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 		args = append(args, opts.To)
 	}
 
-	query := "SELECT id, line_number, end_line_number, timestamp, raw, pattern_id FROM log_entries"
+	query := "SELECT id, line_number, end_line_number, timestamp, raw, CAST(labels AS VARCHAR) FROM log_entries"
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
@@ -166,11 +186,11 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 // joined with pattern metadata from the patterns table.
 func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT le.pattern_id, COALESCE(p.raw_pattern, ''), COUNT(*) as cnt,
+		`SELECT p.pattern_id, COALESCE(p.raw_pattern, ''), COUNT(*) as cnt,
 		        COALESCE(p.pattern_type, ''), COALESCE(p.semantic_id, ''), COALESCE(p.description, '')
 		 FROM log_entries le
-		 INNER JOIN patterns p ON le.pattern_id = p.pattern_id
-		 GROUP BY le.pattern_id, p.raw_pattern, p.pattern_type, p.semantic_id, p.description
+		 INNER JOIN patterns p ON json_extract_string(le.labels, '$.pattern') = p.semantic_id
+		 GROUP BY p.pattern_id, p.raw_pattern, p.pattern_type, p.semantic_id, p.description
 		 ORDER BY cnt DESC`,
 	)
 	if err != nil {
@@ -200,14 +220,14 @@ func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) er
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// ON CONFLICT: update only structural fields; preserve semantic_id and description
-	// set by 'lapp label' so that re-ingestion does not wipe LLM-generated labels.
 	stmt, err := tx.PrepareContext(ctx,
 		`INSERT INTO patterns (pattern_id, pattern_type, raw_pattern, semantic_id, description)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(pattern_id) DO UPDATE SET
 		     pattern_type = excluded.pattern_type,
-		     raw_pattern  = excluded.raw_pattern`,
+		     raw_pattern  = excluded.raw_pattern,
+		     semantic_id  = excluded.semantic_id,
+		     description  = excluded.description`,
 	)
 	if err != nil {
 		return errors.Errorf("prepare: %w", err)
@@ -254,56 +274,13 @@ func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
 	return patterns, nil
 }
 
-// UpdatePatternLabels updates only semantic_id and description for the given patterns.
-func (s *DuckDBStore) UpdatePatternLabels(ctx context.Context, labels []Pattern) error {
-	if len(labels) == 0 {
-		return nil
-	}
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return errors.Errorf("begin tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	stmt, err := tx.PrepareContext(ctx,
-		`UPDATE patterns SET semantic_id = ?, description = ? WHERE pattern_id = ?`,
-	)
-	if err != nil {
-		return errors.Errorf("prepare: %w", err)
-	}
-	defer func() { _ = stmt.Close() }()
-
-	for _, l := range labels {
-		_, err = stmt.ExecContext(ctx, l.SemanticID, l.Description, l.PatternUUIDString)
-		if err != nil {
-			return errors.Errorf("exec: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return errors.Errorf("commit: %w", err)
-	}
-	return nil
-}
-
-// ClearOrphanPatternIDs sets pattern_id to empty for log entries
-// whose pattern_id does not exist in the patterns table.
-func (s *DuckDBStore) ClearOrphanPatternIDs(ctx context.Context) (int64, error) {
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE log_entries SET pattern_id = ''
-		 WHERE pattern_id != '' AND pattern_id NOT IN (SELECT pattern_id FROM patterns)`,
-	)
-	if err != nil {
-		return 0, errors.Errorf("clear orphan pattern IDs: %w", err)
-	}
-	return result.RowsAffected()
-}
-
-// PatternCounts returns the number of log entries per pattern_id.
+// PatternCounts returns the number of log entries per pattern semantic ID.
 func (s *DuckDBStore) PatternCounts(ctx context.Context) (map[string]int, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT pattern_id, COUNT(*) FROM log_entries WHERE pattern_id != '' GROUP BY pattern_id`,
+		`SELECT json_extract_string(labels, '$.pattern'), COUNT(*)
+		 FROM log_entries
+		 WHERE json_extract_string(labels, '$.pattern') IS NOT NULL AND json_extract_string(labels, '$.pattern') != ''
+		 GROUP BY json_extract_string(labels, '$.pattern')`,
 	)
 	if err != nil {
 		return nil, errors.Errorf("pattern counts: %w", err)
@@ -325,6 +302,11 @@ func (s *DuckDBStore) PatternCounts(ctx context.Context) (map[string]int, error)
 	return counts, nil
 }
 
+// InternalDB returns the underlying *sql.DB for direct SQL queries.
+func (s *DuckDBStore) InternalDB() *sql.DB {
+	return s.db
+}
+
 // Close closes the underlying database connection.
 func (s *DuckDBStore) Close() error {
 	return s.db.Close()
@@ -335,10 +317,16 @@ func scanEntries(rows *sql.Rows) ([]LogEntry, error) {
 	for rows.Next() {
 		var e LogEntry
 		var ts time.Time
-		if err := rows.Scan(&e.ID, &e.LineNumber, &e.EndLineNumber, &ts, &e.Raw, &e.PatternUUIDString); err != nil {
+		var labelsJSON string
+		if err := rows.Scan(&e.ID, &e.LineNumber, &e.EndLineNumber, &ts, &e.Raw, &labelsJSON); err != nil {
 			return nil, errors.Errorf("scan entry: %w", err)
 		}
 		e.Timestamp = ts
+		if labelsJSON != "" {
+			if err := json.Unmarshal([]byte(labelsJSON), &e.Labels); err != nil {
+				return nil, errors.Errorf("unmarshal labels: %w", err)
+			}
+		}
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
