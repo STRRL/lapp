@@ -53,7 +53,7 @@ func (m *tokenGraph) matchProbability(ts []Token) matchContext {
 	lastToken := ts[0]
 	matchForIndex := func(idx int) int {
 		match := -1
-		if m.adjacencies[lastToken] != nil && m.adjacencies[lastToken][ts[idx+1]] {
+		if len(m.adjacencies[lastToken]) > 0 && m.adjacencies[lastToken][ts[idx+1]] {
 			match = 1
 		}
 		lastToken = ts[idx+1]
@@ -75,6 +75,8 @@ func (m *tokenGraph) matchProbability(ts []Token) matchContext {
 
 // maxSubsequence is a modified Kadane's Algorithm that returns the average,
 // start, and end of the largest subsequence.
+//
+//nolint:gocritic // unnamedResult: vendored from Datadog agent, keeping original signature
 func maxSubsequence(length int, matchForIndex func(idx int) int) (float64, int, int) {
 	if length == 0 {
 		return 0, 0, 0

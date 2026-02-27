@@ -47,7 +47,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	}
 	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
 	if err != nil {
-		return fmt.Errorf("multiline detector: %w", err)
+		return errors.Errorf("multiline detector: %w", err)
 	}
 	merged := multiline.MergeSlice(lines, detector)
 	mergedLines := make([]string, len(merged))

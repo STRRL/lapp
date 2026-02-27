@@ -34,7 +34,7 @@ func TestIntegrationJavaStackTrace(t *testing.T) {
 	// 5. "2024-03-28 13:45:34 INFO..."
 	if len(merged) != 5 {
 		for i, m := range merged {
-			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content, 80))
+			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content))
 		}
 		t.Fatalf("expected 5 merged entries, got %d", len(merged))
 	}
@@ -68,7 +68,7 @@ func TestIntegrationPythonTraceback(t *testing.T) {
 	// 4. "2024-03-28 14:00:04 DEBUG Processing next batch..."
 	if len(merged) != 4 {
 		for i, m := range merged {
-			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content, 80))
+			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content))
 		}
 		t.Fatalf("expected 4 merged entries, got %d", len(merged))
 	}
@@ -98,7 +98,7 @@ func TestIntegrationGoPanic(t *testing.T) {
 	// 4. "2024-03-28 15:00:06 INFO Server recovered..."
 	if len(merged) != 4 {
 		for i, m := range merged {
-			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content, 80))
+			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content))
 		}
 		t.Fatalf("expected 4 merged entries, got %d", len(merged))
 	}
@@ -148,15 +148,15 @@ func TestIntegrationMixedFormats(t *testing.T) {
 	// so each should be its own entry
 	if len(merged) != len(lines) {
 		for i, m := range merged {
-			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content, 80))
+			t.Logf("entry %d: lines %d-%d: %s", i, m.StartLine, m.EndLine, truncate(m.Content))
 		}
 		t.Fatalf("expected %d entries, got %d", len(lines), len(merged))
 	}
 }
 
-func truncate(s string, n int) string {
-	if len(s) <= n {
+func truncate(s string) string {
+	if len(s) <= 80 {
 		return s
 	}
-	return s[:n] + "..."
+	return s[:80] + "..."
 }

@@ -6,29 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LAPP (Log Auto Pattern Pipeline) is a tool that automatically discovers log templates from log streams using multi-strategy parsing (JSON, Drain) and stores structured results in DuckDB for querying. It also includes an agentic analyzer that uses LLMs to investigate logs.
 
-## Commands (justfile)
+## Commands (Makefile)
 
 ```bash
 # Build
-just build
+make build
 
 # Run unit tests
-just unit-test
+make unit-test
 
 # Run integration tests (requires LOGHUB_PATH)
-just integration-test
+make integration-test
 
 # Run all tests (unit + integration)
-just test-all
+make test
 
 # Run a single test
 go test -v -run TestFunctionName ./pkg/parser/
 
 # Lint
-just lint
+make lint
 
 # CI checks (fmt + vet + build + lint + unit-test)
-just ci
+make ci
 ```
 
 ## CLI Usage
@@ -58,7 +58,7 @@ pkg/parser/         Multi-strategy parser chain: JSON → Drain
 pkg/store/          DuckDB storage for log entries and templates
 pkg/querier/        Query layer over store
 pkg/analyzer/       Agentic log analysis: builds workspace files, runs LLM agent via eino ADK
-pkg/test/loghub/    Loghub-2.0 CSV loader (integration tests only)
+integration_test/   Integration tests and test assets (Loghub-2.0 CSV loader)
 ```
 
 **Parser Chain:** JSON → Drain (first match wins, via `ChainParser`)

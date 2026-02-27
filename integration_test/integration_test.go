@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strrl/lapp/integration_test/loghub"
 	"github.com/strrl/lapp/pkg/ingestor"
 	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
-	"github.com/strrl/lapp/pkg/test/loghub"
 )
 
 var datasets = []string{

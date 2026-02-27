@@ -17,6 +17,7 @@ const maxRun = 10
 var tokenLookup = makeTokenLookup()
 var toUpperLookup = makeToUpperLookup()
 
+//nolint:gosec // G602: false positive, loop is bounded by [256]byte array
 func makeToUpperLookup() [256]byte {
 	var lookup [256]byte
 	for i := range lookup {
@@ -28,6 +29,7 @@ func makeToUpperLookup() [256]byte {
 	return lookup
 }
 
+//nolint:gosec // G602: false positive, loop is bounded by [256]Token array
 func makeTokenLookup() [256]Token {
 	var lookup [256]Token
 
@@ -97,6 +99,7 @@ func newTokenizer(maxEvalBytes int) *tokenizer {
 	}
 }
 
+//nolint:gocritic // unnamedResult: vendored from Datadog agent, keeping original signature
 func (t *tokenizer) emitToken(ts []Token, indicies []int, lastToken Token, run, idx int) ([]Token, []int) {
 	if lastToken == tC1 && t.strLen > 0 && t.strLen <= 4 {
 		if t.strLen == 1 {
@@ -124,6 +127,7 @@ func (t *tokenizer) emitToken(ts []Token, indicies []int, lastToken Token, run, 
 	return ts, indicies
 }
 
+//nolint:gocritic // unnamedResult: vendored from Datadog agent, keeping original signature
 func (t *tokenizer) tokenize(input []byte) ([]Token, []int) {
 	inputLen := len(input)
 	if inputLen == 0 {
@@ -149,6 +153,7 @@ func (t *tokenizer) tokenize(input []byte) ([]Token, []int) {
 	}
 
 	for i := 1; i < inputLen; i++ {
+		//nolint:gosec // G602: i is bounded by inputLen = len(input)
 		char := input[i]
 		currentToken := tokenLookup[char]
 
@@ -222,6 +227,8 @@ func getSpecialLongToken(input string) Token {
 }
 
 // tokenToString converts a single token to a debug string.
+//
+//nolint:gocyclo,exhaustive // vendored from Datadog agent; tD1-tD10 and tC1-tC10 handled above switch
 func tokenToString(token Token) string {
 	if token >= tD1 && token <= tD10 {
 		return strings.Repeat("D", int(token-tD1)+1)
@@ -310,6 +317,7 @@ func tokensToString(tokens []Token) string {
 	return builder.String()
 }
 
+//nolint:gocritic // paramTypeCombine: vendored from Datadog agent, keeping original signature
 func isMatch(seqA []Token, seqB []Token, thresh float64) bool {
 	count := min(len(seqB), len(seqA))
 
