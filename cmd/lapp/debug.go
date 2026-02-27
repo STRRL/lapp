@@ -7,6 +7,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/parser"
 )
 
@@ -44,7 +45,16 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("read log file: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Read %d lines\n", len(lines))
+	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+	if err != nil {
+		return fmt.Errorf("multiline detector: %w", err)
+	}
+	merged := multiline.MergeSlice(lines, detector)
+	mergedLines := make([]string, len(merged))
+	for i, m := range merged {
+		mergedLines[i] = m.Content
+	}
+	fmt.Fprintf(os.Stderr, "Read %d lines, merged into %d entries\n", len(lines), len(mergedLines))
 
 	outDir := debugWorkspaceOutput
 	if outDir == "" {
@@ -63,8 +73,8 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
-	if err := analyzer.BuildWorkspace(outDir, lines, chain); err != nil {
+	fmt.Fprintf(os.Stderr, "Parsing %d entries...\n", len(mergedLines))
+	if err := analyzer.BuildWorkspace(outDir, mergedLines, chain); err != nil {
 		return errors.Errorf("build workspace: %w", err)
 	}
 

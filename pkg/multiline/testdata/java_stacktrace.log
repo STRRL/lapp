@@ -1,0 +1,13 @@
+2024-03-28 13:45:30 INFO  Application started successfully
+2024-03-28 13:45:31 DEBUG Processing request for user 123
+2024-03-28 13:45:32 ERROR NullPointerException occurred while processing request
+java.lang.NullPointerException: Cannot invoke method on null object
+	at com.example.service.UserService.getUser(UserService.java:42)
+	at com.example.controller.UserController.handleRequest(UserController.java:87)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
+Caused by: java.lang.IllegalStateException: Database connection is null
+	at com.example.db.ConnectionPool.getConnection(ConnectionPool.java:31)
+	at com.example.service.UserService.getUser(UserService.java:40)
+	... 2 more
+2024-03-28 13:45:33 WARN  Retrying request after failure
+2024-03-28 13:45:34 INFO  Request completed successfully on retry

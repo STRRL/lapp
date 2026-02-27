@@ -9,6 +9,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/multiline"
 )
 
 var analyzeModel string
@@ -51,14 +52,23 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("read log file: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "Read %d lines\n", len(lines))
+	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+	if err != nil {
+		return fmt.Errorf("multiline detector: %w", err)
+	}
+	merged := multiline.MergeSlice(lines, detector)
+	mergedLines := make([]string, len(merged))
+	for i, m := range merged {
+		mergedLines[i] = m.Content
+	}
+	fmt.Fprintf(os.Stderr, "Read %d lines, merged into %d entries\n", len(lines), len(mergedLines))
 
 	config := analyzer.Config{
 		APIKey: apiKey,
 		Model:  analyzeModel,
 	}
 
-	result, err := analyzer.Analyze(cmd.Context(), config, lines, question)
+	result, err := analyzer.Analyze(cmd.Context(), config, mergedLines, question)
 	if err != nil {
 		return err
 	}

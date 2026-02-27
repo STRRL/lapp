@@ -9,8 +9,10 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/parser"
 	"github.com/strrl/lapp/pkg/store"
+
 )
 
 func ingestCmd() *cobra.Command {
@@ -34,6 +36,12 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("ingest: %w", err)
 	}
+
+	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+	if err != nil {
+		return errors.Errorf("multiline detector: %w", err)
+	}
+	merged := multiline.Merge(ch, detector)
 
 	// Only use Drain for pattern discovery.
 	// JSON/Grok parsers were removed because:
@@ -61,7 +69,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("store init: %w", err)
 	}
 
-	count, err := ingestLines(ctx, s, ch, chain)
+	count, err := ingestLines(ctx, s, merged, chain)
 	if err != nil {
 		return err
 	}
@@ -78,19 +86,21 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.Result[*ingestor.LogLine], chain *parser.ChainParser) (int, error) {
+func ingestLines(ctx context.Context, s *store.DuckDBStore, merged <-chan multiline.MergeResult, chain *parser.ChainParser) (int, error) {
 	var count int
 	var batch []store.LogEntry
-	for rr := range ch {
+	for rr := range merged {
 		if rr.Err != nil {
 			return 0, errors.Errorf("read log: %w", rr.Err)
 		}
-		result := chain.Parse(rr.Value.Content)
+		ml := rr.Value
+		result := chain.Parse(ml.Content)
 		entry := store.LogEntry{
-			LineNumber: rr.Value.LineNumber,
-			Timestamp:  time.Now(),
-			Raw:        rr.Value.Content,
-			PatternID:  result.PatternID,
+			LineNumber:    ml.StartLine,
+			EndLineNumber: ml.EndLine,
+			Timestamp:     time.Now(),
+			Raw:           ml.Content,
+			PatternID:     result.PatternID,
 		}
 		batch = append(batch, entry)
 

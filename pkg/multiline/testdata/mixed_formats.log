@@ -1,0 +1,8 @@
+Mar 16 08:12:04 myhost sshd[1234]: Accepted publickey for user
+Mar 16 08:12:05 myhost sshd[1234]: pam_unix(sshd:session): session opened
+2024-03-28T13:45:30.123456Z INFO  Starting application v2.1.0
+2024-03-28T13:45:31.456Z DEBUG  Loading configuration
+28/Mar/2024:13:45:30 +0000 GET /api/health 200 0.001
+28/Mar/2024:13:45:31 +0000 POST /api/login 200 0.042
+2024/04/25 14:57:42 [error] worker process exited
+2024/04/25 14:57:43 [notice] signal received: restart

@@ -1,0 +1,5 @@
+2024-03-28 10:00:01 INFO  Application starting
+2024-03-28 10:00:02 INFO  Loading configuration from /etc/app/config.yaml
+2024-03-28 10:00:03 DEBUG Database connection established
+2024-03-28 10:00:04 INFO  Listening on port 8080
+2024-03-28 10:00:05 INFO  Ready to serve requests
