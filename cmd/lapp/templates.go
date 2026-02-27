@@ -60,7 +60,7 @@ func runTemplates(cmd *cobra.Command, _ []string) error {
 			if pType == "" {
 				pType = "-"
 			}
-			fmt.Printf("%-12s %-6s %-22s %-6d %s\n", ts.PatternID, pType, semanticID, ts.Count, desc)
+			fmt.Printf("%-12s %-6s %-22s %-6d %s\n", ts.PatternUUIDString, pType, semanticID, ts.Count, desc)
 		}
 	} else {
 		fmt.Printf("%-12s %-6s %-6s %s\n", "ID", "TYPE", "COUNT", "PATTERN")
@@ -70,7 +70,7 @@ func runTemplates(cmd *cobra.Command, _ []string) error {
 			if pType == "" {
 				pType = "-"
 			}
-			fmt.Printf("%-12s %-6s %-6d %s\n", ts.PatternID, pType, ts.Count, ts.Pattern)
+			fmt.Printf("%-12s %-6s %-6d %s\n", ts.PatternUUIDString, pType, ts.Count, ts.Pattern)
 		}
 	}
 	return nil

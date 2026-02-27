@@ -30,7 +30,7 @@ func BuildWorkspace(dir string, lines []string, templates []parser.DrainCluster)
 		t, ok := parser.MatchTemplate(line, templates)
 		id := ""
 		if ok {
-			id = t.ID
+			id = t.ID.String()
 		}
 		matches = append(matches, lineMatch{raw: line, templateID: id})
 	}
@@ -75,8 +75,9 @@ func writeSummary(dir string, templates []parser.DrainCluster, matches []lineMat
 	statsMap := make(map[string]*templateStats)
 
 	for _, t := range templates {
-		statsMap[t.ID] = &templateStats{
-			id:      t.ID,
+		id := t.ID.String()
+		statsMap[id] = &templateStats{
+			id:      id,
 			pattern: t.Pattern,
 		}
 	}
@@ -122,7 +123,7 @@ func writeErrors(dir string, templates []parser.DrainCluster, matches []lineMatc
 	errorTemplates := make(map[string]bool)
 	for _, t := range templates {
 		if errorPattern.MatchString(t.Pattern) {
-			errorTemplates[t.ID] = true
+			errorTemplates[t.ID.String()] = true
 		}
 	}
 
@@ -151,21 +152,22 @@ func writeErrors(dir string, templates []parser.DrainCluster, matches []lineMatc
 func writeErrorTemplates(buf *strings.Builder, templates []parser.DrainCluster, errorTemplates map[string]bool, matches []lineMatch) bool {
 	hasContent := false
 	for _, t := range templates {
-		if !errorTemplates[t.ID] {
+		tid := t.ID.String()
+		if !errorTemplates[tid] {
 			continue
 		}
 		hasContent = true
 		count := 0
 		var samples []string
 		for _, m := range matches {
-			if m.templateID == t.ID {
+			if m.templateID == tid {
 				count++
 				if len(samples) < 3 {
 					samples = append(samples, m.raw)
 				}
 			}
 		}
-		fmt.Fprintf(buf, "[%s] \"%s\" — %d occurrences\n", t.ID, t.Pattern, count)
+		fmt.Fprintf(buf, "[%s] \"%s\" — %d occurrences\n", tid, t.Pattern, count)
 		for i, sample := range samples {
 			fmt.Fprintf(buf, "  sample %d: %s\n", i+1, sample)
 		}

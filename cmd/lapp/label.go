@@ -56,14 +56,14 @@ func runLabel(cmd *cobra.Command, model string) error {
 	// Build pattern inputs with sample lines
 	var inputs []labeler.PatternInput
 	for _, p := range patterns {
-		samples, err := sampleLines(ctx, s, p.PatternID, 3)
+		samples, err := sampleLines(ctx, s, p.PatternUUIDString, 3)
 		if err != nil {
-			return errors.Errorf("sample lines for %s: %w", p.PatternID, err)
+			return errors.Errorf("sample lines for %s: %w", p.PatternUUIDString, err)
 		}
 		inputs = append(inputs, labeler.PatternInput{
-			PatternUUID: p.PatternID,
-			Pattern:     p.RawPattern,
-			Samples:     samples,
+			PatternUUIDString: p.PatternUUIDString,
+			Pattern:           p.RawPattern,
+			Samples:           samples,
 		})
 	}
 
@@ -81,9 +81,9 @@ func runLabel(cmd *cobra.Command, model string) error {
 	var updates []store.Pattern
 	for _, l := range labels {
 		updates = append(updates, store.Pattern{
-			PatternID:   l.PatternID,
-			SemanticID:  l.SemanticID,
-			Description: l.Description,
+			PatternUUIDString: l.PatternUUIDString,
+			SemanticID:        l.SemanticID,
+			Description:       l.Description,
 		})
 	}
 
@@ -100,16 +100,16 @@ func runLabel(cmd *cobra.Command, model string) error {
 	fmt.Printf("%-12s %-25s %s\n", "ID", "SEMANTIC_ID", "DESCRIPTION")
 	fmt.Println("------------ ------------------------- ----------------------------------------")
 	for _, l := range labels {
-		fmt.Printf("%-12s %-25s %s\n", l.PatternID, l.SemanticID, l.Description)
+		fmt.Printf("%-12s %-25s %s\n", l.PatternUUIDString, l.SemanticID, l.Description)
 	}
 
 	return nil
 }
 
-func sampleLines(ctx context.Context, s store.Store, patternID string, n int) ([]string, error) {
+func sampleLines(ctx context.Context, s store.Store, patternUUIDString string, n int) ([]string, error) {
 	entries, err := s.QueryLogs(ctx, store.QueryOpts{
-		PatternID: patternID,
-		Limit:     n,
+		PatternUUIDString: patternUUIDString,
+		Limit:             n,
 	})
 	if err != nil {
 		return nil, errors.Errorf("query logs: %w", err)

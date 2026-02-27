@@ -39,8 +39,8 @@ func TestDrainParser_FeedAndTemplates(t *testing.T) {
 	}
 
 	for _, tmpl := range templates {
-		if _, err := uuid.Parse(tmpl.ID); err != nil {
-			t.Errorf("expected template ID to be a valid UUID, got %q: %v", tmpl.ID, err)
+		if tmpl.ID == uuid.Nil {
+			t.Error("expected non-nil UUID")
 		}
 		if tmpl.Count <= 0 {
 			t.Errorf("expected positive Count, got %d for template %s", tmpl.Count, tmpl.ID)
@@ -73,9 +73,11 @@ func TestDrainParser_EmptyInput(t *testing.T) {
 }
 
 func TestMatchTemplate(t *testing.T) {
+	id1 := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	id2 := uuid.MustParse("00000000-0000-0000-0000-000000000002")
 	templates := []DrainCluster{
-		{ID: "1", Pattern: "INFO server started on port <*>"},
-		{ID: "2", Pattern: "ERROR connection <*> to <*>"},
+		{ID: id1, Pattern: "INFO server started on port <*>"},
+		{ID: id2, Pattern: "ERROR connection <*> to <*>"},
 	}
 
 	// Should match first template
@@ -83,8 +85,8 @@ func TestMatchTemplate(t *testing.T) {
 	if !ok {
 		t.Fatal("expected match for server started line")
 	}
-	if matched.ID != "1" {
-		t.Errorf("expected template 1, got %s", matched.ID)
+	if matched.ID != id1 {
+		t.Errorf("expected template %s, got %s", id1, matched.ID)
 	}
 
 	// Should match second template
@@ -92,8 +94,8 @@ func TestMatchTemplate(t *testing.T) {
 	if !ok {
 		t.Fatal("expected match for error line")
 	}
-	if matched.ID != "2" {
-		t.Errorf("expected template 2, got %s", matched.ID)
+	if matched.ID != id2 {
+		t.Errorf("expected template %s, got %s", id2, matched.ID)
 	}
 
 	// Should not match

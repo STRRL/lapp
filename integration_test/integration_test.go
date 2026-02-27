@@ -8,6 +8,7 @@ import (
 
 	"github.com/strrl/lapp/integration_test/loghub"
 	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/parser"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -52,20 +53,10 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			dp := newDrainParser(t)
 			s := newStore(t)
 
-			// Collect lines and store log entries
+			// Collect lines
 			lines := make([]string, len(entries))
-			batch := make([]store.LogEntry, len(entries))
 			for i, entry := range entries {
 				lines[i] = entry.Content
-				batch[i] = store.LogEntry{
-					LineNumber: i + 1,
-					Timestamp:  time.Now(),
-					Raw:        entry.Content,
-				}
-			}
-
-			if err := s.InsertLogBatch(ctx, batch); err != nil {
-				t.Fatalf("insert batch: %v", err)
 			}
 
 			// Feed all lines and get templates
@@ -77,12 +68,29 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 				t.Fatalf("templates: %v", err)
 			}
 
+			// Store log entries with pattern IDs assigned via MatchTemplate
+			batch := make([]store.LogEntry, len(entries))
+			for i, entry := range entries {
+				le := store.LogEntry{
+					LineNumber: i + 1,
+					Timestamp:  time.Now(),
+					Raw:        entry.Content,
+				}
+				if tpl, ok := parser.MatchTemplate(entry.Content, templates); ok {
+					le.PatternUUIDString = tpl.ID.String()
+				}
+				batch[i] = le
+			}
+			if err := s.InsertLogBatch(ctx, batch); err != nil {
+				t.Fatalf("insert batch: %v", err)
+			}
+
 			// Insert discovered patterns into the patterns table
 			patterns := make([]store.Pattern, len(templates))
 			for i, tpl := range templates {
 				patterns[i] = store.Pattern{
-					PatternID:  tpl.ID,
-					RawPattern: tpl.Pattern,
+					PatternUUIDString: tpl.ID.String(),
+					RawPattern:        tpl.Pattern,
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {
@@ -100,9 +108,9 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: sm.PatternID,
-					Pattern:   sm.Pattern,
-					Count:     sm.Count,
+					PatternUUIDString: sm.PatternUUIDString,
+					Pattern:           sm.Pattern,
+					Count:             sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -143,31 +151,31 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			dp := newDrainParser(t)
 			s := newStore(t)
 
-			// Collect lines and store log entries
-			var lines []string
-			var batch []store.LogEntry
+			// Collect lines from ingestor
+			type logLine struct {
+				lineNumber int
+				content    string
+			}
+			var collected []logLine
 			for rr := range ch {
 				if rr.Err != nil {
 					t.Fatalf("ingest read error: %v", rr.Err)
 				}
-				lines = append(lines, rr.Value.Content)
-				batch = append(batch, store.LogEntry{
-					LineNumber: rr.Value.LineNumber,
-					Timestamp:  time.Now(),
-					Raw:        rr.Value.Content,
+				collected = append(collected, logLine{
+					lineNumber: rr.Value.LineNumber,
+					content:    rr.Value.Content,
 				})
 			}
 
-			if len(batch) == 0 {
+			if len(collected) == 0 {
 				t.Fatal("expected at least 1 ingested line, got 0")
 			}
 
-			if err := s.InsertLogBatch(ctx, batch); err != nil {
-				t.Fatalf("insert batch: %v", err)
-			}
-			t.Logf("Ingested and stored %d lines", len(batch))
-
 			// Feed all lines and get templates
+			lines := make([]string, len(collected))
+			for i, ll := range collected {
+				lines[i] = ll.content
+			}
 			if err := dp.Feed(lines); err != nil {
 				t.Fatalf("feed: %v", err)
 			}
@@ -176,12 +184,30 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				t.Fatalf("templates: %v", err)
 			}
 
+			// Store log entries with pattern IDs assigned via MatchTemplate
+			batch := make([]store.LogEntry, len(collected))
+			for i, ll := range collected {
+				le := store.LogEntry{
+					LineNumber: ll.lineNumber,
+					Timestamp:  time.Now(),
+					Raw:        ll.content,
+				}
+				if tpl, ok := parser.MatchTemplate(ll.content, templates); ok {
+					le.PatternUUIDString = tpl.ID.String()
+				}
+				batch[i] = le
+			}
+			if err := s.InsertLogBatch(ctx, batch); err != nil {
+				t.Fatalf("insert batch: %v", err)
+			}
+			t.Logf("Ingested and stored %d lines", len(batch))
+
 			// Insert discovered patterns into the patterns table
 			patterns := make([]store.Pattern, len(templates))
 			for i, tpl := range templates {
 				patterns[i] = store.Pattern{
-					PatternID:  tpl.ID,
-					RawPattern: tpl.Pattern,
+					PatternUUIDString: tpl.ID.String(),
+					RawPattern:        tpl.Pattern,
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {
@@ -199,9 +225,9 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			tplSummaries := make([]templateSummary, len(summaries))
 			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: sm.PatternID,
-					Pattern:   sm.Pattern,
-					Count:     sm.Count,
+					PatternUUIDString: sm.PatternUUIDString,
+					Pattern:           sm.Pattern,
+					Count:             sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{

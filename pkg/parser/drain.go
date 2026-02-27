@@ -13,9 +13,7 @@ type DrainParser struct {
 	mu    sync.Mutex
 	drain *drain3.Drain
 	// clusterUUIDs maps Drain cluster IDs to stable UUIDs for consistent template identification.
-	// key is drain3.ClusterId, value is a UUID string.
-	// FIXME: use uuid type not uuid string
-	clusterUUIDs map[int64]string
+	clusterUUIDs map[int64]uuid.UUID
 }
 
 // NewDrainParser creates a DrainParser with default Drain parameters.
@@ -23,13 +21,14 @@ func NewDrainParser() (*DrainParser, error) {
 	d, err := drain3.NewDrain(
 		drain3.WithDepth(4),
 		drain3.WithSimTh(0.4),
+		drain3.WithExtraDelimiter([]string{"|", "=", ","}),
 	)
 	if err != nil {
 		return nil, errors.Errorf("create drain: %w", err)
 	}
 	return &DrainParser{
 		drain:        d,
-		clusterUUIDs: make(map[int64]string),
+		clusterUUIDs: make(map[int64]uuid.UUID),
 	}, nil
 }
 
@@ -47,7 +46,7 @@ func (p *DrainParser) Feed(contents []string) error {
 			continue
 		}
 		if _, ok := p.clusterUUIDs[cluster.ClusterId]; !ok {
-			p.clusterUUIDs[cluster.ClusterId] = uuid.New().String()
+			p.clusterUUIDs[cluster.ClusterId] = uuid.New()
 		}
 	}
 	return nil

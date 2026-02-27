@@ -73,7 +73,7 @@ func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
 		entry.EndLineNumber,
 		entry.Timestamp,
 		entry.Raw,
-		entry.PatternID,
+		entry.PatternUUIDString,
 	)
 	if err != nil {
 		return errors.Errorf("insert log: %w", err)
@@ -99,7 +99,7 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 	defer func() { _ = stmt.Close() }()
 
 	for _, e := range entries {
-		_, err = stmt.ExecContext(ctx, e.LineNumber, e.EndLineNumber, e.Timestamp, e.Raw, e.PatternID)
+		_, err = stmt.ExecContext(ctx, e.LineNumber, e.EndLineNumber, e.Timestamp, e.Raw, e.PatternUUIDString)
 		if err != nil {
 			return errors.Errorf("exec: %w", err)
 		}
@@ -130,9 +130,9 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 	var conditions []string
 	var args []any
 
-	if opts.PatternID != "" {
+	if opts.PatternUUIDString != "" {
 		conditions = append(conditions, "pattern_id = ?")
-		args = append(args, opts.PatternID)
+		args = append(args, opts.PatternUUIDString)
 	}
 	if !opts.From.IsZero() {
 		conditions = append(conditions, "timestamp >= ?")
@@ -181,7 +181,7 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 	var summaries []PatternSummary
 	for rows.Next() {
 		var ps PatternSummary
-		if err := rows.Scan(&ps.PatternID, &ps.Pattern, &ps.Count, &ps.PatternType, &ps.SemanticID, &ps.Description); err != nil {
+		if err := rows.Scan(&ps.PatternUUIDString, &ps.Pattern, &ps.Count, &ps.PatternType, &ps.SemanticID, &ps.Description); err != nil {
 			return nil, errors.Errorf("scan summary: %w", err)
 		}
 		summaries = append(summaries, ps)
@@ -215,7 +215,7 @@ func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) er
 	defer func() { _ = stmt.Close() }()
 
 	for _, p := range patterns {
-		_, err = stmt.ExecContext(ctx, p.PatternID, p.PatternType, p.RawPattern, p.SemanticID, p.Description)
+		_, err = stmt.ExecContext(ctx, p.PatternUUIDString, p.PatternType, p.RawPattern, p.SemanticID, p.Description)
 		if err != nil {
 			return errors.Errorf("exec: %w", err)
 		}
@@ -243,7 +243,7 @@ func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
 	var patterns []Pattern
 	for rows.Next() {
 		var p Pattern
-		if err := rows.Scan(&p.PatternID, &p.PatternType, &p.RawPattern, &p.SemanticID, &p.Description); err != nil {
+		if err := rows.Scan(&p.PatternUUIDString, &p.PatternType, &p.RawPattern, &p.SemanticID, &p.Description); err != nil {
 			return nil, errors.Errorf("scan pattern: %w", err)
 		}
 		patterns = append(patterns, p)
@@ -275,7 +275,7 @@ func (s *DuckDBStore) UpdatePatternLabels(ctx context.Context, labels []Pattern)
 	defer func() { _ = stmt.Close() }()
 
 	for _, l := range labels {
-		_, err = stmt.ExecContext(ctx, l.SemanticID, l.Description, l.PatternID)
+		_, err = stmt.ExecContext(ctx, l.SemanticID, l.Description, l.PatternUUIDString)
 		if err != nil {
 			return errors.Errorf("exec: %w", err)
 		}
@@ -335,7 +335,7 @@ func scanEntries(rows *sql.Rows) ([]LogEntry, error) {
 	for rows.Next() {
 		var e LogEntry
 		var ts time.Time
-		if err := rows.Scan(&e.ID, &e.LineNumber, &e.EndLineNumber, &ts, &e.Raw, &e.PatternID); err != nil {
+		if err := rows.Scan(&e.ID, &e.LineNumber, &e.EndLineNumber, &ts, &e.Raw, &e.PatternUUIDString); err != nil {
 			return nil, errors.Errorf("scan entry: %w", err)
 		}
 		e.Timestamp = ts

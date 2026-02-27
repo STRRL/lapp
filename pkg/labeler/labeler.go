@@ -23,21 +23,21 @@ type Config struct {
 // PatternInput represents a log pattern to be labeled.
 //
 // Fields come from the Drain log parsing algorithm:
-//   - PatternID: a UUID assigned to each Drain cluster (group of similar log lines)
+//   - PatternUUIDString: a UUID string assigned to each Drain cluster (group of similar log lines)
 //   - Pattern: the Drain template string where variable tokens are replaced with <*>
 //     Example: "Starting <*> on port <*>"
 //   - Samples: representative raw log lines from this cluster, used as LLM context
 type PatternInput struct {
-	PatternUUID string
-	Pattern     string
-	Samples     []string
+	PatternUUIDString string
+	Pattern           string
+	Samples           []string
 }
 
 // SemanticLabel is the LLM-generated label for a pattern.
 type SemanticLabel struct {
-	PatternID   string `json:"pattern_id"`
-	SemanticID  string `json:"semantic_id"`
-	Description string `json:"description"`
+	PatternUUIDString string `json:"pattern_id"`
+	SemanticID        string `json:"semantic_id"`
+	Description       string `json:"description"`
 }
 
 // Label sends all patterns to the LLM in a single call and returns semantic labels.
@@ -73,7 +73,7 @@ Patterns:
 `)
 
 	for _, p := range patterns {
-		fmt.Fprintf(&b, "\nPattern %s: %q\n", p.PatternUUID, p.Pattern)
+		fmt.Fprintf(&b, "\nPattern %s: %q\n", p.PatternUUIDString, p.Pattern)
 		if len(p.Samples) > 0 {
 			b.WriteString("Samples:\n")
 			for _, s := range p.Samples {

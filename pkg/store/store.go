@@ -7,39 +7,39 @@ import (
 
 // LogEntry represents a single stored log line.
 type LogEntry struct {
-	ID            int64
-	LineNumber    int
-	EndLineNumber int
-	Timestamp     time.Time
-	Raw           string
-	PatternID     string
+	ID                int64
+	LineNumber        int
+	EndLineNumber     int
+	Timestamp         time.Time
+	Raw               string
+	PatternUUIDString string
 }
 
 // Pattern represents a discovered log pattern with optional semantic labels.
 type Pattern struct {
-	PatternID   string
-	PatternType string
-	RawPattern  string
-	SemanticID  string
-	Description string
+	PatternUUIDString string
+	PatternType       string
+	RawPattern        string
+	SemanticID        string
+	Description       string
 }
 
 // PatternSummary holds a pattern and its occurrence count.
 type PatternSummary struct {
-	PatternID   string
-	Pattern     string
-	Count       int
-	PatternType string
-	SemanticID  string
-	Description string
+	PatternUUIDString string
+	Pattern           string
+	Count             int
+	PatternType       string
+	SemanticID        string
+	Description       string
 }
 
 // QueryOpts specifies filters for querying log entries.
 type QueryOpts struct {
-	PatternID string
-	From      time.Time
-	To        time.Time
-	Limit     int
+	PatternUUIDString string
+	From              time.Time
+	To                time.Time
+	Limit             int
 }
 
 // Store persists log entries and patterns.
@@ -51,7 +51,7 @@ type Store interface {
 	// InsertLogBatch stores multiple log entries.
 	InsertLogBatch(ctx context.Context, entries []LogEntry) error
 	// QueryByPattern returns entries matching a pattern ID.
-	QueryByPattern(ctx context.Context, patternID string) ([]LogEntry, error)
+	QueryByPattern(ctx context.Context, patternUUIDString string) ([]LogEntry, error)
 	// QueryLogs returns entries matching the given options.
 	QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry, error)
 	// PatternSummaries returns all patterns with their counts.

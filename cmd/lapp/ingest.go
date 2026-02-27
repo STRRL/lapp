@@ -123,9 +123,9 @@ func discoverAndSavePatterns(ctx context.Context, s *store.DuckDBStore, dp *pars
 			continue
 		}
 		patterns = append(patterns, store.Pattern{
-			PatternID:   t.ID,
-			PatternType: "drain",
-			RawPattern:  t.Pattern,
+			PatternUUIDString: t.ID.String(),
+			PatternType:       "drain",
+			RawPattern:        t.Pattern,
 		})
 	}
 	if len(patterns) > 0 {

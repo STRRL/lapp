@@ -78,9 +78,9 @@ type templateResult struct {
 }
 
 type templateSummary struct {
-	PatternID string `json:"pattern_id"`
-	Pattern   string `json:"pattern"`
-	Count     int    `json:"count"`
+	PatternUUIDString string `json:"pattern_id"`
+	Pattern           string `json:"pattern"`
+	Count             int    `json:"count"`
 }
 
 // saveTemplates writes template summaries to a JSON file in the output directory.
