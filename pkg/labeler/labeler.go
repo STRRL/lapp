@@ -9,6 +9,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/schema"
+	"github.com/go-errors/errors"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 )
 
@@ -51,12 +52,12 @@ func Label(ctx context.Context, config Config, patterns []PatternInput) ([]Seman
 	prompt := buildPrompt(patterns)
 	resp, err := callLLM(ctx, config, prompt)
 	if err != nil {
-		return nil, fmt.Errorf("call LLM: %w", err)
+		return nil, errors.Errorf("call LLM: %w", err)
 	}
 
 	labels, err := parseResponse(resp)
 	if err != nil {
-		return nil, fmt.Errorf("parse LLM response: %w", err)
+		return nil, errors.Errorf("parse LLM response: %w", err)
 	}
 
 	return labels, nil
@@ -90,39 +91,29 @@ func callLLM(ctx context.Context, config Config, prompt string) (string, error) 
 		APIKey:     config.APIKey,
 		Model:      config.Model,
 		HTTPClient: config.HTTPClient,
+		ResponseFormat: &openrouter.ChatCompletionResponseFormat{
+			Type: openrouter.ChatCompletionResponseFormatTypeJSONObject,
+		},
 	})
 	if err != nil {
-		return "", fmt.Errorf("create chat model: %w", err)
+		return "", errors.Errorf("create chat model: %w", err)
 	}
 
 	resp, err := chatModel.Generate(ctx, []*schema.Message{
 		{Role: schema.User, Content: prompt},
 	})
 	if err != nil {
-		return "", fmt.Errorf("generate: %w", err)
+		return "", errors.Errorf("generate: %w", err)
 	}
 	return resp.Content, nil
 }
 
 func parseResponse(content string) ([]SemanticLabel, error) {
-	// Strip markdown code fences if present
 	content = strings.TrimSpace(content)
-	if strings.HasPrefix(content, "```") {
-		lines := strings.Split(content, "\n")
-		if len(lines) >= 2 {
-			// Strip the opening fence line
-			lines = lines[1:]
-			// Strip the closing fence line if present
-			if len(lines) > 0 && strings.HasPrefix(lines[len(lines)-1], "```") {
-				lines = lines[:len(lines)-1]
-			}
-		}
-		content = strings.Join(lines, "\n")
-	}
 
 	var labels []SemanticLabel
 	if err := json.Unmarshal([]byte(content), &labels); err != nil {
-		return nil, fmt.Errorf("JSON decode (content=%q): %w", content[:min(len(content), 200)], err)
+		return nil, errors.Errorf("JSON decode (content=%q): %w", content[:min(len(content), 200)], err)
 	}
 	return labels, nil
 }

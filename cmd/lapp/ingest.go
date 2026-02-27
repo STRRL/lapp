@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/ingestor"
 	"github.com/strrl/lapp/pkg/parser"
@@ -31,7 +32,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 
 	ch, err := ingestor.Ingest(ctx, logFile)
 	if err != nil {
-		return fmt.Errorf("ingest: %w", err)
+		return errors.Errorf("ingest: %w", err)
 	}
 
 	// Only use Drain for pattern discovery.
@@ -44,7 +45,7 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	// Drain discovers meaningful patterns by clustering similar lines online.
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
-		return fmt.Errorf("drain parser: %w", err)
+		return errors.Errorf("drain parser: %w", err)
 	}
 	chain := parser.NewChainParser(
 		drainParser,
@@ -52,12 +53,12 @@ func runIngest(cmd *cobra.Command, args []string) error {
 
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("store: %w", err)
+		return errors.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
 	if err := s.Init(ctx); err != nil {
-		return fmt.Errorf("store init: %w", err)
+		return errors.Errorf("store init: %w", err)
 	}
 
 	count, err := ingestLines(ctx, s, ch, chain)
@@ -77,25 +78,25 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.ReadResult, chain *parser.ChainParser) (int, error) {
+func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.Result[*ingestor.LogLine], chain *parser.ChainParser) (int, error) {
 	var count int
 	var batch []store.LogEntry
 	for rr := range ch {
 		if rr.Err != nil {
-			return 0, fmt.Errorf("read log: %w", rr.Err)
+			return 0, errors.Errorf("read log: %w", rr.Err)
 		}
-		result := chain.Parse(rr.Line.Content)
+		result := chain.Parse(rr.Value.Content)
 		entry := store.LogEntry{
-			LineNumber: rr.Line.LineNumber,
+			LineNumber: rr.Value.LineNumber,
 			Timestamp:  time.Now(),
-			Raw:        rr.Line.Content,
+			Raw:        rr.Value.Content,
 			PatternID:  result.PatternID,
 		}
 		batch = append(batch, entry)
 
 		if len(batch) >= 500 {
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
-				return 0, fmt.Errorf("insert batch: %w", err)
+				return 0, errors.Errorf("insert batch: %w", err)
 			}
 			batch = batch[:0]
 		}
@@ -104,7 +105,7 @@ func ingestLines(ctx context.Context, s *store.DuckDBStore, ch <-chan ingestor.R
 
 	if len(batch) > 0 {
 		if err := s.InsertLogBatch(ctx, batch); err != nil {
-			return 0, fmt.Errorf("insert batch: %w", err)
+			return 0, errors.Errorf("insert batch: %w", err)
 		}
 	}
 	return count, nil
@@ -119,7 +120,7 @@ func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *pa
 	// original text with no generalization. Not useful as a pattern.
 	patternCounts, err := s.PatternCounts(ctx)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("pattern counts: %w", err)
+		return 0, 0, 0, errors.Errorf("pattern counts: %w", err)
 	}
 
 	var patterns []store.Pattern
@@ -135,13 +136,13 @@ func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *pa
 	}
 	if len(patterns) > 0 {
 		if err := s.InsertPatterns(ctx, patterns); err != nil {
-			return 0, 0, 0, fmt.Errorf("insert patterns: %w", err)
+			return 0, 0, 0, errors.Errorf("insert patterns: %w", err)
 		}
 	}
 
 	cleared, err = s.ClearOrphanPatternIDs(ctx)
 	if err != nil {
-		return 0, 0, 0, fmt.Errorf("clear orphan pattern IDs: %w", err)
+		return 0, 0, 0, errors.Errorf("clear orphan pattern IDs: %w", err)
 	}
 
 	return len(templates), len(patterns), cleared, nil

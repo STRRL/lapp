@@ -9,6 +9,7 @@ import (
 
 	// DuckDB driver for database/sql.
 	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/go-errors/errors"
 )
 
 var _ Store = (*DuckDBStore)(nil)
@@ -23,7 +24,7 @@ type DuckDBStore struct {
 func NewDuckDBStore(dsn string) (*DuckDBStore, error) {
 	db, err := sql.Open("duckdb", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open duckdb: %w", err)
+		return nil, errors.Errorf("open duckdb: %w", err)
 	}
 	return &DuckDBStore{db: db}, nil
 }
@@ -31,7 +32,7 @@ func NewDuckDBStore(dsn string) (*DuckDBStore, error) {
 // Init creates the log_entries and patterns tables if they do not exist.
 func (s *DuckDBStore) Init(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, `CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`); err != nil {
-		return fmt.Errorf("create sequence: %w", err)
+		return errors.Errorf("create sequence: %w", err)
 	}
 	_, err := s.db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS log_entries (
@@ -43,7 +44,7 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		return fmt.Errorf("create log_entries table: %w", err)
+		return errors.Errorf("create log_entries table: %w", err)
 	}
 
 	_, err = s.db.ExecContext(ctx, `
@@ -56,7 +57,7 @@ func (s *DuckDBStore) Init(ctx context.Context) error {
 		)
 	`)
 	if err != nil {
-		return fmt.Errorf("create patterns table: %w", err)
+		return errors.Errorf("create patterns table: %w", err)
 	}
 
 	return nil
@@ -73,7 +74,7 @@ func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
 		entry.PatternID,
 	)
 	if err != nil {
-		return fmt.Errorf("insert log: %w", err)
+		return errors.Errorf("insert log: %w", err)
 	}
 	return nil
 }
@@ -82,7 +83,7 @@ func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
 func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return errors.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -91,19 +92,19 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 		 VALUES (?, ?, ?, ?)`,
 	)
 	if err != nil {
-		return fmt.Errorf("prepare: %w", err)
+		return errors.Errorf("prepare: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, e := range entries {
 		_, err = stmt.ExecContext(ctx, e.LineNumber, e.Timestamp, e.Raw, e.PatternID)
 		if err != nil {
-			return fmt.Errorf("exec: %w", err)
+			return errors.Errorf("exec: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return errors.Errorf("commit: %w", err)
 	}
 	return nil
 }
@@ -116,7 +117,7 @@ func (s *DuckDBStore) QueryByPattern(ctx context.Context, patternID string) ([]L
 		patternID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query by pattern: %w", err)
+		return nil, errors.Errorf("query by pattern: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	return scanEntries(rows)
@@ -153,7 +154,7 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query logs: %w", err)
+		return nil, errors.Errorf("query logs: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	return scanEntries(rows)
@@ -171,7 +172,7 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 		 ORDER BY cnt DESC`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pattern summaries: %w", err)
+		return nil, errors.Errorf("pattern summaries: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -179,12 +180,12 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 	for rows.Next() {
 		var ps PatternSummary
 		if err := rows.Scan(&ps.PatternID, &ps.Pattern, &ps.Count, &ps.PatternType, &ps.SemanticID, &ps.Description); err != nil {
-			return nil, fmt.Errorf("scan summary: %w", err)
+			return nil, errors.Errorf("scan summary: %w", err)
 		}
 		summaries = append(summaries, ps)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows err: %w", err)
+		return nil, errors.Errorf("rows err: %w", err)
 	}
 	return summaries, nil
 }
@@ -193,7 +194,7 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return errors.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -207,19 +208,19 @@ func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) er
 		     raw_pattern  = excluded.raw_pattern`,
 	)
 	if err != nil {
-		return fmt.Errorf("prepare: %w", err)
+		return errors.Errorf("prepare: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, p := range patterns {
 		_, err = stmt.ExecContext(ctx, p.PatternID, p.PatternType, p.RawPattern, p.SemanticID, p.Description)
 		if err != nil {
-			return fmt.Errorf("exec: %w", err)
+			return errors.Errorf("exec: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return errors.Errorf("commit: %w", err)
 	}
 	return nil
 }
@@ -233,7 +234,7 @@ func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
 		 ORDER BY pattern_id`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query patterns: %w", err)
+		return nil, errors.Errorf("query patterns: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -241,12 +242,12 @@ func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
 	for rows.Next() {
 		var p Pattern
 		if err := rows.Scan(&p.PatternID, &p.PatternType, &p.RawPattern, &p.SemanticID, &p.Description); err != nil {
-			return nil, fmt.Errorf("scan pattern: %w", err)
+			return nil, errors.Errorf("scan pattern: %w", err)
 		}
 		patterns = append(patterns, p)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows err: %w", err)
+		return nil, errors.Errorf("rows err: %w", err)
 	}
 	return patterns, nil
 }
@@ -259,7 +260,7 @@ func (s *DuckDBStore) UpdatePatternLabels(ctx context.Context, labels []Pattern)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return errors.Errorf("begin tx: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
@@ -267,19 +268,19 @@ func (s *DuckDBStore) UpdatePatternLabels(ctx context.Context, labels []Pattern)
 		`UPDATE patterns SET semantic_id = ?, description = ? WHERE pattern_id = ?`,
 	)
 	if err != nil {
-		return fmt.Errorf("prepare: %w", err)
+		return errors.Errorf("prepare: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, l := range labels {
 		_, err = stmt.ExecContext(ctx, l.SemanticID, l.Description, l.PatternID)
 		if err != nil {
-			return fmt.Errorf("exec: %w", err)
+			return errors.Errorf("exec: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return errors.Errorf("commit: %w", err)
 	}
 	return nil
 }
@@ -292,7 +293,7 @@ func (s *DuckDBStore) ClearOrphanPatternIDs(ctx context.Context) (int64, error) 
 		 WHERE pattern_id != '' AND pattern_id NOT IN (SELECT pattern_id FROM patterns)`,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("clear orphan pattern IDs: %w", err)
+		return 0, errors.Errorf("clear orphan pattern IDs: %w", err)
 	}
 	return result.RowsAffected()
 }
@@ -303,7 +304,7 @@ func (s *DuckDBStore) PatternCounts(ctx context.Context) (map[string]int, error)
 		`SELECT pattern_id, COUNT(*) FROM log_entries WHERE pattern_id != '' GROUP BY pattern_id`,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("pattern counts: %w", err)
+		return nil, errors.Errorf("pattern counts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -312,12 +313,12 @@ func (s *DuckDBStore) PatternCounts(ctx context.Context) (map[string]int, error)
 		var id string
 		var cnt int
 		if err := rows.Scan(&id, &cnt); err != nil {
-			return nil, fmt.Errorf("scan: %w", err)
+			return nil, errors.Errorf("scan: %w", err)
 		}
 		counts[id] = cnt
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows err: %w", err)
+		return nil, errors.Errorf("rows err: %w", err)
 	}
 	return counts, nil
 }
@@ -333,13 +334,13 @@ func scanEntries(rows *sql.Rows) ([]LogEntry, error) {
 		var e LogEntry
 		var ts time.Time
 		if err := rows.Scan(&e.ID, &e.LineNumber, &ts, &e.Raw, &e.PatternID); err != nil {
-			return nil, fmt.Errorf("scan entry: %w", err)
+			return nil, errors.Errorf("scan entry: %w", err)
 		}
 		e.Timestamp = ts
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows err: %w", err)
+		return nil, errors.Errorf("rows err: %w", err)
 	}
 	return entries, nil
 }

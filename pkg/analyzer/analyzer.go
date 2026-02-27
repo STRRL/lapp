@@ -15,6 +15,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	"github.com/go-errors/errors"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/parser"
 )
@@ -56,20 +57,20 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	// Create temp workspace
 	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
 	if err != nil {
-		return "", fmt.Errorf("create temp dir: %w", err)
+		return "", errors.Errorf("create temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Resolve to absolute path for the local backend
 	absDir, err := filepath.Abs(tmpDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve temp dir: %w", err)
+		return "", errors.Errorf("resolve temp dir: %w", err)
 	}
 
 	// Build parser chain and workspace
 	drainParser, err := parser.NewDrainParser()
 	if err != nil {
-		return "", fmt.Errorf("drain parser: %w", err)
+		return "", errors.Errorf("drain parser: %w", err)
 	}
 	chain := parser.NewChainParser(
 		parser.NewJSONParser(),
@@ -78,7 +79,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
 	if err := BuildWorkspace(absDir, lines, chain); err != nil {
-		return "", fmt.Errorf("build workspace: %w", err)
+		return "", errors.Errorf("build workspace: %w", err)
 	}
 
 	return RunAgent(ctx, config, absDir, question)
@@ -90,7 +91,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace dir: %w", err)
+		return "", errors.Errorf("resolve workspace dir: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Analyzing with model %s...\n", config.Model)
@@ -107,13 +108,13 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 		HTTPClient: &http.Client{Transport: &fixupRoundTripper{base: http.DefaultTransport}},
 	})
 	if err != nil {
-		return "", fmt.Errorf("create chat model: %w", err)
+		return "", errors.Errorf("create chat model: %w", err)
 	}
 
 	// Create local filesystem backend from eino-ext
 	backend, err := local.NewBackend(ctx, &local.Config{})
 	if err != nil {
-		return "", fmt.Errorf("create local backend: %w", err)
+		return "", errors.Errorf("create local backend: %w", err)
 	}
 
 	// Create filesystem middleware
@@ -121,7 +122,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 		Backend: backend,
 	})
 	if err != nil {
-		return "", fmt.Errorf("create filesystem middleware: %w", err)
+		return "", errors.Errorf("create filesystem middleware: %w", err)
 	}
 
 	// Create agent
@@ -134,7 +135,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 		MaxIterations: 15,
 	})
 	if err != nil {
-		return "", fmt.Errorf("create agent: %w", err)
+		return "", errors.Errorf("create agent: %w", err)
 	}
 
 	// Build user message
@@ -157,7 +158,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 			break
 		}
 		if event.Err != nil {
-			return "", fmt.Errorf("agent error: %w", event.Err)
+			return "", errors.Errorf("agent error: %w", event.Err)
 		}
 		msg, _, err := adk.GetMessage(event)
 		if err != nil {
@@ -183,7 +184,7 @@ func (rt *fixupRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	if req.Body != nil && req.Method == http.MethodPost {
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err != nil {
-			return nil, fmt.Errorf("read request body: %w", err)
+			return nil, errors.Errorf("read request body: %w", err)
 		}
 		bodyBytes = fixToolMessages(bodyBytes)
 		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
@@ -236,19 +237,19 @@ func preflightCheck(ctx context.Context, config Config) error {
 	apiURL := "https://openrouter.ai/api/v1/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
 	if err != nil {
-		return fmt.Errorf("preflight: %w", err)
+		return errors.Errorf("preflight: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
 	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
 	if err != nil {
-		return fmt.Errorf("preflight: cannot reach OpenRouter: %w", err)
+		return errors.Errorf("preflight: cannot reach OpenRouter: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("API error (HTTP %d) from OpenRouter: %s", resp.StatusCode, string(body))
+		return errors.Errorf("API error (HTTP %d) from OpenRouter: %s", resp.StatusCode, string(body))
 	}
 	return nil
 }

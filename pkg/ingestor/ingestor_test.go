@@ -38,7 +38,7 @@ func TestIngest(t *testing.T) {
 		if rr.Err != nil {
 			t.Fatalf("unexpected error: %v", rr.Err)
 		}
-		got = append(got, *rr.Line)
+		got = append(got, *rr.Value)
 	}
 
 	if len(got) != len(lines) {

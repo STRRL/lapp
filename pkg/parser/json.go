@@ -9,6 +9,8 @@ import (
 	"sync"
 )
 
+var _ Parser = (*JSONParser)(nil)
+
 // JSONParser detects JSON-formatted log lines and extracts structure.
 type JSONParser struct {
 	mu   sync.Mutex

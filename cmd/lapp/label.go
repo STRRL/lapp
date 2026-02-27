@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/labeler"
 	"github.com/strrl/lapp/pkg/store"
@@ -29,22 +30,22 @@ func runLabel(cmd *cobra.Command, model string) error {
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return fmt.Errorf("OPENROUTER_API_KEY environment variable is required")
+		return errors.Errorf("OPENROUTER_API_KEY environment variable is required")
 	}
 
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("store: %w", err)
+		return errors.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
 	if err := s.Init(ctx); err != nil {
-		return fmt.Errorf("store init: %w", err)
+		return errors.Errorf("store init: %w", err)
 	}
 
 	patterns, err := s.Patterns(ctx)
 	if err != nil {
-		return fmt.Errorf("query patterns: %w", err)
+		return errors.Errorf("query patterns: %w", err)
 	}
 
 	if len(patterns) == 0 {
@@ -57,7 +58,7 @@ func runLabel(cmd *cobra.Command, model string) error {
 	for _, p := range patterns {
 		samples, err := sampleLines(ctx, s, p.PatternID, 3)
 		if err != nil {
-			return fmt.Errorf("sample lines for %s: %w", p.PatternID, err)
+			return errors.Errorf("sample lines for %s: %w", p.PatternID, err)
 		}
 		inputs = append(inputs, labeler.PatternInput{
 			PatternID: p.PatternID,
@@ -73,7 +74,7 @@ func runLabel(cmd *cobra.Command, model string) error {
 		Model:  model,
 	}, inputs)
 	if err != nil {
-		return fmt.Errorf("label: %w", err)
+		return errors.Errorf("label: %w", err)
 	}
 
 	// Convert to store.Pattern for update
@@ -92,7 +93,7 @@ func runLabel(cmd *cobra.Command, model string) error {
 	}
 
 	if err := s.UpdatePatternLabels(ctx, updates); err != nil {
-		return fmt.Errorf("update labels: %w", err)
+		return errors.Errorf("update labels: %w", err)
 	}
 
 	// Print results
@@ -111,7 +112,7 @@ func sampleLines(ctx context.Context, s store.Store, patternID string, n int) ([
 		Limit:     n,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("query logs: %w", err)
+		return nil, errors.Errorf("query logs: %w", err)
 	}
 	var lines []string
 	for _, e := range entries {

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/go-errors/errors"
 	"github.com/strrl/lapp/pkg/parser"
 )
 
@@ -25,7 +26,7 @@ type lineResult struct {
 // BuildWorkspace creates pre-processed analysis files in the given directory.
 func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error {
 	if err := writeRawLog(dir, lines); err != nil {
-		return fmt.Errorf("write raw.log: %w", err)
+		return errors.Errorf("write raw.log: %w", err)
 	}
 
 	// Parse all lines to discover templates
@@ -40,13 +41,13 @@ func BuildWorkspace(dir string, lines []string, chain *parser.ChainParser) error
 
 	templates := chain.Templates()
 	if err := writeSummary(dir, templates, results); err != nil {
-		return fmt.Errorf("write summary.txt: %w", err)
+		return errors.Errorf("write summary.txt: %w", err)
 	}
 	if err := writeErrors(dir, templates, results); err != nil {
-		return fmt.Errorf("write errors.txt: %w", err)
+		return errors.Errorf("write errors.txt: %w", err)
 	}
 	if err := writeAgentsMD(dir); err != nil {
-		return fmt.Errorf("write AGENTS.md: %w", err)
+		return errors.Errorf("write AGENTS.md: %w", err)
 	}
 	return nil
 }
@@ -174,14 +175,14 @@ func writeErrorTemplates(buf *strings.Builder, templates []parser.Template, erro
 }
 
 func collectUnmatchedErrors(results []lineResult, limit int) []string {
-	var errors []string
+	var errLines []string
 	for _, r := range results {
 		if r.patternID == "" && errorPattern.MatchString(r.raw) {
-			errors = append(errors, r.raw)
-			if len(errors) >= limit {
+			errLines = append(errLines, r.raw)
+			if len(errLines) >= limit {
 				break
 			}
 		}
 	}
-	return errors
+	return errLines
 }

@@ -49,11 +49,11 @@ func TestParseResponse(t *testing.T) {
 			want:  1,
 		},
 		{
-			name: "with markdown code fences",
+			name: "with markdown code fences (rejected since JSON mode guarantees clean output)",
 			input: "```json\n" +
 				`[{"pattern_id":"D1","semantic_id":"server-startup","description":"Server starting"}]` +
 				"\n```",
-			want: 1,
+			wantErr: true,
 		},
 		{
 			name: "multiple labels",
@@ -69,10 +69,9 @@ func TestParseResponse(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "code fence without closing fence",
+			name:    "code fence without closing fence (rejected since JSON mode guarantees clean output)",
 			input:   "```json\n" + `[{"pattern_id":"D1","semantic_id":"test","description":"test"}]`,
-			wantErr: false,
-			want:    1,
+			wantErr: true,
 		},
 	}
 

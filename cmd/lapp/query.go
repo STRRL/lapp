@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/querier"
 	"github.com/strrl/lapp/pkg/store"
@@ -28,14 +29,14 @@ func queryCmd() *cobra.Command {
 func runQuery(ctx context.Context, patternID string) error {
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
-		return fmt.Errorf("store: %w", err)
+		return errors.Errorf("store: %w", err)
 	}
 	defer func() { _ = s.Close() }()
 
 	q := querier.NewQuerier(s)
 	entries, err := q.ByPattern(ctx, patternID)
 	if err != nil {
-		return fmt.Errorf("query: %w", err)
+		return errors.Errorf("query: %w", err)
 	}
 
 	for _, e := range entries {

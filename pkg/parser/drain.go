@@ -1,12 +1,14 @@
 package parser
 
 import (
-	"fmt"
 	"sync"
 
+	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	"github.com/jaeyo/go-drain3/pkg/drain3"
 )
+
+var _ Parser = (*DrainParser)(nil)
 
 // DrainParser uses the Drain algorithm to discover log templates online.
 type DrainParser struct {
@@ -22,7 +24,7 @@ func NewDrainParser() (*DrainParser, error) {
 		drain3.WithSimTh(0.4),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create drain: %w", err)
+		return nil, errors.Errorf("create drain: %w", err)
 	}
 	return &DrainParser{
 		drain:        d,

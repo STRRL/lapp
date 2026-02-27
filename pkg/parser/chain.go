@@ -1,5 +1,7 @@
 package parser
 
+var _ Parser = (*ChainParser)(nil)
+
 // ChainParser tries multiple parsers in order and returns the first match.
 type ChainParser struct {
 	parsers []Parser

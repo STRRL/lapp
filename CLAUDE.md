@@ -77,3 +77,4 @@ pkg/test/loghub/    Loghub-2.0 CSV loader (integration tests only)
 ## Code Style
 
 - `nolint` directives should be placed on the line above the target, not as end-of-line comments
+- For every Go interface implementation, add a compile-time interface guard: `var _ MyInterface = (*MyImpl)(nil)`

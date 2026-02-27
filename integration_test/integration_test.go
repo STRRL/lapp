@@ -141,11 +141,11 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 				if rr.Err != nil {
 					t.Fatalf("ingest read error: %v", rr.Err)
 				}
-				result := chain.Parse(rr.Line.Content)
+				result := chain.Parse(rr.Value.Content)
 				batch = append(batch, store.LogEntry{
-					LineNumber: rr.Line.LineNumber,
+					LineNumber: rr.Value.LineNumber,
 					Timestamp:  time.Now(),
-					Raw:        rr.Line.Content,
+					Raw:        rr.Value.Content,
 					PatternID:  result.PatternID,
 				})
 			}

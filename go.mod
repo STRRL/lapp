@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/eino-ext/adk/backend/local v0.1.1
 	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2
 	github.com/duckdb/duckdb-go/v2 v2.5.5
+	github.com/go-errors/errors v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/jaeyo/go-drain3 v0.1.2
 	github.com/joho/godotenv v1.5.1

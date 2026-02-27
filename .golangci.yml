@@ -4,7 +4,7 @@ linters:
     - bodyclose
     - errorlint
     - exhaustive
-    #- forbidigo
+    - forbidigo
     - gocritic
     - gocyclo
     - gosec
@@ -23,6 +23,10 @@ linters:
       default-signifies-exhaustive: true
     forbidigo:
       analyze-types: true
+      forbid:
+        - pattern: '^fmt\.Errorf'
+          pkg: '^fmt'
+          msg: 'use fmt.Errorf from standard library is forbidden; use errors.Errorf("<verb> <object>: %w", err) from github.com/go-errors/errors; no "failed to", no -ing verbs'
     gocritic:
       disabled-checks:
         - hugeParam
