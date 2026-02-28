@@ -25,6 +25,9 @@ import (
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
+IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
+Do NOT access files outside this workspace directory.
+
 Your workspace contains pre-processed log data at %s:
 - %s/raw.log — the original log file
 - %s/summary.txt — log templates discovered by automated parsing, with occurrence counts and samples
@@ -41,7 +44,7 @@ Provide:
 4. Suggested next steps for debugging
 
 Be concise and actionable. Focus on what matters.`,
-		workDir, workDir, workDir, workDir, workDir, workDir, workDir)
+		workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir)
 }
 
 // Config holds configuration for the analyzer.
