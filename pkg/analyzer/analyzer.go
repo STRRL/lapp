@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,7 +74,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 		return "", errors.Errorf("drain parser: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
+	slog.Info("Parsing lines", "count", len(lines))
 	if err := drainParser.Feed(lines); err != nil {
 		return "", errors.Errorf("drain feed: %w", err)
 	}
@@ -98,7 +99,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 		return "", errors.Errorf("resolve workspace dir: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Analyzing with model %s...\n", config.Model)
+	slog.Info("Analyzing with model", "model", config.Model)
 
 	// Preflight check: verify API key works
 	if err := preflightCheck(ctx, config); err != nil {

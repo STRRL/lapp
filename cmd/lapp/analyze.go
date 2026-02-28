@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -47,7 +47,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Read all lines
-	fmt.Fprintf(os.Stderr, "Reading logs...\n")
+	slog.Info("Reading logs...")
 	lines, err := readLines(logFile)
 	if err != nil {
 		return errors.Errorf("read log file: %w", err)
@@ -61,7 +61,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	for i, m := range merged {
 		mergedLines[i] = m.Content
 	}
-	fmt.Fprintf(os.Stderr, "Read %d lines, merged into %d entries\n", len(lines), len(mergedLines))
+	slog.Info("Read lines", "lines", len(lines), "merged_entries", len(mergedLines))
 
 	config := analyzer.Config{
 		APIKey: apiKey,
@@ -73,7 +73,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println(result)
+	slog.Info(result)
 	return nil
 }
 
