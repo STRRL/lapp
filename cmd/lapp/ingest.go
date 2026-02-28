@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -97,9 +97,12 @@ func runIngest(cmd *cobra.Command, args []string, model string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches)\n",
-		len(lines), templateCount, patternCount)
-	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
+	slog.Info("Ingestion complete",
+		"lines", len(lines),
+		"templates", templateCount,
+		"patterns_with_2+_matches", patternCount,
+	)
+	slog.Info("Database stored", "path", dbPath)
 	return nil
 }
 
@@ -148,7 +151,7 @@ func discoverAndSavePatterns(
 	// Build labeler inputs with sample lines from in-memory data
 	inputs := buildLabelInputs(filtered, lines)
 
-	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
+	slog.Info("Labeling patterns", "count", len(inputs))
 
 	labels, err := semantic.Label(ctx, labelCfg, inputs)
 	if err != nil {

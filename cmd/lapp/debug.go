@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/go-errors/errors"
@@ -41,7 +41,7 @@ files (raw.log, summary.txt, errors.txt) in a local directory for inspection.`,
 func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	logFile := args[0]
 
-	fmt.Fprintf(os.Stderr, "Reading logs...\n")
+	slog.Info("Reading logs...")
 	lines, err := readLines(logFile)
 	if err != nil {
 		return errors.Errorf("read log file: %w", err)
@@ -55,7 +55,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	for i, m := range merged {
 		mergedLines[i] = m.Content
 	}
-	fmt.Fprintf(os.Stderr, "Read %d lines, merged into %d entries\n", len(lines), len(mergedLines))
+	slog.Info("Read lines", "lines", len(lines), "merged_entries", len(mergedLines))
 
 	outDir := debugWorkspaceOutput
 	if outDir == "" {
@@ -74,7 +74,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("drain parser: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Parsing %d entries...\n", len(mergedLines))
+	slog.Info("Parsing entries", "count", len(mergedLines))
 	if err := drainParser.Feed(mergedLines); err != nil {
 		return errors.Errorf("drain feed: %w", err)
 	}
@@ -87,8 +87,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("build workspace: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Workspace created at: %s\n", outDir)
-	fmt.Println(outDir)
+	slog.Info("Workspace created", "dir", outDir)
 	return nil
 }
 
@@ -130,12 +129,12 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 		Model:  debugRunModel,
 	}
 
-	fmt.Fprintf(os.Stderr, "Running agent on workspace: %s\n", workDir)
+	slog.Info("Running agent on workspace", "dir", workDir)
 	result, err := analyzer.RunAgent(cmd.Context(), config, workDir, question)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(result)
+	slog.Info(result)
 	return nil
 }

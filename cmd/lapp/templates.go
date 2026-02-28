@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
@@ -45,8 +45,6 @@ func runTemplates(cmd *cobra.Command, _ []string) error {
 	}
 
 	if hasLabels {
-		fmt.Printf("%-12s %-6s %-22s %-6s %s\n", "ID", "TYPE", "SEMANTIC_ID", "COUNT", "DESCRIPTION")
-		fmt.Println("------------ ------ ---------------------- ------ ----------------------------------------")
 		for _, ts := range summaries {
 			semanticID := ts.SemanticID
 			if semanticID == "" {
@@ -60,17 +58,26 @@ func runTemplates(cmd *cobra.Command, _ []string) error {
 			if pType == "" {
 				pType = "-"
 			}
-			fmt.Printf("%-12s %-6s %-22s %-6d %s\n", ts.PatternUUIDString, pType, semanticID, ts.Count, desc)
+			slog.Info("template",
+				"id", ts.PatternUUIDString,
+				"type", pType,
+				"semantic_id", semanticID,
+				"count", ts.Count,
+				"description", desc,
+			)
 		}
 	} else {
-		fmt.Printf("%-12s %-6s %-6s %s\n", "ID", "TYPE", "COUNT", "PATTERN")
-		fmt.Println("------------ ------ ------ ----------------------------------------")
 		for _, ts := range summaries {
 			pType := ts.PatternType
 			if pType == "" {
 				pType = "-"
 			}
-			fmt.Printf("%-12s %-6s %-6d %s\n", ts.PatternUUIDString, pType, ts.Count, ts.Pattern)
+			slog.Info("template",
+				"id", ts.PatternUUIDString,
+				"type", pType,
+				"count", ts.Count,
+				"pattern", ts.Pattern,
+			)
 		}
 	}
 	return nil
