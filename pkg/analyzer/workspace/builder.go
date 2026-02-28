@@ -11,7 +11,7 @@ import (
 	"text/template"
 
 	"github.com/go-errors/errors"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 //go:embed templates/*.tmpl
@@ -54,15 +54,15 @@ type errorsData struct {
 type Builder struct {
 	dir       string
 	lines     []string
-	templates []parser.DrainCluster
+	templates []pattern.DrainCluster
 	matches   []lineMatch
 }
 
 // NewBuilder creates a Builder and pre-computes line-to-template matches.
-func NewBuilder(dir string, lines []string, templates []parser.DrainCluster) *Builder {
+func NewBuilder(dir string, lines []string, templates []pattern.DrainCluster) *Builder {
 	matches := make([]lineMatch, 0, len(lines))
 	for _, line := range lines {
-		t, ok := parser.MatchTemplate(line, templates)
+		t, ok := pattern.MatchTemplate(line, templates)
 		id := ""
 		if ok {
 			id = t.ID.String()

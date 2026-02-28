@@ -22,7 +22,7 @@ make integration-test
 make test
 
 # Run a single test
-go test -v -run TestFunctionName ./pkg/parser/
+go test -v -run TestFunctionName ./pkg/pattern/
 
 # Lint
 make lint
@@ -51,7 +51,7 @@ See `ARCHITECTURE.md` for full module design. Key modules:
 ```
 cmd/lapp/           CLI entrypoint (cobra commands)
 pkg/ingestor/       Read log files → stream of LogLine
-pkg/parser/         Multi-strategy parser chain: JSON → Drain
+pkg/pattern/        Drain-based log pattern discovery and template matching
 pkg/store/          DuckDB storage for log entries and templates
 pkg/analyzer/       Agentic log analysis: builds workspace files, runs LLM agent via eino ADK
 integration_test/   Integration tests and test assets (Loghub-2.0 CSV loader)
@@ -65,7 +65,7 @@ integration_test/   Integration tests and test assets (Loghub-2.0 CSV loader)
 
 ## Key Interfaces
 
-- `parser.Parser` (`pkg/parser/parser.go`): All parsers implement `Parse(content string) Result` and `Templates() []Template`
+- `pattern.DrainCluster` / `pattern.MatchTemplate` (`pkg/pattern/parser.go`): Pattern discovery and template matching
 - `store.Store` (`pkg/store/store.go`): Storage interface with `Init`, `InsertLog`, `InsertLogBatch`, `QueryByTemplate`, etc.
 
 ## Environment Variables

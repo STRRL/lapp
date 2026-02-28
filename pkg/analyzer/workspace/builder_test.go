@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 func TestBuildAll(t *testing.T) {
@@ -20,7 +20,7 @@ func TestBuildAll(t *testing.T) {
 
 	dir := t.TempDir()
 
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestBuildAll_NoErrors(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}

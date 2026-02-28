@@ -18,7 +18,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 func buildSystemPrompt(workDir string) string {
@@ -68,7 +68,7 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	}
 
 	// Parse lines with Drain
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return "", errors.Errorf("drain parser: %w", err)
 	}

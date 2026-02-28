@@ -9,7 +9,7 @@ import (
 	"github.com/strrl/lapp/pkg/analyzer"
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	"github.com/strrl/lapp/pkg/multiline"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 func debugCmd() *cobra.Command {
@@ -69,7 +69,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return errors.Errorf("drain parser: %w", err)
 	}

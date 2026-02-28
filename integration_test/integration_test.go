@@ -10,7 +10,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/strrl/lapp/integration_test/loghub"
 	"github.com/strrl/lapp/pkg/ingestor"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -84,7 +84,7 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 					Timestamp:  time.Now(),
 					Raw:        entry.Content,
 				}
-				if tpl, ok := parser.MatchTemplate(entry.Content, templates); ok {
+				if tpl, ok := pattern.MatchTemplate(entry.Content, templates); ok {
 					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
 				}
 				batch[i] = le
@@ -201,7 +201,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 					Timestamp:  time.Now(),
 					Raw:        ll.content,
 				}
-				if tpl, ok := parser.MatchTemplate(ll.content, templates); ok {
+				if tpl, ok := pattern.MatchTemplate(ll.content, templates); ok {
 					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
 				}
 				batch[i] = le

@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/ingestor"
 	"github.com/strrl/lapp/pkg/multiline"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
 )
@@ -52,7 +52,7 @@ func runIngest(cmd *cobra.Command, args []string, model string) error {
 	}
 	merged := multiline.Merge(ch, detector)
 
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return errors.Errorf("drain parser: %w", err)
 	}
@@ -117,7 +117,7 @@ func collectLines(merged <-chan multiline.MergeResult) ([]multiline.MergedLine, 
 func discoverAndSavePatterns(
 	ctx context.Context,
 	s *store.DuckDBStore,
-	dp *parser.DrainParser,
+	dp *pattern.DrainParser,
 	lines []string,
 	labelCfg semantic.Config,
 ) (semanticIDMap map[string]string, patternCount, templateCount int, err error) {
@@ -131,7 +131,7 @@ func discoverAndSavePatterns(
 	}
 
 	// Filter out single-match patterns (not generalized)
-	var filtered []parser.DrainCluster
+	var filtered []pattern.DrainCluster
 	for _, t := range templates {
 		if t.Count <= 1 {
 			continue
@@ -188,7 +188,7 @@ func storeLogsWithLabels(
 	ctx context.Context,
 	s *store.DuckDBStore,
 	mergedLines []multiline.MergedLine,
-	templates []parser.DrainCluster,
+	templates []pattern.DrainCluster,
 	semanticIDMap map[string]string,
 ) error {
 	var batch []store.LogEntry
@@ -200,7 +200,7 @@ func storeLogsWithLabels(
 			Raw:           ml.Content,
 		}
 
-		if tpl, ok := parser.MatchTemplate(ml.Content, templates); ok {
+		if tpl, ok := pattern.MatchTemplate(ml.Content, templates); ok {
 			if sid, found := semanticIDMap[tpl.ID.String()]; found {
 				entry.Labels = map[string]string{
 					"pattern":    sid,
@@ -227,12 +227,12 @@ func storeLogsWithLabels(
 	return nil
 }
 
-func buildLabelInputs(templates []parser.DrainCluster, lines []string) []semantic.PatternInput {
+func buildLabelInputs(templates []pattern.DrainCluster, lines []string) []semantic.PatternInput {
 	var inputs []semantic.PatternInput
 	for _, t := range templates {
 		var samples []string
 		for _, line := range lines {
-			if _, ok := parser.MatchTemplate(line, []parser.DrainCluster{t}); ok {
+			if _, ok := pattern.MatchTemplate(line, []pattern.DrainCluster{t}); ok {
 				samples = append(samples, line)
 				if len(samples) >= 3 {
 					break

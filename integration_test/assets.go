@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -23,9 +23,9 @@ func loghubPath(t *testing.T) string {
 
 // newDrainParser creates a fresh DrainParser.
 // Each call returns independent state (important because DrainParser is stateful).
-func newDrainParser(t *testing.T) *parser.DrainParser {
+func newDrainParser(t *testing.T) *pattern.DrainParser {
 	t.Helper()
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		t.Fatalf("create drain parser: %v", err)
 	}
