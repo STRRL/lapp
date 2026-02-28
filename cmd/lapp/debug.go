@@ -20,6 +20,7 @@ func debugCmd() *cobra.Command {
 
 	cmd.AddCommand(debugWorkspaceCmd())
 	cmd.AddCommand(debugRunCmd())
+	cmd.AddCommand(debugIngestCmd())
 	return cmd
 }
 

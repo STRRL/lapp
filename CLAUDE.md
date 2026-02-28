@@ -23,10 +23,9 @@ go test -v -run TestFunctionName ./pkg/pattern/
 ## CLI Usage
 
 ```bash
-go run ./cmd/lapp/ ingest <logfile> [--db <path>] [--model <model>]
-go run ./cmd/lapp/ templates [--db <path>]
-go run ./cmd/lapp/ analyze <logfile> [question]
+go run ./cmd/lapp/ analyze <logfile> [question] [--model <model>] [--db <path>]
 go run ./cmd/lapp/ debug workspace <logfile> [-o <dir>]
+go run ./cmd/lapp/ debug ingest <logfile> [--model <model>] [--db <path>]
 go run ./cmd/lapp/ debug run <workspace-dir> [question] [--model <model>]
 ```
 
@@ -79,7 +78,7 @@ Builds a workspace directory with pre-processed files, then runs an eino ADK age
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for `ingest`, `analyze`, and `debug run`
+- `OPENROUTER_API_KEY`: Required for `analyze`, `debug ingest`, and `debug run`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - `.env` file is auto-loaded via godotenv
 
@@ -91,3 +90,4 @@ Builds a workspace directory with pre-processed files, then runs an eino ADK age
 
 - `nolint` directives go on the line above the target, not as end-of-line comments
 - Compile-time interface guards: `var _ MyInterface = (*MyImpl)(nil)`
+- Always use `make build` to verify compilation, never bare `go build` (it drops a binary in the project root)
