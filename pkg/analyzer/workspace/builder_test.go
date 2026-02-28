@@ -1,6 +1,7 @@
 package workspace_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,10 +25,10 @@ func TestBuildAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
-	if err := drainParser.Feed(lines); err != nil {
+	if err := drainParser.Feed(context.Background(), lines); err != nil {
 		t.Fatalf("Feed: %v", err)
 	}
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(context.Background())
 	if err != nil {
 		t.Fatalf("Templates: %v", err)
 	}
@@ -84,10 +85,10 @@ func TestBuildAll_NoErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
-	if err := drainParser.Feed(lines); err != nil {
+	if err := drainParser.Feed(context.Background(), lines); err != nil {
 		t.Fatalf("Feed: %v", err)
 	}
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(context.Background())
 	if err != nil {
 		t.Fatalf("Templates: %v", err)
 	}

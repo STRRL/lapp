@@ -12,6 +12,9 @@ import (
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 func debugIngestCmd() *cobra.Command {
@@ -32,8 +35,13 @@ func debugIngestCmd() *cobra.Command {
 func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 	logFile := args[0]
 
-	ctx, cancel := context.WithCancel(cmd.Context())
+	parentCtx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
+
+	ctx, span := otel.Tracer("lapp/cmd").Start(parentCtx, "cmd.DebugIngest")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("log.file", logFile))
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
@@ -49,7 +57,7 @@ func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 	if err != nil {
 		return errors.Errorf("multiline detector: %w", err)
 	}
-	merged := multiline.Merge(ch, detector)
+	merged := multiline.Merge(ctx, ch, detector)
 
 	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
@@ -67,7 +75,7 @@ func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 	}
 
 	// Round 1: Collect all lines in memory (no DB writes yet)
-	mergedLines, err := collectLines(merged)
+	mergedLines, err := collectLines(ctx, merged)
 	if err != nil {
 		return err
 	}
@@ -87,7 +95,7 @@ func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 	}
 
 	// Round 2: Match each line to a pattern and store with labels
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(ctx)
 	if err != nil {
 		return errors.Errorf("drain templates: %w", err)
 	}
@@ -102,5 +110,7 @@ func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 		"patterns_with_2+_matches", patternCount,
 	)
 	slog.Info("Database stored", "path", dbPath)
+
+	span.SetStatus(codes.Ok, "")
 	return nil
 }

@@ -20,6 +20,10 @@ import (
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/pattern"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 func buildSystemPrompt(workDir string) string {
@@ -56,7 +60,16 @@ type Config struct {
 // Analyze runs the full agentic log analysis pipeline:
 // build a workspace, then run the AI agent on it.
 func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.Analyze")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("line.count", len(lines)),
+		attribute.String("question", question),
+	)
+
 	config.Model = llmconfig.ResolveModel(config.Model)
+	span.SetAttributes(attribute.String("model", config.Model))
 
 	// Create temp workspace
 	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
@@ -78,10 +91,12 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	}
 
 	slog.Info("Parsing lines", "count", len(lines))
-	if err := drainParser.Feed(lines); err != nil {
+	if err := drainParser.Feed(ctx, lines); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", errors.Errorf("drain feed: %w", err)
 	}
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(ctx)
 	if err != nil {
 		return "", errors.Errorf("drain templates: %w", err)
 	}
@@ -95,7 +110,15 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 
 // RunAgent runs the AI agent on an existing workspace directory.
 func RunAgent(ctx context.Context, config Config, workDir, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.RunAgent")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("workspace.dir", workDir),
+	)
+
 	config.Model = llmconfig.ResolveModel(config.Model)
+	span.SetAttributes(attribute.String("model", config.Model))
 
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {
@@ -110,10 +133,13 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 	}
 
 	// Create OpenRouter chat model with fixup transport to patch eino tool message bug
+	// Stack: otelhttp (tracing) → fixupRoundTripper (eino bug workaround) → http.DefaultTransport
 	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
-		APIKey:     config.APIKey,
-		Model:      config.Model,
-		HTTPClient: &http.Client{Transport: &fixupRoundTripper{base: http.DefaultTransport}},
+		APIKey: config.APIKey,
+		Model:  config.Model,
+		HTTPClient: &http.Client{
+			Transport: otelhttp.NewTransport(&fixupRoundTripper{base: http.DefaultTransport}),
+		},
 	})
 	if err != nil {
 		return "", errors.Errorf("create chat model: %w", err)
@@ -242,6 +268,9 @@ func fixToolMessages(body []byte) []byte {
 
 // preflightCheck does a quick API call to verify the key works.
 func preflightCheck(ctx context.Context, config Config) error {
+	_, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.PreflightCheck")
+	defer span.End()
+
 	apiURL := "https://openrouter.ai/api/v1/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
 	if err != nil {

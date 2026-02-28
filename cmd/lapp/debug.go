@@ -10,6 +10,9 @@ import (
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/pattern"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 func debugCmd() *cobra.Command {
@@ -42,6 +45,11 @@ files (raw.log, summary.txt, errors.txt) in a local directory for inspection.`,
 func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	logFile := args[0]
 
+	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.DebugWorkspace")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("log.file", logFile))
+
 	slog.Info("Reading logs...")
 	lines, err := readLines(logFile)
 	if err != nil {
@@ -51,7 +59,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("multiline detector: %w", err)
 	}
-	merged := multiline.MergeSlice(lines, detector)
+	merged := multiline.MergeSlice(ctx, lines, detector)
 	mergedLines := make([]string, len(merged))
 	for i, m := range merged {
 		mergedLines[i] = m.Content
@@ -76,10 +84,10 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	}
 
 	slog.Info("Parsing entries", "count", len(mergedLines))
-	if err := drainParser.Feed(mergedLines); err != nil {
+	if err := drainParser.Feed(ctx, mergedLines); err != nil {
 		return errors.Errorf("drain feed: %w", err)
 	}
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(ctx)
 	if err != nil {
 		return errors.Errorf("drain templates: %w", err)
 	}
@@ -89,6 +97,8 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	}
 
 	slog.Info("Workspace created", "dir", outDir)
+
+	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
@@ -109,6 +119,9 @@ Requires OPENROUTER_API_KEY environment variable to be set.`,
 }
 
 func runDebugRun(cmd *cobra.Command, args []string) error {
+	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.DebugRun")
+	defer span.End()
+
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		return errors.Errorf("OPENROUTER_API_KEY environment variable is required")
@@ -130,12 +143,16 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 		Model:  debugRunModel,
 	}
 
+	span.SetAttributes(attribute.String("workspace.dir", workDir))
+
 	slog.Info("Running agent on workspace", "dir", workDir)
-	result, err := analyzer.RunAgent(cmd.Context(), config, workDir, question)
+	result, err := analyzer.RunAgent(ctx, config, workDir, question)
 	if err != nil {
 		return err
 	}
 
 	slog.Info(result)
+
+	span.SetStatus(codes.Ok, "")
 	return nil
 }

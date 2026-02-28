@@ -10,16 +10,26 @@ import (
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
-func collectLines(merged <-chan multiline.MergeResult) ([]multiline.MergedLine, error) {
+func collectLines(ctx context.Context, merged <-chan multiline.MergeResult) ([]multiline.MergedLine, error) {
+	_, span := otel.Tracer("lapp/pipeline").Start(ctx, "pipeline.CollectLines")
+	defer span.End()
+
 	var lines []multiline.MergedLine
 	for rr := range merged {
 		if rr.Err != nil {
+			span.RecordError(rr.Err)
+			span.SetStatus(codes.Error, rr.Err.Error())
 			return nil, errors.Errorf("read log: %w", rr.Err)
 		}
 		lines = append(lines, *rr.Value)
 	}
+
+	span.SetAttributes(attribute.Int("line.count", len(lines)))
 	return lines, nil
 }
 
@@ -30,11 +40,16 @@ func discoverAndSavePatterns(
 	lines []string,
 	labelCfg semantic.Config,
 ) (semanticIDMap map[string]string, patternCount, templateCount int, err error) {
-	if err := dp.Feed(lines); err != nil {
+	ctx, span := otel.Tracer("lapp/pipeline").Start(ctx, "pipeline.DiscoverAndSavePatterns")
+	defer span.End()
+
+	if err := dp.Feed(ctx, lines); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, 0, 0, errors.Errorf("drain feed: %w", err)
 	}
 
-	templates, err := dp.Templates()
+	templates, err := dp.Templates(ctx)
 	if err != nil {
 		return nil, 0, 0, errors.Errorf("drain templates: %w", err)
 	}
@@ -55,7 +70,7 @@ func discoverAndSavePatterns(
 	}
 
 	// Build labeler inputs with sample lines from in-memory data
-	inputs := buildLabelInputs(filtered, lines)
+	inputs := buildLabelInputs(ctx, filtered, lines)
 
 	slog.Info("Labeling patterns", "count", len(inputs))
 
@@ -87,9 +102,15 @@ func discoverAndSavePatterns(
 	}
 
 	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, 0, 0, errors.Errorf("insert patterns: %w", err)
 	}
 
+	span.SetAttributes(
+		attribute.Int("pattern.count", len(patterns)),
+		attribute.Int("template.count", len(templates)),
+	)
 	return semanticIDMap, len(patterns), len(templates), nil
 }
 
@@ -100,6 +121,12 @@ func storeLogsWithLabels(
 	templates []pattern.DrainCluster,
 	semanticIDMap map[string]string,
 ) error {
+	ctx, span := otel.Tracer("lapp/pipeline").Start(ctx, "pipeline.StoreLogsWithLabels")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("line.count", len(mergedLines)))
+
+	var batchCount int
 	var batch []store.LogEntry
 	for _, ml := range mergedLines {
 		entry := store.LogEntry{
@@ -122,21 +149,34 @@ func storeLogsWithLabels(
 
 		if len(batch) >= 500 {
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return errors.Errorf("insert batch: %w", err)
 			}
 			batch = batch[:0]
+			batchCount++
 		}
 	}
 
 	if len(batch) > 0 {
 		if err := s.InsertLogBatch(ctx, batch); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return errors.Errorf("insert batch: %w", err)
 		}
+		batchCount++
 	}
+
+	span.SetAttributes(attribute.Int("batch.count", batchCount))
 	return nil
 }
 
-func buildLabelInputs(templates []pattern.DrainCluster, lines []string) []semantic.PatternInput {
+func buildLabelInputs(ctx context.Context, templates []pattern.DrainCluster, lines []string) []semantic.PatternInput {
+	_, span := otel.Tracer("lapp/pipeline").Start(ctx, "pipeline.BuildLabelInputs")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("template.count", len(templates)))
+
 	var inputs []semantic.PatternInput
 	for _, t := range templates {
 		var samples []string

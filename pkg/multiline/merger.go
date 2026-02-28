@@ -7,9 +7,12 @@
 package multiline
 
 import (
+	"context"
 	"strings"
 
 	"github.com/strrl/lapp/pkg/logsource"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // MergedLine represents one logical log entry that may span multiple
@@ -31,10 +34,13 @@ type MergeResult struct {
 // It propagates read errors from the ingestor Result channel.
 // If no line is ever detected as a new entry (i.e. no recognizable timestamp),
 // each physical line is emitted as its own entry to avoid behavioral regression.
-func Merge(in <-chan logsource.Result[*logsource.LogLine], detector *Detector) <-chan MergeResult {
+func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], detector *Detector) <-chan MergeResult {
+	_, span := otel.Tracer("lapp/multiline").Start(ctx, "multiline.Merge")
+
 	out := make(chan MergeResult, 100)
 	go func() {
 		defer close(out)
+		defer span.End()
 
 		var buf []string
 		startLine := 0
@@ -105,7 +111,12 @@ func Merge(in <-chan logsource.Result[*logsource.LogLine], detector *Detector) <
 // MergeSlice merges a slice of log lines into logical entries.
 // This is useful for non-streaming paths (analyze, debug commands).
 // If no line is ever detected as a new entry, each line passes through individually.
-func MergeSlice(lines []string, detector *Detector) []MergedLine {
+func MergeSlice(ctx context.Context, lines []string, detector *Detector) []MergedLine {
+	_, span := otel.Tracer("lapp/multiline").Start(ctx, "multiline.MergeSlice")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("input.lines", len(lines)))
+
 	if len(lines) == 0 {
 		return nil
 	}
@@ -165,5 +176,7 @@ func MergeSlice(lines []string, detector *Detector) []MergedLine {
 	}
 
 	flush()
+
+	span.SetAttributes(attribute.Int("merged.entries", len(result)))
 	return result
 }

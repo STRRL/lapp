@@ -1,11 +1,15 @@
 package pattern
 
 import (
+	"context"
 	"sync"
 
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	"github.com/jaeyo/go-drain3/pkg/drain3"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // DrainParser uses the Drain algorithm to discover log templates online.
@@ -33,13 +37,20 @@ func NewDrainParser() (*DrainParser, error) {
 }
 
 // Feed processes a batch of log lines through the Drain algorithm.
-func (p *DrainParser) Feed(contents []string) error {
+func (p *DrainParser) Feed(ctx context.Context, contents []string) error {
+	_, span := otel.Tracer("lapp/pattern").Start(ctx, "pattern.Feed")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("input.lines", len(contents)))
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for _, content := range contents {
 		cluster, _, err := p.drain.AddLogMessage(content)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return errors.Errorf("drain add: %w", err)
 		}
 		if cluster == nil {
@@ -53,7 +64,10 @@ func (p *DrainParser) Feed(contents []string) error {
 }
 
 // Templates returns all Drain clusters discovered so far with their counts.
-func (p *DrainParser) Templates() ([]DrainCluster, error) {
+func (p *DrainParser) Templates(ctx context.Context) ([]DrainCluster, error) {
+	_, span := otel.Tracer("lapp/pattern").Start(ctx, "pattern.Templates")
+	defer span.End()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -70,5 +84,7 @@ func (p *DrainParser) Templates() ([]DrainCluster, error) {
 			Count:   int(c.Size),
 		})
 	}
+
+	span.SetAttributes(attribute.Int("cluster.count", len(templates)))
 	return templates, nil
 }

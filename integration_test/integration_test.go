@@ -68,10 +68,10 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			}
 
 			// Feed all lines and get templates
-			if err := dp.Feed(lines); err != nil {
+			if err := dp.Feed(ctx, lines); err != nil {
 				t.Fatalf("feed: %v", err)
 			}
-			templates, err := dp.Templates()
+			templates, err := dp.Templates(ctx)
 			if err != nil {
 				t.Fatalf("templates: %v", err)
 			}
@@ -185,10 +185,10 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			for i, ll := range collected {
 				lines[i] = ll.content
 			}
-			if err := dp.Feed(lines); err != nil {
+			if err := dp.Feed(ctx, lines); err != nil {
 				t.Fatalf("feed: %v", err)
 			}
-			templates, err := dp.Templates()
+			templates, err := dp.Templates(ctx)
 			if err != nil {
 				t.Fatalf("templates: %v", err)
 			}

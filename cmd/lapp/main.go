@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,7 @@ func main() {
 	_ = godotenv.Load()
 
 	flush := tracing.InitLangfuse()
+	otelShutdown := tracing.InitOTel(context.Background())
 
 	root := &cobra.Command{
 		Use:   "lapp",
@@ -28,6 +30,7 @@ func main() {
 	root.AddCommand(debugCmd())
 
 	err := root.Execute()
+	otelShutdown()
 	flush()
 
 	if err != nil {

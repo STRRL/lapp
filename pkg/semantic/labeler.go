@@ -11,6 +11,10 @@ import (
 	"github.com/cloudwego/eino/schema"
 	"github.com/go-errors/errors"
 	llmconfig "github.com/strrl/lapp/pkg/config"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 // Config holds configuration for the labeler.
@@ -42,20 +46,30 @@ type SemanticLabel struct {
 
 // Label sends all patterns to the LLM in a single call and returns semantic labels.
 func Label(ctx context.Context, config Config, patterns []PatternInput) ([]SemanticLabel, error) {
+	ctx, span := otel.Tracer("lapp/semantic").Start(ctx, "semantic.Label")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("pattern.count", len(patterns)))
+
 	if len(patterns) == 0 {
 		return nil, nil
 	}
 
 	config.Model = llmconfig.ResolveModel(config.Model)
+	span.SetAttributes(attribute.String("model", config.Model))
 
 	prompt := buildPrompt(patterns)
 	resp, err := callLLM(ctx, config, prompt)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, errors.Errorf("call LLM: %w", err)
 	}
 
 	labels, err := parseResponse(resp)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, errors.Errorf("parse LLM response: %w", err)
 	}
 
@@ -86,10 +100,25 @@ Patterns:
 }
 
 func callLLM(ctx context.Context, config Config, prompt string) (string, error) {
+	_, span := otel.Tracer("lapp/semantic").Start(ctx, "semantic.CallLLM")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("model", config.Model),
+		attribute.Int("prompt.length", len(prompt)),
+	)
+
+	httpClient := config.HTTPClient
+	if httpClient == nil {
+		httpClient = &http.Client{
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		}
+	}
+
 	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
 		APIKey:     config.APIKey,
 		Model:      config.Model,
-		HTTPClient: config.HTTPClient,
+		HTTPClient: httpClient,
 		ResponseFormat: &openrouter.ChatCompletionResponseFormat{
 			Type: openrouter.ChatCompletionResponseFormatTypeJSONObject,
 		},
@@ -102,8 +131,12 @@ func callLLM(ctx context.Context, config Config, prompt string) (string, error) 
 		{Role: schema.User, Content: prompt},
 	})
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return "", errors.Errorf("generate: %w", err)
 	}
+
+	span.SetAttributes(attribute.Int("response.length", len(resp.Content)))
 	return resp.Content, nil
 }
 

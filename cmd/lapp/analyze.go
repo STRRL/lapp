@@ -13,6 +13,9 @@ import (
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 var analyzeModel string
@@ -50,7 +53,10 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		question = args[1]
 	}
 
-	ctx := cmd.Context()
+	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.Analyze")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("log.file", logFile))
 
 	// Read all lines
 	slog.Info("Reading logs...")
@@ -62,7 +68,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("multiline detector: %w", err)
 	}
-	merged := multiline.MergeSlice(lines, detector)
+	merged := multiline.MergeSlice(ctx, lines, detector)
 	mergedLines := make([]string, len(merged))
 	for i, m := range merged {
 		mergedLines[i] = m.Content
@@ -93,7 +99,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	templates, err := drainParser.Templates()
+	templates, err := drainParser.Templates(ctx)
 	if err != nil {
 		return errors.Errorf("drain templates: %w", err)
 	}
@@ -116,6 +122,8 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 	result, err := analyzer.Analyze(ctx, config, mergedLines, question)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
