@@ -3,7 +3,7 @@ package multiline
 import (
 	"testing"
 
-	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/logsource"
 )
 
 func TestMergeSliceJavaStackTrace(t *testing.T) {
@@ -84,8 +84,8 @@ func TestMergeChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ch := make(chan ingestor.Result[*ingestor.LogLine], 10)
-	lines := []*ingestor.LogLine{
+	ch := make(chan logsource.Result[*logsource.LogLine], 10)
+	lines := []*logsource.LogLine{
 		{LineNumber: 1, Content: "2024-03-28 13:45:30 INFO started"},
 		{LineNumber: 2, Content: "2024-03-28 13:45:31 ERROR something broke"},
 		{LineNumber: 3, Content: "\tat com.example.Foo.bar(Foo.java:42)"},
@@ -93,7 +93,7 @@ func TestMergeChannel(t *testing.T) {
 	}
 
 	for _, l := range lines {
-		ch <- ingestor.Result[*ingestor.LogLine]{Value: l}
+		ch <- logsource.Result[*logsource.LogLine]{Value: l}
 	}
 	close(ch)
 
@@ -165,9 +165,9 @@ func TestMergeChannelNoTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ch := make(chan ingestor.Result[*ingestor.LogLine], 10)
+	ch := make(chan logsource.Result[*logsource.LogLine], 10)
 	for i, s := range []string{"foo", "bar", "baz"} {
-		ch <- ingestor.Result[*ingestor.LogLine]{Value: &ingestor.LogLine{LineNumber: i + 1, Content: s}}
+		ch <- logsource.Result[*logsource.LogLine]{Value: &logsource.LogLine{LineNumber: i + 1, Content: s}}
 	}
 	close(ch)
 

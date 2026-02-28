@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
-	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/logsource"
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
@@ -41,7 +41,7 @@ func runIngest(cmd *cobra.Command, args []string, model string) error {
 		return errors.Errorf("OPENROUTER_API_KEY environment variable is required")
 	}
 
-	ch, err := ingestor.Ingest(ctx, logFile)
+	ch, err := logsource.Ingest(ctx, logFile)
 	if err != nil {
 		return errors.Errorf("ingest: %w", err)
 	}

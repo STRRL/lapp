@@ -50,7 +50,7 @@ See `ARCHITECTURE.md` for full module design. Key modules:
 
 ```
 cmd/lapp/           CLI entrypoint (cobra commands)
-pkg/ingestor/       Read log files → stream of LogLine
+pkg/logsource/      Read log files → stream of LogLine
 pkg/pattern/        Drain-based log pattern discovery and template matching
 pkg/store/          DuckDB storage for log entries and templates
 pkg/analyzer/       Agentic log analysis: builds workspace files, runs LLM agent via eino ADK

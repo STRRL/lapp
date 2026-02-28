@@ -9,7 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/strrl/lapp/integration_test/loghub"
-	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/logsource"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/store"
 )
@@ -152,7 +152,7 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			ctx := context.Background()
 
 			logPath := filepath.Join(basePath, ds, ds+"_2k.log")
-			ch, err := ingestor.Ingest(ctx, logPath)
+			ch, err := logsource.Ingest(ctx, logPath)
 			if err != nil {
 				t.Fatalf("ingest: %v", err)
 			}

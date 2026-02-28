@@ -9,7 +9,7 @@ package multiline
 import (
 	"strings"
 
-	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/logsource"
 )
 
 // MergedLine represents one logical log entry that may span multiple
@@ -31,7 +31,7 @@ type MergeResult struct {
 // It propagates read errors from the ingestor Result channel.
 // If no line is ever detected as a new entry (i.e. no recognizable timestamp),
 // each physical line is emitted as its own entry to avoid behavioral regression.
-func Merge(in <-chan ingestor.Result[*ingestor.LogLine], detector *Detector) <-chan MergeResult {
+func Merge(in <-chan logsource.Result[*logsource.LogLine], detector *Detector) <-chan MergeResult {
 	out := make(chan MergeResult, 100)
 	go func() {
 		defer close(out)
