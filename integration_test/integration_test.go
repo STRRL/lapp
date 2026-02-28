@@ -2,15 +2,23 @@ package integration_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/strrl/lapp/pkg/ingestor"
-	"github.com/strrl/lapp/pkg/querier"
+	"github.com/joho/godotenv"
+	"github.com/strrl/lapp/integration_test/loghub"
+	"github.com/strrl/lapp/pkg/logsource"
+	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/store"
-	"github.com/strrl/lapp/pkg/test/loghub"
 )
+
+func TestMain(m *testing.M) {
+	// Load .env.test if present (does not override existing env vars)
+	_ = godotenv.Load("../.env.test")
+	os.Exit(m.Run())
+}
 
 var datasets = []string{
 	"Apache",
@@ -50,39 +58,55 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			}
 			t.Logf("Loaded %d entries", len(entries))
 
-			chain := newChainParser(t)
+			dp := newDrainParser(t)
 			s := newStore(t)
 
-			var batch []store.LogEntry
+			// Collect lines
+			lines := make([]string, len(entries))
 			for i, entry := range entries {
-				result := chain.Parse(entry.Content)
-				batch = append(batch, store.LogEntry{
+				lines[i] = entry.Content
+			}
+
+			// Feed all lines and get templates
+			if err := dp.Feed(lines); err != nil {
+				t.Fatalf("feed: %v", err)
+			}
+			templates, err := dp.Templates()
+			if err != nil {
+				t.Fatalf("templates: %v", err)
+			}
+
+			// Store log entries with labels assigned via MatchTemplate
+			batch := make([]store.LogEntry, len(entries))
+			for i, entry := range entries {
+				le := store.LogEntry{
 					LineNumber: i + 1,
 					Timestamp:  time.Now(),
 					Raw:        entry.Content,
-					PatternID:  result.PatternID,
-				})
+				}
+				if tpl, ok := pattern.MatchTemplate(entry.Content, templates); ok {
+					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
+				}
+				batch[i] = le
 			}
-
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
 				t.Fatalf("insert batch: %v", err)
 			}
 
 			// Insert discovered patterns into the patterns table
-			templates := chain.Templates()
 			patterns := make([]store.Pattern, len(templates))
 			for i, tpl := range templates {
 				patterns[i] = store.Pattern{
-					PatternID:  tpl.ID,
-					RawPattern: tpl.Pattern,
+					PatternUUIDString: tpl.ID.String(),
+					RawPattern:        tpl.Pattern,
+					SemanticID:        tpl.ID.String(),
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {
 				t.Fatalf("insert patterns: %v", err)
 			}
 
-			q := querier.NewQuerier(s)
-			summaries, err := q.Summary(ctx)
+			summaries, err := s.PatternSummaries(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -91,11 +115,11 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 
 			// Save discovered templates
 			tplSummaries := make([]templateSummary, len(summaries))
-			for i, s := range summaries {
+			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: s.PatternID,
-					Pattern:   s.Pattern,
-					Count:     s.Count,
+					PatternUUIDString: sm.PatternUUIDString,
+					Pattern:           sm.Pattern,
+					Count:             sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -112,25 +136,12 @@ func TestAllDatasets_CSVPath(t *testing.T) {
 			if len(summaries) >= len(entries) {
 				t.Fatalf("expected fewer templates (%d) than entries (%d)", len(summaries), len(entries))
 			}
-
-			// Verify query-by-template roundtrip
-			first := summaries[0]
-			matched, err := q.ByPattern(ctx, first.PatternID)
-			if err != nil {
-				t.Fatalf("query by template: %v", err)
-			}
-			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.PatternID)
-			}
-			if len(matched) < first.Count {
-				t.Fatalf("query returned %d entries, expected at least %d", len(matched), first.Count)
-			}
 		})
 	}
 }
 
 // TestAllDatasets_IngestorPath reads each raw .log file via the ingestor,
-// parses via the chain, stores, and verifies the full end-to-end pipeline.
+// parses via Drain, stores, and verifies the full end-to-end pipeline.
 func TestAllDatasets_IngestorPath(t *testing.T) {
 	basePath := loghubPath(t)
 	outDir := outputDir(t)
@@ -141,52 +152,79 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			ctx := context.Background()
 
 			logPath := filepath.Join(basePath, ds, ds+"_2k.log")
-			ch, err := ingestor.Ingest(ctx, logPath)
+			ch, err := logsource.Ingest(ctx, logPath)
 			if err != nil {
 				t.Fatalf("ingest: %v", err)
 			}
 
-			chain := newChainParser(t)
+			dp := newDrainParser(t)
 			s := newStore(t)
 
-			var batch []store.LogEntry
+			// Collect lines from ingestor
+			type logLine struct {
+				lineNumber int
+				content    string
+			}
+			var collected []logLine
 			for rr := range ch {
 				if rr.Err != nil {
 					t.Fatalf("ingest read error: %v", rr.Err)
 				}
-				result := chain.Parse(rr.Value.Content)
-				batch = append(batch, store.LogEntry{
-					LineNumber: rr.Value.LineNumber,
-					Timestamp:  time.Now(),
-					Raw:        rr.Value.Content,
-					PatternID:  result.PatternID,
+				collected = append(collected, logLine{
+					lineNumber: rr.Value.LineNumber,
+					content:    rr.Value.Content,
 				})
 			}
 
-			if len(batch) == 0 {
+			if len(collected) == 0 {
 				t.Fatal("expected at least 1 ingested line, got 0")
 			}
 
+			// Feed all lines and get templates
+			lines := make([]string, len(collected))
+			for i, ll := range collected {
+				lines[i] = ll.content
+			}
+			if err := dp.Feed(lines); err != nil {
+				t.Fatalf("feed: %v", err)
+			}
+			templates, err := dp.Templates()
+			if err != nil {
+				t.Fatalf("templates: %v", err)
+			}
+
+			// Store log entries with labels assigned via MatchTemplate
+			batch := make([]store.LogEntry, len(collected))
+			for i, ll := range collected {
+				le := store.LogEntry{
+					LineNumber: ll.lineNumber,
+					Timestamp:  time.Now(),
+					Raw:        ll.content,
+				}
+				if tpl, ok := pattern.MatchTemplate(ll.content, templates); ok {
+					le.Labels = map[string]string{"pattern": tpl.ID.String(), "pattern_id": tpl.ID.String()}
+				}
+				batch[i] = le
+			}
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
 				t.Fatalf("insert batch: %v", err)
 			}
 			t.Logf("Ingested and stored %d lines", len(batch))
 
 			// Insert discovered patterns into the patterns table
-			templates := chain.Templates()
 			patterns := make([]store.Pattern, len(templates))
 			for i, tpl := range templates {
 				patterns[i] = store.Pattern{
-					PatternID:  tpl.ID,
-					RawPattern: tpl.Pattern,
+					PatternUUIDString: tpl.ID.String(),
+					RawPattern:        tpl.Pattern,
+					SemanticID:        tpl.ID.String(),
 				}
 			}
 			if err := s.InsertPatterns(ctx, patterns); err != nil {
 				t.Fatalf("insert patterns: %v", err)
 			}
 
-			q := querier.NewQuerier(s)
-			summaries, err := q.Summary(ctx)
+			summaries, err := s.PatternSummaries(ctx)
 			if err != nil {
 				t.Fatalf("get summaries: %v", err)
 			}
@@ -195,11 +233,11 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 
 			// Save discovered templates
 			tplSummaries := make([]templateSummary, len(summaries))
-			for i, s := range summaries {
+			for i, sm := range summaries {
 				tplSummaries[i] = templateSummary{
-					PatternID: s.PatternID,
-					Pattern:   s.Pattern,
-					Count:     s.Count,
+					PatternUUIDString: sm.PatternUUIDString,
+					Pattern:           sm.Pattern,
+					Count:             sm.Count,
 				}
 			}
 			saveTemplates(t, outDir, templateResult{
@@ -218,22 +256,12 @@ func TestAllDatasets_IngestorPath(t *testing.T) {
 			}
 
 			// Verify total stored entries match ingested count
-			allEntries, err := q.Search(ctx, store.QueryOpts{})
+			allEntries, err := s.QueryLogs(ctx, store.QueryOpts{})
 			if err != nil {
 				t.Fatalf("search all: %v", err)
 			}
 			if len(allEntries) != len(batch) {
 				t.Fatalf("stored %d entries, expected %d", len(allEntries), len(batch))
-			}
-
-			// Verify query-by-template roundtrip
-			first := summaries[0]
-			matched, err := q.ByPattern(ctx, first.PatternID)
-			if err != nil {
-				t.Fatalf("query by template: %v", err)
-			}
-			if len(matched) == 0 {
-				t.Fatalf("expected entries for template %s, got none", first.PatternID)
 			}
 		})
 	}

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/store"
 )
 
@@ -21,18 +21,15 @@ func loghubPath(t *testing.T) string {
 	return p
 }
 
-// newChainParser creates a fresh JSON→Drain chain parser.
+// newDrainParser creates a fresh DrainParser.
 // Each call returns independent state (important because DrainParser is stateful).
-func newChainParser(t *testing.T) *parser.ChainParser {
+func newDrainParser(t *testing.T) *pattern.DrainParser {
 	t.Helper()
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		t.Fatalf("create drain parser: %v", err)
 	}
-	return parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	)
+	return drainParser
 }
 
 // newStore creates a fresh in-memory DuckDB store with cleanup registered.
@@ -63,7 +60,7 @@ func outputDir(t *testing.T) string {
 			t.Fatalf("create temp dir: %v", err)
 		}
 	} else {
-		if err := os.MkdirAll(dir, 0o755); err != nil { //nolint:gosec // G703: path from env var, expected
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create output dir: %v", err)
 		}
 	}
@@ -81,9 +78,9 @@ type templateResult struct {
 }
 
 type templateSummary struct {
-	PatternID string `json:"pattern_id"`
-	Pattern   string `json:"pattern"`
-	Count     int    `json:"count"`
+	PatternUUIDString string `json:"pattern_id"`
+	Pattern           string `json:"pattern"`
+	Count             int    `json:"count"`
 }
 
 // saveTemplates writes template summaries to a JSON file in the output directory.
@@ -96,7 +93,7 @@ func saveTemplates(t *testing.T, dir string, result templateResult) {
 	if err != nil {
 		t.Fatalf("marshal templates: %v", err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil { //nolint:gosec // G306: test output files
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write templates: %v", err)
 	}
 	t.Logf("Saved %d templates to %s", result.TemplateCount, path)

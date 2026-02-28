@@ -16,8 +16,9 @@ import (
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/go-errors/errors"
+	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 func buildSystemPrompt(workDir string) string {
@@ -44,7 +45,6 @@ Be concise and actionable. Focus on what matters.`,
 
 // Config holds configuration for the analyzer.
 type Config struct {
-	//nolint:gosec // G117: config field, not a secret value
 	APIKey string
 	Model  string
 }
@@ -67,18 +67,22 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 		return "", errors.Errorf("resolve temp dir: %w", err)
 	}
 
-	// Build parser chain and workspace
-	drainParser, err := parser.NewDrainParser()
+	// Parse lines with Drain
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return "", errors.Errorf("drain parser: %w", err)
 	}
-	chain := parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	)
 
 	fmt.Fprintf(os.Stderr, "Parsing %d lines...\n", len(lines))
-	if err := BuildWorkspace(absDir, lines, chain); err != nil {
+	if err := drainParser.Feed(lines); err != nil {
+		return "", errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		return "", errors.Errorf("drain templates: %w", err)
+	}
+
+	if err := workspace.NewBuilder(absDir, lines, templates).BuildAll(); err != nil {
 		return "", errors.Errorf("build workspace: %w", err)
 	}
 
@@ -241,7 +245,7 @@ func preflightCheck(ctx context.Context, config Config) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+config.APIKey)
 
-	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: intentional HTTP request to OpenRouter API
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.Errorf("preflight: cannot reach OpenRouter: %w", err)
 	}

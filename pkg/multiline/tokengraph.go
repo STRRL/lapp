@@ -53,7 +53,7 @@ func (m *tokenGraph) matchProbability(ts []Token) matchContext {
 	lastToken := ts[0]
 	matchForIndex := func(idx int) int {
 		match := -1
-		if m.adjacencies[lastToken] != nil && m.adjacencies[lastToken][ts[idx+1]] {
+		if len(m.adjacencies[lastToken]) > 0 && m.adjacencies[lastToken][ts[idx+1]] {
 			match = 1
 		}
 		lastToken = ts[idx+1]

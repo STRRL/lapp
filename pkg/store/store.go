@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -12,34 +13,34 @@ type LogEntry struct {
 	EndLineNumber int
 	Timestamp     time.Time
 	Raw           string
-	PatternID     string
+	Labels        map[string]string
 }
 
 // Pattern represents a discovered log pattern with optional semantic labels.
 type Pattern struct {
-	PatternID   string
-	PatternType string
-	RawPattern  string
-	SemanticID  string
-	Description string
+	PatternUUIDString string
+	PatternType       string
+	RawPattern        string
+	SemanticID        string
+	Description       string
 }
 
 // PatternSummary holds a pattern and its occurrence count.
 type PatternSummary struct {
-	PatternID   string
-	Pattern     string
-	Count       int
-	PatternType string
-	SemanticID  string
-	Description string
+	PatternUUIDString string
+	Pattern           string
+	Count             int
+	PatternType       string
+	SemanticID        string
+	Description       string
 }
 
 // QueryOpts specifies filters for querying log entries.
 type QueryOpts struct {
-	PatternID string
-	From      time.Time
-	To        time.Time
-	Limit     int
+	Pattern string
+	From    time.Time
+	To      time.Time
+	Limit   int
 }
 
 // Store persists log entries and patterns.
@@ -50,8 +51,8 @@ type Store interface {
 	InsertLog(ctx context.Context, entry LogEntry) error
 	// InsertLogBatch stores multiple log entries.
 	InsertLogBatch(ctx context.Context, entries []LogEntry) error
-	// QueryByPattern returns entries matching a pattern ID.
-	QueryByPattern(ctx context.Context, patternID string) ([]LogEntry, error)
+	// QueryByPattern returns entries matching a pattern semantic ID via labels.
+	QueryByPattern(ctx context.Context, pattern string) ([]LogEntry, error)
 	// QueryLogs returns entries matching the given options.
 	QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry, error)
 	// PatternSummaries returns all patterns with their counts.
@@ -60,13 +61,11 @@ type Store interface {
 	InsertPatterns(ctx context.Context, patterns []Pattern) error
 	// Patterns returns all patterns.
 	Patterns(ctx context.Context) ([]Pattern, error)
-	// UpdatePatternLabels updates only semantic_id and description for patterns.
-	UpdatePatternLabels(ctx context.Context, labels []Pattern) error
-	// ClearOrphanPatternIDs sets pattern_id to empty for log entries
-	// whose pattern_id does not exist in the patterns table.
-	ClearOrphanPatternIDs(ctx context.Context) (int64, error)
 	// PatternCounts returns the number of log entries per pattern_id.
 	PatternCounts(ctx context.Context) (map[string]int, error)
+	// InternalDB returns the underlying *sql.DB for direct SQL queries.
+	// Only use this when no interface method covers the needed operation.
+	InternalDB() *sql.DB
 	// Close releases resources.
 	Close() error
 }

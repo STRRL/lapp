@@ -7,8 +7,9 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	"github.com/strrl/lapp/pkg/multiline"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
 )
 
 func debugCmd() *cobra.Command {
@@ -47,7 +48,7 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 	}
 	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
 	if err != nil {
-		return fmt.Errorf("multiline detector: %w", err)
+		return errors.Errorf("multiline detector: %w", err)
 	}
 	merged := multiline.MergeSlice(lines, detector)
 	mergedLines := make([]string, len(merged))
@@ -68,13 +69,21 @@ func runDebugWorkspace(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	chain, err := buildParserChain()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
-		return err
+		return errors.Errorf("drain parser: %w", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Parsing %d entries...\n", len(mergedLines))
-	if err := analyzer.BuildWorkspace(outDir, mergedLines, chain); err != nil {
+	if err := drainParser.Feed(mergedLines); err != nil {
+		return errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates()
+	if err != nil {
+		return errors.Errorf("drain templates: %w", err)
+	}
+
+	if err := workspace.NewBuilder(outDir, mergedLines, templates).BuildAll(); err != nil {
 		return errors.Errorf("build workspace: %w", err)
 	}
 
@@ -129,16 +138,4 @@ func runDebugRun(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(result)
 	return nil
-}
-
-// buildParserChain creates a JSON → Drain parser chain for workspace analysis.
-func buildParserChain() (*parser.ChainParser, error) {
-	drainParser, err := parser.NewDrainParser()
-	if err != nil {
-		return nil, errors.Errorf("drain parser: %w", err)
-	}
-	return parser.NewChainParser(
-		parser.NewJSONParser(),
-		drainParser,
-	), nil
 }

@@ -1,4 +1,4 @@
-package labeler
+package semantic
 
 import (
 	"strings"
@@ -10,14 +10,14 @@ import (
 func TestBuildPrompt(t *testing.T) {
 	patterns := []PatternInput{
 		{
-			PatternID: "D1",
-			Pattern:   "Starting <*> on port <*>",
-			Samples:   []string{"Starting myapp on port 8080", "Starting worker on port 3000"},
+			PatternUUIDString: "00000000-0000-0000-0000-000000000001",
+			Pattern:           "Starting <*> on port <*>",
+			Samples:           []string{"Starting myapp on port 8080", "Starting worker on port 3000"},
 		},
 		{
-			PatternID: "D2",
-			Pattern:   "Connection timeout after <*> ms",
-			Samples:   []string{"Connection timeout after 5000 ms"},
+			PatternUUIDString: "00000000-0000-0000-0000-000000000002",
+			Pattern:           "Connection timeout after <*> ms",
+			Samples:           []string{"Connection timeout after 5000 ms"},
 		},
 	}
 
@@ -29,7 +29,7 @@ func TestBuildPrompt(t *testing.T) {
 	if len(prompt) < 50 {
 		t.Errorf("prompt too short: %d chars", len(prompt))
 	}
-	for _, want := range []string{"D1", "D2", "Starting <*> on port <*>", "Connection timeout", "Starting myapp on port 8080"} {
+	for _, want := range []string{"00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002", "Starting <*> on port <*>", "Connection timeout", "Starting myapp on port 8080"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing expected content %q", want)
 		}

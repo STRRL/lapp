@@ -1,4 +1,4 @@
-package ingestor
+package logsource
 
 import (
 	"bufio"
@@ -21,43 +21,34 @@ type Result[T any] struct {
 	Err   error
 }
 
-// Ingestor reads log lines from a source and streams them as Results.
-type Ingestor interface {
+// ingestor reads log lines from a source and streams them as Results.
+type ingestor interface {
 	Ingest(ctx context.Context) (<-chan Result[*LogLine], error)
 }
 
-var _ Ingestor = (*FileIngestor)(nil)
+var _ ingestor = (*fileIngestor)(nil)
 
-// FileIngestor reads log lines from a file path or stdin.
-type FileIngestor struct {
-	Path string
+// fileIngestor reads log lines from a file path.
+type fileIngestor struct {
+	path string
 }
 
-// Ingest reads log lines from the file (or stdin if Path is "-").
+// Ingest reads log lines from the file.
 // Cancel the context to stop reading early; the goroutine will exit promptly.
-func (f *FileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], error) {
-	var file *os.File
-	if f.Path == "-" {
-		file = os.Stdin
-	} else {
-		var err error
-		file, err = os.Open(f.Path)
-		if err != nil {
-			return nil, errors.Errorf("open log file: %w", err)
-		}
+func (f *fileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], error) {
+	file, err := os.Open(f.path)
+	if err != nil {
+		return nil, errors.Errorf("open log file: %w", err)
 	}
 
-	ownFile := f.Path != "-"
 	ch := make(chan Result[*LogLine], 100)
 	go func() {
 		defer close(ch)
 
 		var fileErr error
 		defer func() {
-			if ownFile {
-				if cerr := file.Close(); cerr != nil {
-					fileErr = errors.Join(fileErr, errors.Errorf("close log file: %w", cerr))
-				}
+			if cerr := file.Close(); cerr != nil {
+				fileErr = errors.Join(fileErr, errors.Errorf("close log file: %w", cerr))
 			}
 			if fileErr != nil {
 				select {
@@ -85,8 +76,7 @@ func (f *FileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], err
 	return ch, nil
 }
 
-// Ingest is a convenience function that creates a FileIngestor and reads from it.
-// Pass "-" to read from stdin.
+// Ingest is a convenience function that creates a fileIngestor and reads from it.
 func Ingest(ctx context.Context, filePath string) (<-chan Result[*LogLine], error) {
-	return (&FileIngestor{Path: filePath}).Ingest(ctx)
+	return (&fileIngestor{path: filePath}).Ingest(ctx)
 }

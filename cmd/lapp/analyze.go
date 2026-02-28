@@ -26,7 +26,7 @@ Requires OPENROUTER_API_KEY environment variable to be set.
 Examples:
   lapp analyze app.log
   lapp analyze app.log "why is my service returning 502?"
-  cat logs.txt | lapp analyze - "what caused the crash?"`,
+  lapp analyze app.log "what caused the crash?"`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runAnalyze,
 	}
@@ -54,7 +54,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
 	if err != nil {
-		return fmt.Errorf("multiline detector: %w", err)
+		return errors.Errorf("multiline detector: %w", err)
 	}
 	merged := multiline.MergeSlice(lines, detector)
 	mergedLines := make([]string, len(merged))
@@ -78,17 +78,11 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 }
 
 func readLines(path string) ([]string, error) {
-	var reader *os.File
-	if path == "-" {
-		reader = os.Stdin
-	} else {
-		f, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = f.Close() }()
-		reader = f
+	reader, err := os.Open(path)
+	if err != nil {
+		return nil, err
 	}
+	defer func() { _ = reader.Close() }()
 
 	var lines []string
 	scanner := bufio.NewScanner(reader)

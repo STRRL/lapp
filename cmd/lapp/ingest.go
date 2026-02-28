@@ -8,31 +8,40 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
-	"github.com/strrl/lapp/pkg/ingestor"
+	"github.com/strrl/lapp/pkg/logsource"
 	"github.com/strrl/lapp/pkg/multiline"
-	"github.com/strrl/lapp/pkg/parser"
+	"github.com/strrl/lapp/pkg/pattern"
+	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/store"
-
 )
 
 func ingestCmd() *cobra.Command {
+	var model string
 	cmd := &cobra.Command{
 		Use:   "ingest <logfile>",
 		Short: "Ingest a log file through the parser pipeline into the store",
-		Long:  "Read a log file, parse each line through Drain, and store results in DuckDB.",
+		Long:  "Read a log file, parse each line through Drain, store results in DuckDB, and label patterns with semantic IDs via LLM.",
 		Args:  cobra.ExactArgs(1),
-		RunE:  runIngest,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runIngest(cmd, args, model)
+		},
 	}
+	cmd.Flags().StringVar(&model, "model", "", "LLM model to use for labeling (default: $MODEL_NAME or google/gemini-3-flash-preview)")
 	return cmd
 }
 
-func runIngest(cmd *cobra.Command, args []string) error {
+func runIngest(cmd *cobra.Command, args []string, model string) error {
 	logFile := args[0]
 
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
-	ch, err := ingestor.Ingest(ctx, logFile)
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	if apiKey == "" {
+		return errors.Errorf("OPENROUTER_API_KEY environment variable is required")
+	}
+
+	ch, err := logsource.Ingest(ctx, logFile)
 	if err != nil {
 		return errors.Errorf("ingest: %w", err)
 	}
@@ -43,21 +52,10 @@ func runIngest(cmd *cobra.Command, args []string) error {
 	}
 	merged := multiline.Merge(ch, detector)
 
-	// Only use Drain for pattern discovery.
-	// JSON/Grok parsers were removed because:
-	// - Grok: predefined patterns (SYSLOG, APACHE) match structurally but don't
-	//   produce generalized templates — a single pattern like "SYSLOG" covers all
-	//   syslog lines without distinguishing between different log messages.
-	// - JSON: similar issue — groups by key structure, not by message semantics.
-	// - LLM: stub, not implemented yet.
-	// Drain discovers meaningful patterns by clustering similar lines online.
-	drainParser, err := parser.NewDrainParser()
+	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return errors.Errorf("drain parser: %w", err)
 	}
-	chain := parser.NewChainParser(
-		drainParser,
-	)
 
 	s, err := store.NewDuckDBStore(dbPath)
 	if err != nil {
@@ -69,91 +67,183 @@ func runIngest(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("store init: %w", err)
 	}
 
-	count, err := ingestLines(ctx, s, merged, chain)
+	// Round 1: Collect all lines in memory (no DB writes yet)
+	mergedLines, err := collectLines(merged)
 	if err != nil {
 		return err
 	}
 
-	templates, patternCount, cleared, err := saveDiscoveredPatterns(ctx, s, chain)
+	var lines []string
+	for _, ml := range mergedLines {
+		lines = append(lines, ml.Content)
+	}
+
+	// Discover patterns, label them, and save to patterns table
+	semanticIDMap, patternCount, templateCount, err := discoverAndSavePatterns(ctx, s, drainParser, lines, semantic.Config{
+		APIKey: apiKey,
+		Model:  model,
+	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches, %d orphan entries cleared)\n",
-		count, templates, patternCount, cleared)
+	// Round 2: Match each line to a pattern and store with labels
+	templates, err := drainParser.Templates()
+	if err != nil {
+		return errors.Errorf("drain templates: %w", err)
+	}
+	err = storeLogsWithLabels(ctx, s, mergedLines, templates, semanticIDMap)
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "Ingested %d lines, discovered %d patterns (%d with 2+ matches)\n",
+		len(lines), templateCount, patternCount)
 	fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
-	fmt.Fprintf(os.Stderr, "Run 'lapp label' to add semantic labels to patterns.\n")
 	return nil
 }
 
-func ingestLines(ctx context.Context, s *store.DuckDBStore, merged <-chan multiline.MergeResult, chain *parser.ChainParser) (int, error) {
-	var count int
-	var batch []store.LogEntry
+func collectLines(merged <-chan multiline.MergeResult) ([]multiline.MergedLine, error) {
+	var lines []multiline.MergedLine
 	for rr := range merged {
 		if rr.Err != nil {
-			return 0, errors.Errorf("read log: %w", rr.Err)
+			return nil, errors.Errorf("read log: %w", rr.Err)
 		}
-		ml := rr.Value
-		result := chain.Parse(ml.Content)
+		lines = append(lines, *rr.Value)
+	}
+	return lines, nil
+}
+
+func discoverAndSavePatterns(
+	ctx context.Context,
+	s *store.DuckDBStore,
+	dp *pattern.DrainParser,
+	lines []string,
+	labelCfg semantic.Config,
+) (semanticIDMap map[string]string, patternCount, templateCount int, err error) {
+	if err := dp.Feed(lines); err != nil {
+		return nil, 0, 0, errors.Errorf("drain feed: %w", err)
+	}
+
+	templates, err := dp.Templates()
+	if err != nil {
+		return nil, 0, 0, errors.Errorf("drain templates: %w", err)
+	}
+
+	// Filter out single-match patterns (not generalized)
+	var filtered []pattern.DrainCluster
+	for _, t := range templates {
+		if t.Count <= 1 {
+			continue
+		}
+		filtered = append(filtered, t)
+	}
+
+	semanticIDMap = make(map[string]string)
+
+	if len(filtered) == 0 {
+		return semanticIDMap, 0, len(templates), nil
+	}
+
+	// Build labeler inputs with sample lines from in-memory data
+	inputs := buildLabelInputs(filtered, lines)
+
+	fmt.Fprintf(os.Stderr, "Labeling %d patterns...\n", len(inputs))
+
+	labels, err := semantic.Label(ctx, labelCfg, inputs)
+	if err != nil {
+		return nil, 0, 0, errors.Errorf("label: %w", err)
+	}
+
+	// Index labels by pattern UUID for lookup
+	labelMap := make(map[string]semantic.SemanticLabel, len(labels))
+	for _, l := range labels {
+		labelMap[l.PatternUUIDString] = l
+	}
+
+	// Build store patterns with semantic labels and populate semanticIDMap
+	var patterns []store.Pattern
+	for _, t := range filtered {
+		p := store.Pattern{
+			PatternUUIDString: t.ID.String(),
+			PatternType:       "drain",
+			RawPattern:        t.Pattern,
+		}
+		if l, ok := labelMap[t.ID.String()]; ok {
+			p.SemanticID = l.SemanticID
+			p.Description = l.Description
+			semanticIDMap[t.ID.String()] = l.SemanticID
+		}
+		patterns = append(patterns, p)
+	}
+
+	if err := s.InsertPatterns(ctx, patterns); err != nil {
+		return nil, 0, 0, errors.Errorf("insert patterns: %w", err)
+	}
+
+	return semanticIDMap, len(patterns), len(templates), nil
+}
+
+func storeLogsWithLabels(
+	ctx context.Context,
+	s *store.DuckDBStore,
+	mergedLines []multiline.MergedLine,
+	templates []pattern.DrainCluster,
+	semanticIDMap map[string]string,
+) error {
+	var batch []store.LogEntry
+	for _, ml := range mergedLines {
 		entry := store.LogEntry{
 			LineNumber:    ml.StartLine,
 			EndLineNumber: ml.EndLine,
 			Timestamp:     time.Now(),
 			Raw:           ml.Content,
-			PatternID:     result.PatternID,
 		}
+
+		if tpl, ok := pattern.MatchTemplate(ml.Content, templates); ok {
+			if sid, found := semanticIDMap[tpl.ID.String()]; found {
+				entry.Labels = map[string]string{
+					"pattern":    sid,
+					"pattern_id": tpl.ID.String(),
+				}
+			}
+		}
+
 		batch = append(batch, entry)
 
 		if len(batch) >= 500 {
 			if err := s.InsertLogBatch(ctx, batch); err != nil {
-				return 0, errors.Errorf("insert batch: %w", err)
+				return errors.Errorf("insert batch: %w", err)
 			}
 			batch = batch[:0]
 		}
-		count++
 	}
 
 	if len(batch) > 0 {
 		if err := s.InsertLogBatch(ctx, batch); err != nil {
-			return 0, errors.Errorf("insert batch: %w", err)
+			return errors.Errorf("insert batch: %w", err)
 		}
 	}
-	return count, nil
+	return nil
 }
 
-func saveDiscoveredPatterns(ctx context.Context, s *store.DuckDBStore, chain *parser.ChainParser) (templateCount, patternCount int, cleared int64, err error) {
-	templates := chain.Templates()
-
-	// Count occurrences per pattern to filter out single-match patterns.
-	// Drain is an online algorithm — a cluster with only 1 log line means
-	// Drain never saw a similar line, so the "pattern" is just the literal
-	// original text with no generalization. Not useful as a pattern.
-	patternCounts, err := s.PatternCounts(ctx)
-	if err != nil {
-		return 0, 0, 0, errors.Errorf("pattern counts: %w", err)
-	}
-
-	var patterns []store.Pattern
+func buildLabelInputs(templates []pattern.DrainCluster, lines []string) []semantic.PatternInput {
+	var inputs []semantic.PatternInput
 	for _, t := range templates {
-		if patternCounts[t.ID] <= 1 {
-			continue
+		var samples []string
+		for _, line := range lines {
+			if _, ok := pattern.MatchTemplate(line, []pattern.DrainCluster{t}); ok {
+				samples = append(samples, line)
+				if len(samples) >= 3 {
+					break
+				}
+			}
 		}
-		patterns = append(patterns, store.Pattern{
-			PatternID:   t.ID,
-			PatternType: "drain",
-			RawPattern:  t.Pattern,
+		inputs = append(inputs, semantic.PatternInput{
+			PatternUUIDString: t.ID.String(),
+			Pattern:           t.Pattern,
+			Samples:           samples,
 		})
 	}
-	if len(patterns) > 0 {
-		if err := s.InsertPatterns(ctx, patterns); err != nil {
-			return 0, 0, 0, errors.Errorf("insert patterns: %w", err)
-		}
-	}
-
-	cleared, err = s.ClearOrphanPatternIDs(ctx)
-	if err != nil {
-		return 0, 0, 0, errors.Errorf("clear orphan pattern IDs: %w", err)
-	}
-
-	return len(templates), len(patterns), cleared, nil
+	return inputs
 }
