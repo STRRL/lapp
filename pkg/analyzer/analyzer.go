@@ -59,12 +59,47 @@ type Config struct {
 
 // Analyze runs the full agentic log analysis pipeline:
 // build a workspace, then run the AI agent on it.
+// It creates its own DrainParser internally, so template IDs will not match
+// any external parser. Use AnalyzeWithTemplates when templates are already available.
 func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
 	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.Analyze")
 	defer span.End()
 
 	span.SetAttributes(
 		attribute.Int("line.count", len(lines)),
+		attribute.String("question", question),
+	)
+
+	// Parse lines with Drain
+	drainParser, err := pattern.NewDrainParser()
+	if err != nil {
+		return "", errors.Errorf("drain parser: %w", err)
+	}
+
+	slog.Info("Parsing lines", "count", len(lines))
+	if err := drainParser.Feed(ctx, lines); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates(ctx)
+	if err != nil {
+		return "", errors.Errorf("drain templates: %w", err)
+	}
+
+	return AnalyzeWithTemplates(ctx, config, lines, templates, question)
+}
+
+// AnalyzeWithTemplates runs the agentic log analysis pipeline using
+// pre-computed Drain templates. This ensures template IDs in the workspace
+// match those stored in the database by the ingest pipeline.
+func AnalyzeWithTemplates(ctx context.Context, config Config, lines []string, templates []pattern.DrainCluster, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.AnalyzeWithTemplates")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("line.count", len(lines)),
+		attribute.Int("template.count", len(templates)),
 		attribute.String("question", question),
 	)
 
@@ -82,23 +117,6 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 	absDir, err := filepath.Abs(tmpDir)
 	if err != nil {
 		return "", errors.Errorf("resolve temp dir: %w", err)
-	}
-
-	// Parse lines with Drain
-	drainParser, err := pattern.NewDrainParser()
-	if err != nil {
-		return "", errors.Errorf("drain parser: %w", err)
-	}
-
-	slog.Info("Parsing lines", "count", len(lines))
-	if err := drainParser.Feed(ctx, lines); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return "", errors.Errorf("drain feed: %w", err)
-	}
-	templates, err := drainParser.Templates(ctx)
-	if err != nil {
-		return "", errors.Errorf("drain templates: %w", err)
 	}
 
 	if err := workspace.NewBuilder(absDir, lines, templates).BuildAll(); err != nil {

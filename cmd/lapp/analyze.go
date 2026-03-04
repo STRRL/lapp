@@ -120,7 +120,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		Model:  analyzeModel,
 	}
 
-	result, err := analyzer.Analyze(ctx, config, mergedLines, question)
+	result, err := analyzer.AnalyzeWithTemplates(ctx, config, mergedLines, templates, question)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
