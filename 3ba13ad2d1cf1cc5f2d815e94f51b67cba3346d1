@@ -1,0 +1,25 @@
+pkg/analyzer/analyzer.go
+  6fc7471149565cca 62-63,90-108,115
+cmd/lapp/analyze.go
+  6fc7471149565cca 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "3ba13ad2d1cf1cc5f2d815e94f51b67cba3346d1",
+  "prompts": {
+    "6fc7471149565cca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25dfc7ea-3dd2-45af-8040-1b8eaaa22536",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 35,
+      "total_deletions": 17,
+      "accepted_lines": 25,
+      "overriden_lines": 0
+    }
+  }
+}
