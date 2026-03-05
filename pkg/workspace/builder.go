@@ -29,6 +29,7 @@ var tmpl = template.Must(
 )
 
 var errorPattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
+var validDirChar = regexp.MustCompile(`[^a-z0-9-]`)
 
 // Builder creates the structured workspace directory from pre-processed data.
 type Builder struct {
@@ -109,7 +110,7 @@ func (b *Builder) computePatterns() {
 		if !hasLabel {
 			continue
 		}
-		dirName := deduplicateDirName(usedDirs, label.SemanticID)
+		dirName := deduplicateDirName(usedDirs, sanitizeDirName(label.SemanticID))
 		usedDirs[dirName] = true
 		infoMap[tid] = &PatternInfo{
 			SemanticID:  label.SemanticID,
@@ -271,6 +272,17 @@ func (b *Builder) writeAgentsMD() error {
 }
 
 // deduplicateDirName appends -2, -3, etc. if the name is already taken.
+// sanitizeDirName strips characters not in [a-z0-9-] to prevent path traversal.
+func sanitizeDirName(name string) string {
+	name = strings.ToLower(name)
+	name = validDirChar.ReplaceAllString(name, "-")
+	name = strings.Trim(name, "-")
+	if name == "" {
+		name = "unknown"
+	}
+	return name
+}
+
 func deduplicateDirName(used map[string]bool, name string) string {
 	if !used[name] {
 		return name

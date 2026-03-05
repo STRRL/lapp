@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -138,7 +139,7 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 
 func copyLogToWorkspace(dir string, args []string, span trace.Span) error {
 	if addLogStdin {
-		name := fmt.Sprintf("stdin-%d.log", time.Now().Unix())
+		name := fmt.Sprintf("stdin-%d.log", time.Now().UnixNano())
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return errors.Errorf("read stdin: %w", err)
@@ -174,9 +175,17 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []workspace.TaggedLin
 		return nil, nil, 0, errors.Errorf("read all logs: %w", err)
 	}
 
+	// Sort filenames for deterministic output across rebuilds
+	fileNames := make([]string, 0, len(allLogs))
+	for name := range allLogs {
+		fileNames = append(fileNames, name)
+	}
+	sort.Strings(fileNames)
+
 	var allTagged []workspace.TaggedLine
 	var allContent []string
-	for fileName, lines := range allLogs {
+	for _, fileName := range fileNames {
+		lines := allLogs[fileName]
 		detector, err := multiline.NewDetector(multiline.DetectorConfig{})
 		if err != nil {
 			return nil, nil, 0, errors.Errorf("multiline detector: %w", err)
