@@ -10,6 +10,12 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
 	"github.com/strrl/lapp/pkg/multiline"
+	"github.com/strrl/lapp/pkg/pattern"
+	"github.com/strrl/lapp/pkg/semantic"
+	"github.com/strrl/lapp/pkg/store"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 var analyzeModel string
@@ -18,8 +24,9 @@ func analyzeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "analyze <logfile> [question]",
 		Short: "Analyze a log file using an AI agent to find root causes",
-		Long: `Read a log file, parse it through the template pipeline, then use an AI agent
-to autonomously explore the processed logs and provide analysis.
+		Long: `Read a log file, run the full ingest pipeline (Drain clustering, semantic labeling,
+DuckDB storage), then use an AI agent to autonomously explore the processed logs
+and provide analysis.
 
 Requires OPENROUTER_API_KEY environment variable to be set.
 
@@ -46,6 +53,11 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		question = args[1]
 	}
 
+	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.Analyze")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("log.file", logFile))
+
 	// Read all lines
 	slog.Info("Reading logs...")
 	lines, err := readLines(logFile)
@@ -56,20 +68,67 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("multiline detector: %w", err)
 	}
-	merged := multiline.MergeSlice(lines, detector)
+	merged := multiline.MergeSlice(ctx, lines, detector)
 	mergedLines := make([]string, len(merged))
 	for i, m := range merged {
 		mergedLines[i] = m.Content
 	}
 	slog.Info("Read lines", "lines", len(lines), "merged_entries", len(mergedLines))
 
+	// Refuse to reuse an existing database to avoid silently mixing datasets
+	if _, err := os.Stat(dbPath); err == nil {
+		return errors.Errorf("database %q already exists; remove it first or choose a different --db path", dbPath)
+	}
+
+	// Ingest pipeline: Drain clustering + semantic labeling + DuckDB storage
+	drainParser, err := pattern.NewDrainParser()
+	if err != nil {
+		return errors.Errorf("drain parser: %w", err)
+	}
+
+	s, err := store.NewDuckDBStore(dbPath)
+	if err != nil {
+		return errors.Errorf("store: %w", err)
+	}
+	defer func() { _ = s.Close() }()
+
+	if err := s.Init(ctx); err != nil {
+		return errors.Errorf("store init: %w", err)
+	}
+
+	semanticIDMap, patternCount, templateCount, err := discoverAndSavePatterns(ctx, s, drainParser, mergedLines, semantic.Config{
+		APIKey: apiKey,
+		Model:  analyzeModel,
+	})
+	if err != nil {
+		return err
+	}
+
+	templates, err := drainParser.Templates(ctx)
+	if err != nil {
+		return errors.Errorf("drain templates: %w", err)
+	}
+	if err := storeLogsWithLabels(ctx, s, merged, templates, semanticIDMap); err != nil {
+		return err
+	}
+
+	slog.Info("Ingestion complete",
+		"lines", len(mergedLines),
+		"templates", templateCount,
+		"patterns_with_2+_matches", patternCount,
+	)
+	slog.Info("Database stored", "path", dbPath)
+
+	// Run AI agent analysis
 	config := analyzer.Config{
 		APIKey: apiKey,
 		Model:  analyzeModel,
 	}
 
-	result, err := analyzer.Analyze(cmd.Context(), config, mergedLines, question)
+	result, err := analyzer.AnalyzeWithTemplates(ctx, config, mergedLines, templates, question)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 

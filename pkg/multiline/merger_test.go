@@ -1,6 +1,7 @@
 package multiline
 
 import (
+	"context"
 	"testing"
 
 	"github.com/strrl/lapp/pkg/logsource"
@@ -24,7 +25,7 @@ func TestMergeSliceJavaStackTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 	if len(merged) != 3 {
 		t.Fatalf("expected 3 merged entries, got %d", len(merged))
 	}
@@ -54,7 +55,7 @@ func TestMergeSliceSingleLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 	if len(merged) != 3 {
 		t.Fatalf("expected 3 entries for single-line logs, got %d", len(merged))
 	}
@@ -72,7 +73,7 @@ func TestMergeSliceEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(nil, d)
+	merged := MergeSlice(context.Background(), nil, d)
 	if merged != nil {
 		t.Errorf("expected nil for empty input, got %v", merged)
 	}
@@ -97,7 +98,7 @@ func TestMergeChannel(t *testing.T) {
 	}
 	close(ch)
 
-	merged := Merge(ch, d)
+	merged := Merge(context.Background(), ch, d)
 	var results []MergedLine
 	for m := range merged {
 		if m.Err != nil {
@@ -129,7 +130,7 @@ func TestMergeSliceMaxEntryBytes(t *testing.T) {
 		"another continuation line",
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 	if len(merged) < 2 {
 		t.Fatalf("expected at least 2 entries due to max entry bytes, got %d", len(merged))
 	}
@@ -148,7 +149,7 @@ func TestMergeSliceNoTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 	if len(merged) != 3 {
 		t.Fatalf("expected 3 entries for non-timestamp logs, got %d", len(merged))
 	}
@@ -172,7 +173,7 @@ func TestMergeChannelNoTimestamp(t *testing.T) {
 	close(ch)
 
 	var results []MergedLine
-	for m := range Merge(ch, d) {
+	for m := range Merge(context.Background(), ch, d) {
 		if m.Err != nil {
 			t.Fatalf("unexpected error: %v", m.Err)
 		}
@@ -198,7 +199,7 @@ func TestMergeSliceOverflowLineRange(t *testing.T) {
 		"2024-03-28 13:45:31 INFO next entry",
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	// Verify no overlapping line ranges
 	for i := 1; i < len(merged); i++ {

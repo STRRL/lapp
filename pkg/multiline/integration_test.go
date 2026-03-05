@@ -1,6 +1,7 @@
 package multiline
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +25,7 @@ func TestIntegrationJavaStackTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	// Expected: 4 entries
 	// 1. "2024-03-28 13:45:30 INFO  Application started successfully"
@@ -59,7 +60,7 @@ func TestIntegrationPythonTraceback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	// Expected: 4 entries
 	// 1. "2024-03-28 14:00:01 INFO Starting batch processing"
@@ -89,7 +90,7 @@ func TestIntegrationGoPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	// Expected: 3 entries
 	// 1. "2024-03-28 15:00:01 INFO Server listening..."
@@ -119,7 +120,7 @@ func TestIntegrationSingleLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	if len(merged) != len(lines) {
 		t.Fatalf("expected %d entries for single-line logs, got %d", len(lines), len(merged))
@@ -142,7 +143,7 @@ func TestIntegrationMixedFormats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	merged := MergeSlice(lines, d)
+	merged := MergeSlice(context.Background(), lines, d)
 
 	// All lines in mixed_formats.log start with timestamps,
 	// so each should be its own entry

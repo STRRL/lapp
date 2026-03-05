@@ -20,10 +20,17 @@ import (
 	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/pattern"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
+
+IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
+Do NOT access files outside this workspace directory.
 
 Your workspace contains pre-processed log data at %s:
 - %s/raw.log — the original log file
@@ -41,7 +48,7 @@ Provide:
 4. Suggested next steps for debugging
 
 Be concise and actionable. Focus on what matters.`,
-		workDir, workDir, workDir, workDir, workDir, workDir, workDir)
+		workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir)
 }
 
 // Config holds configuration for the analyzer.
@@ -52,8 +59,52 @@ type Config struct {
 
 // Analyze runs the full agentic log analysis pipeline:
 // build a workspace, then run the AI agent on it.
+// It creates its own DrainParser internally, so template IDs will not match
+// any external parser. Use AnalyzeWithTemplates when templates are already available.
 func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.Analyze")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("line.count", len(lines)),
+		attribute.String("question", question),
+	)
+
+	// Parse lines with Drain
+	drainParser, err := pattern.NewDrainParser()
+	if err != nil {
+		return "", errors.Errorf("drain parser: %w", err)
+	}
+
+	slog.Info("Parsing lines", "count", len(lines))
+	if err := drainParser.Feed(ctx, lines); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return "", errors.Errorf("drain feed: %w", err)
+	}
+	templates, err := drainParser.Templates(ctx)
+	if err != nil {
+		return "", errors.Errorf("drain templates: %w", err)
+	}
+
+	return AnalyzeWithTemplates(ctx, config, lines, templates, question)
+}
+
+// AnalyzeWithTemplates runs the agentic log analysis pipeline using
+// pre-computed Drain templates. This ensures template IDs in the workspace
+// match those stored in the database by the ingest pipeline.
+func AnalyzeWithTemplates(ctx context.Context, config Config, lines []string, templates []pattern.DrainCluster, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.AnalyzeWithTemplates")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("line.count", len(lines)),
+		attribute.Int("template.count", len(templates)),
+		attribute.String("question", question),
+	)
+
 	config.Model = llmconfig.ResolveModel(config.Model)
+	span.SetAttributes(attribute.String("model", config.Model))
 
 	// Create temp workspace
 	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
@@ -68,21 +119,6 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 		return "", errors.Errorf("resolve temp dir: %w", err)
 	}
 
-	// Parse lines with Drain
-	drainParser, err := pattern.NewDrainParser()
-	if err != nil {
-		return "", errors.Errorf("drain parser: %w", err)
-	}
-
-	slog.Info("Parsing lines", "count", len(lines))
-	if err := drainParser.Feed(lines); err != nil {
-		return "", errors.Errorf("drain feed: %w", err)
-	}
-	templates, err := drainParser.Templates()
-	if err != nil {
-		return "", errors.Errorf("drain templates: %w", err)
-	}
-
 	if err := workspace.NewBuilder(absDir, lines, templates).BuildAll(); err != nil {
 		return "", errors.Errorf("build workspace: %w", err)
 	}
@@ -92,7 +128,15 @@ func Analyze(ctx context.Context, config Config, lines []string, question string
 
 // RunAgent runs the AI agent on an existing workspace directory.
 func RunAgent(ctx context.Context, config Config, workDir, question string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.RunAgent")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("workspace.dir", workDir),
+	)
+
 	config.Model = llmconfig.ResolveModel(config.Model)
+	span.SetAttributes(attribute.String("model", config.Model))
 
 	absDir, err := filepath.Abs(workDir)
 	if err != nil {
@@ -107,10 +151,13 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 	}
 
 	// Create OpenRouter chat model with fixup transport to patch eino tool message bug
+	// Stack: otelhttp (tracing) → fixupRoundTripper (eino bug workaround) → http.DefaultTransport
 	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
-		APIKey:     config.APIKey,
-		Model:      config.Model,
-		HTTPClient: &http.Client{Transport: &fixupRoundTripper{base: http.DefaultTransport}},
+		APIKey: config.APIKey,
+		Model:  config.Model,
+		HTTPClient: &http.Client{
+			Transport: otelhttp.NewTransport(&fixupRoundTripper{base: http.DefaultTransport}),
+		},
 	})
 	if err != nil {
 		return "", errors.Errorf("create chat model: %w", err)
@@ -239,6 +286,9 @@ func fixToolMessages(body []byte) []byte {
 
 // preflightCheck does a quick API call to verify the key works.
 func preflightCheck(ctx context.Context, config Config) error {
+	_, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.PreflightCheck")
+	defer span.End()
+
 	apiURL := "https://openrouter.ai/api/v1/models"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody)
 	if err != nil {

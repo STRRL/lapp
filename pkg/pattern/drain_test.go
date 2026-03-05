@@ -1,6 +1,7 @@
 package pattern
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,11 +21,11 @@ func TestDrainParser_FeedAndTemplates(t *testing.T) {
 		"081109 204005 36 INFO dfs.FSNamesystem: BLOCK* NameSystem.allocateBlock: /mnt/hadoop/mapred/system/job_200811092030_0002/job.jar. blk_5260569883199042858",
 	}
 
-	if err := p.Feed(lines); err != nil {
+	if err := p.Feed(context.Background(), lines); err != nil {
 		t.Fatalf("Feed: %v", err)
 	}
 
-	templates, err := p.Templates()
+	templates, err := p.Templates(context.Background())
 	if err != nil {
 		t.Fatalf("Templates: %v", err)
 	}
@@ -63,7 +64,7 @@ func TestDrainParser_EmptyInput(t *testing.T) {
 		t.Fatalf("NewDrainParser: %v", err)
 	}
 
-	templates, err := p.Templates()
+	templates, err := p.Templates(context.Background())
 	if err != nil {
 		t.Fatalf("Templates: %v", err)
 	}

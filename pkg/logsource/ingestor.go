@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/go-errors/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // LogLine represents a single raw log line read from input.
@@ -36,14 +38,20 @@ type fileIngestor struct {
 // Ingest reads log lines from the file.
 // Cancel the context to stop reading early; the goroutine will exit promptly.
 func (f *fileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], error) {
+	_, span := otel.Tracer("lapp/logsource").Start(ctx, "logsource.Ingest")
+
 	file, err := os.Open(f.path)
 	if err != nil {
+		span.End()
 		return nil, errors.Errorf("open log file: %w", err)
 	}
+
+	span.SetAttributes(attribute.String("file.path", f.path))
 
 	ch := make(chan Result[*LogLine], 100)
 	go func() {
 		defer close(ch)
+		defer span.End()
 
 		var fileErr error
 		defer func() {

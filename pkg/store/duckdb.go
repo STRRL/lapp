@@ -11,6 +11,8 @@ import (
 	// DuckDB driver for database/sql.
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/go-errors/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var _ Store = (*DuckDBStore)(nil)
@@ -32,6 +34,9 @@ func NewDuckDBStore(dsn string) (*DuckDBStore, error) {
 
 // Init creates the log_entries and patterns tables if they do not exist.
 func (s *DuckDBStore) Init(ctx context.Context) error {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.Init")
+	defer span.End()
+
 	if _, err := s.db.ExecContext(ctx, `CREATE SEQUENCE IF NOT EXISTS log_entries_id_seq START 1`); err != nil {
 		return errors.Errorf("create sequence: %w", err)
 	}
@@ -78,6 +83,9 @@ func marshalLabels(labels map[string]string) (string, error) {
 
 // InsertLog stores a single log entry.
 func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.InsertLog")
+	defer span.End()
+
 	labelsJSON, err := marshalLabels(entry.Labels)
 	if err != nil {
 		return err
@@ -99,6 +107,11 @@ func (s *DuckDBStore) InsertLog(ctx context.Context, entry LogEntry) error {
 
 // InsertLogBatch stores multiple log entries in a single transaction.
 func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) error {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.InsertLogBatch")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("batch.size", len(entries)))
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Errorf("begin tx: %w", err)
@@ -133,6 +146,11 @@ func (s *DuckDBStore) InsertLogBatch(ctx context.Context, entries []LogEntry) er
 
 // QueryByPattern returns log entries matching the given pattern semantic ID via labels.
 func (s *DuckDBStore) QueryByPattern(ctx context.Context, pattern string) ([]LogEntry, error) {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.QueryByPattern")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("pattern", pattern))
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, line_number, end_line_number, timestamp, raw, CAST(labels AS VARCHAR)
 		 FROM log_entries WHERE json_extract_string(labels, '$.pattern') = ?`,
@@ -147,6 +165,9 @@ func (s *DuckDBStore) QueryByPattern(ctx context.Context, pattern string) ([]Log
 
 // QueryLogs returns log entries matching the given options.
 func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry, error) {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.QueryLogs")
+	defer span.End()
+
 	var conditions []string
 	var args []any
 
@@ -185,6 +206,9 @@ func (s *DuckDBStore) QueryLogs(ctx context.Context, opts QueryOpts) ([]LogEntry
 // PatternSummaries returns all patterns with their occurrence counts,
 // joined with pattern metadata from the patterns table.
 func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, error) {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.PatternSummaries")
+	defer span.End()
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT p.pattern_id, COALESCE(p.raw_pattern, ''), COUNT(*) as cnt,
 		        COALESCE(p.pattern_type, ''), COALESCE(p.semantic_id, ''), COALESCE(p.description, '')
@@ -214,6 +238,11 @@ func (s *DuckDBStore) PatternSummaries(ctx context.Context) ([]PatternSummary, e
 
 // InsertPatterns upserts patterns into the patterns table.
 func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) error {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.InsertPatterns")
+	defer span.End()
+
+	span.SetAttributes(attribute.Int("pattern.count", len(patterns)))
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return errors.Errorf("begin tx: %w", err)
@@ -249,6 +278,9 @@ func (s *DuckDBStore) InsertPatterns(ctx context.Context, patterns []Pattern) er
 
 // Patterns returns all patterns from the patterns table.
 func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.Patterns")
+	defer span.End()
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT pattern_id, pattern_type, raw_pattern,
 		        COALESCE(semantic_id, ''), COALESCE(description, '')
@@ -276,6 +308,9 @@ func (s *DuckDBStore) Patterns(ctx context.Context) ([]Pattern, error) {
 
 // PatternCounts returns the number of log entries per pattern semantic ID.
 func (s *DuckDBStore) PatternCounts(ctx context.Context) (map[string]int, error) {
+	_, span := otel.Tracer("lapp/store").Start(ctx, "store.PatternCounts")
+	defer span.End()
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT json_extract_string(labels, '$.pattern'), COUNT(*)
 		 FROM log_entries
