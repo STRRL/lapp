@@ -1,0 +1,25 @@
+cmd/lapp/workspace.go
+  b0acfdfe1c2294f9 10,142,178-184,187-188
+pkg/workspace/builder.go
+  b0acfdfe1c2294f9 32,113,275-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "f05c01eb0d6505ccd5976c35813b934abf277c56",
+  "prompts": {
+    "b0acfdfe1c2294f9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "68d0e367-76c9-42a4-b428-aa2ed315a7a3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 24,
+      "total_deletions": 3,
+      "accepted_lines": 24,
+      "overriden_lines": 0
+    }
+  }
+}
