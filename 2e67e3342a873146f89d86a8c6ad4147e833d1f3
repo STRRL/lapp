@@ -1,0 +1,41 @@
+pkg/workspace/workspace.go
+  b0acfdfe1c2294f9 1-95
+pkg/analyzer/analyzer.go
+  b0acfdfe1c2294f9 56-58,60-61,63-74,76-80,82-83,86-90,113,139-141,148,191-193
+cmd/lapp/workspace.go
+  b0acfdfe1c2294f9 1-166,168-333
+CLAUDE.md
+  b0acfdfe1c2294f9 7,26-29,35,40,47,49,52-53,55-59,68,72
+pkg/workspace/builder.go
+  b0acfdfe1c2294f9 1-284
+pkg/workspace/templates/pattern.md.tmpl
+  b0acfdfe1c2294f9 1-20
+pkg/workspace/templates/summary.md.tmpl
+  b0acfdfe1c2294f9 1-23
+pkg/workspace/templates/AGENTS.md.tmpl
+  b0acfdfe1c2294f9 1-31
+pkg/workspace/templates/errors.md.tmpl
+  b0acfdfe1c2294f9 1-23
+cmd/lapp/main.go
+  b0acfdfe1c2294f9 25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "2e67e3342a873146f89d86a8c6ad4147e833d1f3",
+  "prompts": {
+    "b0acfdfe1c2294f9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "68d0e367-76c9-42a4-b428-aa2ed315a7a3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 967,
+      "total_deletions": 203,
+      "accepted_lines": 872,
+      "overriden_lines": 1
+    }
+  }
+}
