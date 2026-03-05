@@ -75,6 +75,11 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	}
 	slog.Info("Read lines", "lines", len(lines), "merged_entries", len(mergedLines))
 
+	// Refuse to reuse an existing database to avoid silently mixing datasets
+	if _, err := os.Stat(dbPath); err == nil {
+		return errors.Errorf("database %q already exists; remove it first or choose a different --db path", dbPath)
+	}
+
 	// Ingest pipeline: Drain clustering + semantic labeling + DuckDB storage
 	drainParser, err := pattern.NewDrainParser()
 	if err != nil {

@@ -59,6 +59,11 @@ func runDebugIngest(cmd *cobra.Command, args []string, model string) error {
 	}
 	merged := multiline.Merge(ctx, ch, detector)
 
+	// Refuse to reuse an existing database to avoid silently mixing datasets
+	if _, err := os.Stat(dbPath); err == nil {
+		return errors.Errorf("database %q already exists; remove it first or choose a different --db path", dbPath)
+	}
+
 	drainParser, err := pattern.NewDrainParser()
 	if err != nil {
 		return errors.Errorf("drain parser: %w", err)
