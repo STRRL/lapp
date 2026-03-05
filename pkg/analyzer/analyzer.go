@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -17,13 +16,10 @@ import (
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/go-errors/errors"
-	"github.com/strrl/lapp/pkg/analyzer/workspace"
 	llmconfig "github.com/strrl/lapp/pkg/config"
-	"github.com/strrl/lapp/pkg/pattern"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 )
 
 func buildSystemPrompt(workDir string) string {
@@ -57,78 +53,41 @@ type Config struct {
 	Model  string
 }
 
-// Analyze runs the full agentic log analysis pipeline:
-// build a workspace, then run the AI agent on it.
-// It creates its own DrainParser internally, so template IDs will not match
-// any external parser. Use AnalyzeWithTemplates when templates are already available.
-func Analyze(ctx context.Context, config Config, lines []string, question string) (string, error) {
-	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.Analyze")
-	defer span.End()
+// BuildWorkspaceSystemPrompt builds a system prompt for the structured workspace layout.
+func BuildWorkspaceSystemPrompt(workDir string) string {
+	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
-	span.SetAttributes(
-		attribute.Int("line.count", len(lines)),
-		attribute.String("question", question),
-	)
+IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
+Do NOT access files outside this workspace directory.
 
-	// Parse lines with Drain
-	drainParser, err := pattern.NewDrainParser()
-	if err != nil {
-		return "", errors.Errorf("drain parser: %w", err)
-	}
+Your workspace at %s contains structured log data:
+- %s/logs/ — original log files
+- %s/patterns/ — discovered log patterns, one directory per pattern
+  - Each pattern directory contains pattern.md (metadata) and samples.log (sample lines)
+  - %s/patterns/unmatched/samples.log — lines that did not match any pattern
+- %s/notes/summary.md — overview of all patterns sorted by frequency
+- %s/notes/errors.md — error and warning patterns
 
-	slog.Info("Parsing lines", "count", len(lines))
-	if err := drainParser.Feed(ctx, lines); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return "", errors.Errorf("drain feed: %w", err)
-	}
-	templates, err := drainParser.Templates(ctx)
-	if err != nil {
-		return "", errors.Errorf("drain templates: %w", err)
-	}
+Start by reading %s/notes/summary.md and %s/notes/errors.md to understand the log patterns.
+Then drill into specific patterns under %s/patterns/ for details.
+Use grep on %s/logs/ to search for specific terms across all log files.
+You can also use the execute tool to run shell commands (e.g., awk, sort, wc) for deeper analysis.
 
-	return AnalyzeWithTemplates(ctx, config, lines, templates, question)
+Provide:
+1. Key findings from the logs
+2. Anomalies or error patterns detected
+3. Root cause analysis (if a problem description is provided)
+4. Suggested next steps for debugging
+
+Be concise and actionable. Focus on what matters.`,
+		workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir)
 }
 
-// AnalyzeWithTemplates runs the agentic log analysis pipeline using
-// pre-computed Drain templates. This ensures template IDs in the workspace
-// match those stored in the database by the ingest pipeline.
-func AnalyzeWithTemplates(ctx context.Context, config Config, lines []string, templates []pattern.DrainCluster, question string) (string, error) {
-	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.AnalyzeWithTemplates")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.Int("line.count", len(lines)),
-		attribute.Int("template.count", len(templates)),
-		attribute.String("question", question),
-	)
-
-	config.Model = llmconfig.ResolveModel(config.Model)
-	span.SetAttributes(attribute.String("model", config.Model))
-
-	// Create temp workspace
-	tmpDir, err := os.MkdirTemp("", "lapp-analyze-*")
-	if err != nil {
-		return "", errors.Errorf("create temp dir: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Resolve to absolute path for the local backend
-	absDir, err := filepath.Abs(tmpDir)
-	if err != nil {
-		return "", errors.Errorf("resolve temp dir: %w", err)
-	}
-
-	if err := workspace.NewBuilder(absDir, lines, templates).BuildAll(); err != nil {
-		return "", errors.Errorf("build workspace: %w", err)
-	}
-
-	return RunAgent(ctx, config, absDir, question)
-}
-
-// RunAgent runs the AI agent on an existing workspace directory.
-func RunAgent(ctx context.Context, config Config, workDir, question string) (string, error) {
-	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.RunAgent")
+// RunAgentWithPrompt runs the AI agent on an existing workspace directory with a custom system prompt.
+//
+//nolint:gocyclo // sequential setup of model, backend, middleware, agent, and runner
+func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, systemPrompt string) (string, error) {
+	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.RunAgentWithPrompt")
 	defer span.End()
 
 	span.SetAttributes(
@@ -151,7 +110,7 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 	}
 
 	// Create OpenRouter chat model with fixup transport to patch eino tool message bug
-	// Stack: otelhttp (tracing) → fixupRoundTripper (eino bug workaround) → http.DefaultTransport
+	// Stack: otelhttp (tracing) -> fixupRoundTripper (eino bug workaround) -> http.DefaultTransport
 	chatModel, err := openrouter.NewChatModel(ctx, &openrouter.Config{
 		APIKey: config.APIKey,
 		Model:  config.Model,
@@ -177,11 +136,16 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 		return "", errors.Errorf("create filesystem middleware: %w", err)
 	}
 
+	// Use the provided system prompt, replacing workDir placeholder if needed
+	if systemPrompt == "" {
+		systemPrompt = buildSystemPrompt(absDir)
+	}
+
 	// Create agent
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "log-analyzer",
 		Description:   "Analyzes log files to find root causes",
-		Instruction:   buildSystemPrompt(absDir),
+		Instruction:   systemPrompt,
 		Model:         chatModel,
 		Middlewares:   []adk.AgentMiddleware{fsMiddleware},
 		MaxIterations: 15,
@@ -222,6 +186,11 @@ func RunAgent(ctx context.Context, config Config, workDir, question string) (str
 	}
 
 	return result.String(), nil
+}
+
+// RunAgent runs the AI agent on an existing workspace directory using the default system prompt.
+func RunAgent(ctx context.Context, config Config, workDir, question string) (string, error) {
+	return RunAgentWithPrompt(ctx, config, workDir, question, "")
 }
 
 // fixupRoundTripper patches outgoing API requests to work around eino bugs.

@@ -1,0 +1,23 @@
+# Error and Warning Patterns
+
+{{range .ErrorPatterns -}}
+## {{.SemanticID}} ({{.Count}} matches)
+
+{{.Description}}
+
+Template: `{{.Template}}`
+
+First seen: `{{.FirstSeen.FileName}}` line {{.FirstSeen.LineNum}}
+
+{{end -}}
+{{if .UnmatchedErrors -}}
+## Unmatched Error Lines
+
+```
+{{range .UnmatchedErrors}}{{.}}
+{{end -}}
+```
+{{end -}}
+{{if not .HasContent -}}
+No error or warning patterns detected.
+{{end -}}
