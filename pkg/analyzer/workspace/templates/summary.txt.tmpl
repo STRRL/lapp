@@ -1,7 +1,0 @@
-# Log Template Summary
-
-{{range .Stats -}}
-[{{.ID}}] "{{.Pattern}}" — {{.Count}} occurrences
-{{range $i, $s := .Samples}}  sample {{add $i 1}}: {{$s}}
-{{end}}
-{{end -}}

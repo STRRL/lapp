@@ -9,8 +9,6 @@ import (
 	"github.com/strrl/lapp/pkg/tracing"
 )
 
-var dbPath string
-
 func main() {
 	// Load .env file if present (does not override existing env vars)
 	_ = godotenv.Load()
@@ -24,10 +22,7 @@ func main() {
 		Long:  "LAPP automatically discovers log templates and stores structured results for querying.",
 	}
 
-	root.PersistentFlags().StringVar(&dbPath, "db", "lapp.duckdb", "path to DuckDB database")
-
-	root.AddCommand(analyzeCmd())
-	root.AddCommand(debugCmd())
+	root.AddCommand(workspaceCmd())
 
 	err := root.Execute()
 	otelShutdown()

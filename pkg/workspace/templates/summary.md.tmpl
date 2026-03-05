@@ -1,0 +1,23 @@
+# Log Summary
+
+- **Log files:** {{.FileCount}}
+{{- range .LogFiles}}
+  - `{{.}}`
+{{- end}}
+- **Total lines:** {{.TotalLines}}
+- **Patterns discovered:** {{.PatternCount}}
+- **Unmatched lines:** {{.UnmatchedCount}}
+
+## Patterns by Frequency
+
+{{range .Patterns -}}
+### {{.SemanticID}} ({{.Count}} matches)
+
+{{.Description}}
+
+Template: `{{.Template}}`
+
+{{end -}}
+{{if eq .PatternCount 0 -}}
+No patterns discovered.
+{{end -}}
