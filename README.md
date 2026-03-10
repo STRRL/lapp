@@ -8,18 +8,15 @@ AI-native log pattern discovery: cluster logs cheaply, semantify templates with 
 # Build
 go build ./cmd/lapp/
 
-# Ingest logs (stdin or file)
-cat app.log | go run ./cmd/lapp/ ingest - --db lapp.duckdb
-go run ./cmd/lapp/ ingest /var/log/syslog --db lapp.duckdb
+# Create a workspace
+go run ./cmd/lapp/ workspace create app-incident
 
-# View discovered templates
-go run ./cmd/lapp/ templates --db lapp.duckdb
+# Add logs to the workspace (semantic labeling via OpenRouter)
+go run ./cmd/lapp/ workspace add-log --topic app-incident /var/log/syslog
 
-# Query logs by template
-go run ./cmd/lapp/ query --template D1 --db lapp.duckdb
-
-# AI-powered analysis (requires OPENROUTER_API_KEY)
-go run ./cmd/lapp/ analyze app.log "why are there connection timeouts?"
+# AI-powered analysis (agent backend via ACP provider)
+go run ./cmd/lapp/ workspace analyze --topic app-incident "why are there connection timeouts?" --acp claude
+go run ./cmd/lapp/ workspace analyze --topic app-incident "what failed?" --acp codex
 ```
 
 ## How It Works
@@ -40,27 +37,26 @@ Parser Chain (first match wins)
 DuckDB Store (log_entries: line_number, raw, template_id, template)
   │
   ▼
-Query / Analyze
+Workspace Notes / Analyze
 ```
 
 **Core idea**: Drain clusters logs into templates cheaply (no API cost), then LLM semantifies the templates in a single call. This follows the IBM "Label Broadcasting" pattern — cluster first (90%+ volume reduction), apply LLM to representatives, broadcast labels back.
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for `analyze` and `debug run` commands
+- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace add-log`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
+- Provider-specific auth for ACP agent CLI (for example Claude/Codex/Gemini CLI login credentials)
 - `.env` file is auto-loaded
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `ingest <file>` | Parse log file, store in DuckDB |
-| `templates` | Show discovered templates with counts |
-| `query --template <id>` | Filter logs by template ID |
-| `analyze <file> [question]` | AI-powered log analysis |
-| `debug workspace <file>` | Build analysis workspace without LLM |
-| `debug run <dir> [question]` | Run AI agent on existing workspace |
+| `workspace create <topic>` | Create a workspace under `~/.lapp/workspaces/` |
+| `workspace list` | List all workspace topics |
+| `workspace add-log --topic <topic> <file>` | Add log file and rebuild patterns/notes |
+| `workspace analyze --topic <topic> [question]` | Run AI analysis (`--acp claude|codex|gemini`) |
 
 ## Development
 

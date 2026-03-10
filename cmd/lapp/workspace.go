@@ -347,6 +347,7 @@ func resetWorkspaceDirs(dir string) error {
 }
 
 var analyzeWsModel string
+var analyzeWsACP string
 var analyzeTopic string
 
 func workspaceAnalyzeCmd() *cobra.Command {
@@ -355,12 +356,13 @@ func workspaceAnalyzeCmd() *cobra.Command {
 		Short: "Run an AI agent to analyze the workspace",
 		Long: `Run an AI agent on a structured workspace directory to analyze logs.
 
-Requires OPENROUTER_API_KEY environment variable.`,
+Use --acp to choose ACP agent backend (claude/codex/gemini).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAnalyze,
 	}
 	cmd.Flags().StringVar(&analyzeTopic, "topic", "", "workspace topic (required)")
-	cmd.Flags().StringVar(&analyzeWsModel, "model", "", "override LLM model")
+	cmd.Flags().StringVar(&analyzeWsModel, "model", "", "override ACP agent model (passed as --model to provider command)")
+	cmd.Flags().StringVar(&analyzeWsACP, "acp", analyzer.ProviderClaude, "ACP agent provider: claude|codex|gemini")
 	_ = cmd.MarkFlagRequired("topic")
 	return cmd
 }
@@ -377,11 +379,6 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("not a workspace: %s (no patterns/ directory)%s", dir, hint)
 	}
 
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		return errors.New("OPENROUTER_API_KEY environment variable is required")
-	}
-
 	var question string
 	if len(args) > 0 {
 		question = args[0]
@@ -396,8 +393,8 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	config := analyzer.Config{
-		APIKey: apiKey,
-		Model:  analyzeWsModel,
+		Provider: analyzeWsACP,
+		Model:    analyzeWsModel,
 	}
 
 	prompt := analyzer.BuildWorkspaceSystemPrompt(absDir)
