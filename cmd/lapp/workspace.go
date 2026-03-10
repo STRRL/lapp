@@ -50,9 +50,70 @@ func workspaceCmd() *cobra.Command {
 		Short: "Create and manage structured log investigation workspaces",
 	}
 	cmd.AddCommand(workspaceCreateCmd())
+	cmd.AddCommand(workspaceListCmd())
 	cmd.AddCommand(workspaceAddLogCmd())
 	cmd.AddCommand(workspaceAnalyzeCmd())
 	return cmd
+}
+
+func workspaceListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all workspaces",
+		Args:  cobra.NoArgs,
+		RunE:  runWorkspaceList,
+	}
+}
+
+func runWorkspaceList(_ *cobra.Command, _ []string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return errors.Errorf("resolve home dir: %w", err)
+	}
+	wsDir := filepath.Join(home, ".lapp", "workspaces")
+	entries, err := os.ReadDir(wsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No workspaces found.")
+			return nil
+		}
+		return errors.Errorf("read workspaces dir: %w", err)
+	}
+	found := false
+	for _, e := range entries {
+		if e.IsDir() {
+			fmt.Println(e.Name())
+			found = true
+		}
+	}
+	if !found {
+		fmt.Println("No workspaces found.")
+	}
+	return nil
+}
+
+// availableWorkspacesHint returns a hint string listing existing workspaces,
+// or an empty string if none exist.
+func availableWorkspacesHint() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	wsDir := filepath.Join(home, ".lapp", "workspaces")
+	entries, err := os.ReadDir(wsDir)
+	if err != nil {
+		return ""
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	return "\navailable workspaces: " + strings.Join(names, ", ")
 }
 
 func workspaceCreateCmd() *cobra.Command {
@@ -121,7 +182,8 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 
 	// Validate workspace exists
 	if _, err := os.Stat(filepath.Join(dir, "logs")); os.IsNotExist(err) {
-		return errors.Errorf("not a workspace: %s (no logs/ directory)", dir)
+		hint := availableWorkspacesHint()
+		return errors.Errorf("not a workspace: %s (no logs/ directory)%s", dir, hint)
 	}
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
@@ -311,7 +373,8 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 
 	// Validate workspace exists
 	if _, err := os.Stat(filepath.Join(dir, "patterns")); os.IsNotExist(err) {
-		return errors.Errorf("not a workspace: %s (no patterns/ directory)", dir)
+		hint := availableWorkspacesHint()
+		return errors.Errorf("not a workspace: %s (no patterns/ directory)%s", dir, hint)
 	}
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
