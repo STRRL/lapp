@@ -23,7 +23,7 @@ type DrainParser struct {
 // NewDrainParser creates a DrainParser with default Drain parameters.
 func NewDrainParser() (*DrainParser, error) {
 	d, err := drain3.NewDrain(
-		drain3.WithDepth(4),
+		drain3.WithDepth(30),
 		drain3.WithSimTh(0.4),
 		drain3.WithExtraDelimiter([]string{"|", "=", ","}),
 	)
