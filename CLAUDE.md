@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LAPP (Log Auto Pattern Pipeline) discovers log templates from log streams using the Drain algorithm, labels them with semantic IDs via LLM, and stores structured results in DuckDB. It also includes an agentic analyzer that uses LLMs to investigate logs.
+LAPP (Log Auto Pattern Pipeline) discovers log templates from log streams using the Drain algorithm, labels them with semantic IDs via LLM, and builds structured file-based workspaces for AI-assisted log investigation. It also includes an agentic analyzer that uses LLMs to investigate logs.
 
 ## Commands
 
@@ -23,43 +23,42 @@ go test -v -run TestFunctionName ./pkg/pattern/
 ## CLI Usage
 
 ```bash
-go run ./cmd/lapp/ analyze <logfile> [question] [--model <model>] [--db <path>]
-go run ./cmd/lapp/ debug workspace <logfile> [-o <dir>]
-go run ./cmd/lapp/ debug ingest <logfile> [--model <model>] [--db <path>]
-go run ./cmd/lapp/ debug run <workspace-dir> [question] [--model <model>]
+go run ./cmd/lapp/ workspace create <topic>
+go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile> [--model <model>]
+go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin [--model <model>]
+go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 ```
+
+Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/workspaces/<topic>/`.
 
 ## Architecture
 
 ```
-cmd/lapp/                CLI entrypoint (cobra commands)
+cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/analyze)
 pkg/logsource/           Read log files → channel of LogLine
 pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
 pkg/semantic/            LLM-based semantic labeling of Drain patterns
+pkg/workspace/           Structured workspace builder (patterns/, notes/, AGENTS.md)
 pkg/store/               DuckDB storage (log_entries + patterns tables)
 pkg/config/              Model resolution (flag → $MODEL_NAME → default)
 pkg/analyzer/            Agentic log analysis via eino ADK + OpenRouter
-pkg/analyzer/workspace/  Build workspace files (raw.log, summary.txt, errors.txt) from templates
 integration_test/        Integration tests against Loghub-2.0 datasets
 ```
 
-### 2-Round Ingest Pipeline
+### Workspace Pipeline (add-log)
 
-The core design: cheap Drain clustering first, then a single batch LLM call for semantic labels.
+Full rebuild on each `add-log`: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, regenerates `patterns/` and `notes/` entirely.
 
 ```
-Round 1 (pattern discovery):
-  File → logsource.Ingest() → multiline.Merge() → collectLines()
-    → pattern.DrainParser.Feed(lines) → pattern.DrainParser.Templates()
-    → filter patterns with Count > 1
-    → semantic.Label(ctx, cfg, patterns)  ← single LLM batch call
-    → store.InsertPatterns()
-
-Round 2 (match & store):
-  For each line → pattern.MatchTemplate(line, templates)
-    → attach labels {pattern: semantic_id, pattern_id: uuid}
-    → store.InsertLogBatch() (500-entry batches)
+Read all logs/ files → multiline.MergeSlice() per file → tagged lines
+  → pattern.DrainParser.Feed(all content) → Templates() → filter Count > 1
+  → semantic.Label(ctx, cfg, patterns)  ← single LLM batch call
+  → workspace.NewBuilder(...).BuildAll()
+    → patterns/<semantic-id>/pattern.md + samples.log
+    → patterns/unmatched/samples.log
+    → notes/summary.md + errors.md
+    → AGENTS.md
 ```
 
 ### Multiline Detection
@@ -68,17 +67,11 @@ Uses a token graph trained on 70+ timestamp formats. Lines are tokenized (first 
 
 ### Analyzer
 
-Builds a workspace directory with pre-processed files, then runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_file, execute) against that workspace.
-
-### DuckDB Schema
-
-- `log_entries`: id, line_number, end_line_number, timestamp, raw, labels (JSON with `pattern` and `pattern_id` keys)
-- `patterns`: pattern_id (PK, UUID string), pattern_type, raw_pattern, semantic_id, description
-- Joined via `json_extract_string(labels, '$.pattern_id') = patterns.pattern_id`
+Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_file, execute) against a structured workspace directory.
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for `analyze`, `debug ingest`, and `debug run`
+- `OPENROUTER_API_KEY`: Required for `workspace add-log` and `workspace analyze`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - `.env` file is auto-loaded via godotenv
 

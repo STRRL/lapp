@@ -1,0 +1,20 @@
+# {{.SemanticID}}
+
+{{.Description}}
+
+## Template
+
+```
+{{.Template}}
+```
+
+## Statistics
+
+- **Matches:** {{.Count}}
+- **First seen:** `{{.FirstSeen.FileName}}` line {{.FirstSeen.LineNum}}
+- **Last seen:** `{{.LastSeen.FileName}}` line {{.LastSeen.LineNum}}
+
+## Line References
+
+{{range .LineRefs}}- `{{.FileName}}`:{{.LineNum}}
+{{end}}
