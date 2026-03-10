@@ -1,0 +1,23 @@
+cmd/lapp/workspace.go
+  895c6c7e677bc976 53,59-116,185-186,376-377
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "3f9ad11a9fd87f2c28748390dabcf59de748512a",
+  "prompts": {
+    "895c6c7e677bc976": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e957cfdf-5a57-4dd0-bf0f-736bdd829591",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 65,
+      "total_deletions": 2,
+      "accepted_lines": 65,
+      "overriden_lines": 0
+    }
+  }
+}
