@@ -1,0 +1,25 @@
+CLAUDE.md
+  7b26cad52f130be7 26-29,32
+cmd/lapp/workspace.go
+  7b26cad52f130be7 10,12,28-45,60-61,68-71,79,84,96,100,106,109,112,117-120,184,187,288,292,297,300,302,307-310,323-324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "82347b0008a4ccb3ac8450074171d45e1956ef44",
+  "prompts": {
+    "7b26cad52f130be7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6141ace6-a3f1-42bd-aca3-1f37cd4af0f6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 57,
+      "total_deletions": 19,
+      "accepted_lines": 57,
+      "overriden_lines": 0
+    }
+  }
+}
