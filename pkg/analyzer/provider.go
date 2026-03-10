@@ -4,12 +4,12 @@ import (
 	"strings"
 
 	"github.com/go-errors/errors"
+	einoacp "github.com/strrl/eino-acp"
 )
 
 const (
 	ProviderClaude = "claude"
 	ProviderCodex  = "codex"
-	ProviderGemini = "gemini"
 )
 
 // BuildACPCommand resolves provider and builds the ACP launcher command.
@@ -21,11 +21,9 @@ func BuildACPCommand(provider, model string) (resolvedProvider string, command [
 
 	switch resolved {
 	case ProviderClaude:
-		command = []string{"npx", "-y", "@zed-industries/claude-agent-acp@latest"}
+		command = einoacp.ClaudeCommand()
 	case ProviderCodex:
-		command = []string{"codex", "--acp"}
-	case ProviderGemini:
-		command = []string{"gemini", "--experimental-acp"}
+		command = einoacp.CodexCommand()
 	default:
 		return "", nil, errors.Errorf("unsupported provider %q", resolved)
 	}
@@ -44,9 +42,9 @@ func resolveProvider(provider string) (string, error) {
 	}
 
 	switch normalized {
-	case ProviderClaude, ProviderCodex, ProviderGemini:
+	case ProviderClaude, ProviderCodex:
 		return normalized, nil
 	default:
-		return "", errors.Errorf("invalid provider %q (supported: claude, codex, gemini)", provider)
+		return "", errors.Errorf("invalid provider %q (supported: claude, codex)", provider)
 	}
 }

@@ -3,6 +3,8 @@ package analyzer
 import (
 	"reflect"
 	"testing"
+
+	einoacp "github.com/strrl/eino-acp"
 )
 
 func TestBuildACPCommand(t *testing.T) {
@@ -19,25 +21,24 @@ func TestBuildACPCommand(t *testing.T) {
 			name:         "default provider",
 			provider:     "",
 			wantProvider: ProviderClaude,
-			wantCommand:  []string{"npx", "-y", "@zed-industries/claude-agent-acp@latest"},
+			wantCommand:  einoacp.ClaudeCommand(),
 		},
 		{
 			name:         "codex with model",
 			provider:     ProviderCodex,
 			model:        "gpt-5-codex",
 			wantProvider: ProviderCodex,
-			wantCommand:  []string{"codex", "--acp", "--model", "gpt-5-codex"},
+			wantCommand:  append(einoacp.CodexCommand(), "--model", "gpt-5-codex"),
 		},
 		{
-			name:         "gemini normalized",
-			provider:     "GeMiNi",
-			wantProvider: ProviderGemini,
-			wantCommand:  []string{"gemini", "--experimental-acp"},
+			name:         "claude explicit",
+			provider:     "Claude",
+			wantProvider: ProviderClaude,
+			wantCommand:  einoacp.ClaudeCommand(),
 		},
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

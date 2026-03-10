@@ -204,8 +204,8 @@ github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXl
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/strrl/eino-acp v0.0.0-20260310032205-4c84efa27879 h1:xse8vA0W42NBvZ6ZfVC6BGlgX0uf/eMal5objw0QNLQ=
-github.com/strrl/eino-acp v0.0.0-20260310032205-4c84efa27879/go.mod h1:xsRolfWoxdvi9ZQlK8Idgc2+cpZpK8kEoIxywQBOEws=
+github.com/strrl/eino-acp v0.0.0-20260310040548-829a6c320793 h1:qIJK7RuBE/nUeata7pkcjeARwTyrrjdJKzjFJEcI5Rw=
+github.com/strrl/eino-acp v0.0.0-20260310040548-829a6c320793/go.mod h1:xsRolfWoxdvi9ZQlK8Idgc2+cpZpK8kEoIxywQBOEws=
 github.com/tidwall/gjson v1.14.2 h1:6BBkirS0rAHjumnjHF6qgy5d2YAJ1TLIaFE2lzfOLqo=
 github.com/tidwall/gjson v1.14.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=

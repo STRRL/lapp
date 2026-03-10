@@ -356,13 +356,13 @@ func workspaceAnalyzeCmd() *cobra.Command {
 		Short: "Run an AI agent to analyze the workspace",
 		Long: `Run an AI agent on a structured workspace directory to analyze logs.
 
-Use --acp to choose ACP agent backend (claude/codex/gemini).`,
+Use --acp to choose ACP agent backend (claude/codex).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAnalyze,
 	}
 	cmd.Flags().StringVar(&analyzeTopic, "topic", "", "workspace topic (required)")
 	cmd.Flags().StringVar(&analyzeWsModel, "model", "", "override ACP agent model (passed as --model to provider command)")
-	cmd.Flags().StringVar(&analyzeWsACP, "acp", analyzer.ProviderClaude, "ACP agent provider: claude|codex|gemini")
+	cmd.Flags().StringVar(&analyzeWsACP, "acp", analyzer.ProviderClaude, "ACP agent provider: claude|codex")
 	_ = cmd.MarkFlagRequired("topic")
 	return cmd
 }
