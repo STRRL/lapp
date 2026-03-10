@@ -23,11 +23,13 @@ go test -v -run TestFunctionName ./pkg/pattern/
 ## CLI Usage
 
 ```bash
-go run ./cmd/lapp/ workspace create <dir>
-go run ./cmd/lapp/ workspace add-log <dir> <logfile> [--model <model>]
-go run ./cmd/lapp/ workspace add-log <dir> --stdin [--model <model>]
-go run ./cmd/lapp/ workspace analyze <dir> [question] [--model <model>]
+go run ./cmd/lapp/ workspace create <topic>
+go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile> [--model <model>]
+go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin [--model <model>]
+go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 ```
+
+Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/workspaces/<topic>/`.
 
 ## Architecture
 

@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -23,6 +25,25 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]+`)
+
+// topicToDir sanitizes a topic string to lower-kebab-case and returns
+// the workspace path under ~/.lapp/workspaces/<sanitized-topic>.
+func topicToDir(topic string) (string, error) {
+	slug := strings.ToLower(topic)
+	slug = nonAlphaNum.ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return "", errors.New("topic results in empty name after sanitization")
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".lapp", "workspaces", slug), nil
+}
+
 func workspaceCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workspace",
@@ -36,15 +57,18 @@ func workspaceCmd() *cobra.Command {
 
 func workspaceCreateCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "create <dir>",
-		Short: "Create a new workspace directory",
+		Use:   "create <topic>",
+		Short: "Create a new workspace for the given topic",
 		Args:  cobra.ExactArgs(1),
 		RunE:  runWorkspaceCreate,
 	}
 }
 
 func runWorkspaceCreate(_ *cobra.Command, args []string) error {
-	dir := args[0]
+	dir, err := topicToDir(args[0])
+	if err != nil {
+		return err
+	}
 
 	for _, sub := range []string{"logs", "patterns", "notes"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
@@ -52,12 +76,12 @@ func runWorkspaceCreate(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Write initial AGENTS.md with no log files
+	topic := filepath.Base(dir)
 	agentsMD := `# Log Investigation Workspace
 
 This workspace has been created but no log files have been added yet.
 
-Use ` + "`lapp workspace add-log " + dir + " <logfile>`" + ` to add log files.
+Use ` + "`lapp workspace add-log --topic " + topic + " <logfile>`" + ` to add log files.
 `
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(agentsMD), 0o644); err != nil {
 		return errors.Errorf("write AGENTS.md: %w", err)
@@ -69,25 +93,31 @@ Use ` + "`lapp workspace add-log " + dir + " <logfile>`" + ` to add log files.
 
 var addLogModel string
 var addLogStdin bool
+var addLogTopic string
 
 func workspaceAddLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "add-log <dir> [logfile]",
+		Use:   "add-log [logfile]",
 		Short: "Add a log file to the workspace and rebuild patterns",
 		Long: `Copy a log file into the workspace's logs/ directory, then run the full
 pipeline (Drain clustering + semantic labeling) to regenerate patterns/ and notes/.
 
 Requires OPENROUTER_API_KEY environment variable.`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAddLog,
 	}
+	cmd.Flags().StringVar(&addLogTopic, "topic", "", "workspace topic (required)")
 	cmd.Flags().StringVar(&addLogModel, "model", "", "override LLM model")
 	cmd.Flags().BoolVar(&addLogStdin, "stdin", false, "read log from stdin")
+	_ = cmd.MarkFlagRequired("topic")
 	return cmd
 }
 
 func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
-	dir := args[0]
+	dir, err := topicToDir(addLogTopic)
+	if err != nil {
+		return err
+	}
 
 	// Validate workspace exists
 	if _, err := os.Stat(filepath.Join(dir, "logs")); os.IsNotExist(err) {
@@ -151,10 +181,10 @@ func copyLogToWorkspace(dir string, args []string, span trace.Span) error {
 		return nil
 	}
 
-	if len(args) < 2 {
+	if len(args) < 1 {
 		return errors.New("logfile argument required (or use --stdin)")
 	}
-	logFile := args[1]
+	logFile := args[0]
 	span.SetAttributes(attribute.String("log.file", logFile))
 
 	data, err := os.ReadFile(logFile)
@@ -255,23 +285,29 @@ func resetWorkspaceDirs(dir string) error {
 }
 
 var analyzeWsModel string
+var analyzeTopic string
 
 func workspaceAnalyzeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "analyze <dir> [question]",
+		Use:   "analyze [question]",
 		Short: "Run an AI agent to analyze the workspace",
 		Long: `Run an AI agent on a structured workspace directory to analyze logs.
 
 Requires OPENROUTER_API_KEY environment variable.`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAnalyze,
 	}
+	cmd.Flags().StringVar(&analyzeTopic, "topic", "", "workspace topic (required)")
 	cmd.Flags().StringVar(&analyzeWsModel, "model", "", "override LLM model")
+	_ = cmd.MarkFlagRequired("topic")
 	return cmd
 }
 
 func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
-	dir := args[0]
+	dir, err := topicToDir(analyzeTopic)
+	if err != nil {
+		return err
+	}
 
 	// Validate workspace exists
 	if _, err := os.Stat(filepath.Join(dir, "patterns")); os.IsNotExist(err) {
@@ -284,8 +320,8 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	var question string
-	if len(args) > 1 {
-		question = args[1]
+	if len(args) > 0 {
+		question = args[0]
 	}
 
 	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceAnalyze")
