@@ -1,0 +1,22 @@
+{
+  "name": "json_checkout_failure",
+  "source_format": "json",
+  "description": "Structured JSON log with canonical request metadata and inferred service ownership.",
+  "event": {
+    "ts": "2026-03-10T21:00:00Z",
+    "text": "{\"ts\":\"2026-03-10T21:00:00Z\",\"level\":\"ERROR\",\"service\":\"payments-api\",\"env\":\"prod\",\"request_id\":\"req_123\",\"trace_id\":\"trace_456\",\"endpoint\":\"/checkout\",\"message\":\"checkout failed for user user_789\"}",
+    "attrs": {
+      "level": "error",
+      "service": "payments-api",
+      "env": "prod",
+      "request_id": "req_123",
+      "trace_id": "trace_456",
+      "endpoint": "/checkout",
+      "message": "checkout failed for user user_789"
+    },
+    "inferred": {
+      "pattern": "checkout failed for user <*>",
+      "entity": "payments-api"
+    }
+  }
+}

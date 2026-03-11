@@ -1,0 +1,22 @@
+{
+  "name": "key_value_retry",
+  "source_format": "key_value",
+  "description": "Space-delimited key=value log line normalized into canonical service and correlation fields.",
+  "event": {
+    "ts": "2026-03-10T21:02:45Z",
+    "text": "timestamp=2026-03-10T21:02:45Z severity=WARN service_name=billing-worker environment=prod correlation_id=corr_123 tenant_id=tenant_456 action=retrying charge_id=ch_789",
+    "attrs": {
+      "level": "warn",
+      "service": "billing-worker",
+      "env": "prod",
+      "correlation_id": "corr_123",
+      "tenant_id": "tenant_456",
+      "action": "retrying",
+      "charge_id": "ch_789"
+    },
+    "inferred": {
+      "pattern": "retrying charge <*>",
+      "entity": "billing-worker"
+    }
+  }
+}

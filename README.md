@@ -58,6 +58,10 @@ Workspace Notes / Analyze
 | `workspace add-log --topic <topic> <file>` | Add log file and rebuild patterns/notes |
 | `workspace analyze --topic <topic> [question]` | Run AI analysis (`--acp claude|codex|gemini`) |
 
+## Event Schema
+
+The initial normalized event contract is defined in [proto/lapp/event/v1/event.proto](proto/lapp/event/v1/event.proto) and documented in [docs/event-schema-v1.md](docs/event-schema-v1.md). Representative fixtures live under `fixtures/events/v1/` for JSON, logfmt, `key=value`, and plain text logs.
+
 ## Development
 
 ```bash
