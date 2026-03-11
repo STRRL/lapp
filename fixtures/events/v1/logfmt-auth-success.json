@@ -1,0 +1,23 @@
+{
+  "name": "logfmt_auth_success",
+  "source_format": "logfmt",
+  "description": "logfmt line with request and trace identifiers plus a normalized auth pattern.",
+  "event": {
+    "ts": "2026-03-10T21:01:12Z",
+    "text": "ts=2026-03-10T21:01:12Z level=INFO service=auth-api env=staging request_id=req_456 trace_id=trace_789 method=POST endpoint=/login msg=\"user user_123 authenticated\"",
+    "attrs": {
+      "level": "info",
+      "service": "auth-api",
+      "env": "staging",
+      "request_id": "req_456",
+      "trace_id": "trace_789",
+      "method": "POST",
+      "endpoint": "/login",
+      "msg": "user user_123 authenticated"
+    },
+    "inferred": {
+      "pattern": "user <*> authenticated",
+      "entity": "auth-api"
+    }
+  }
+}

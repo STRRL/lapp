@@ -1,0 +1,15 @@
+{
+  "name": "plain_text_worker_stall",
+  "source_format": "plain_text",
+  "description": "Unstructured plain text log that keeps the raw line and only a small amount of inferred metadata.",
+  "event": {
+    "text": "ERROR worker pool stalled after 3 retries while draining queue payments",
+    "attrs": {
+      "level": "error"
+    },
+    "inferred": {
+      "pattern": "worker pool stalled after <*> retries while draining queue <*>",
+      "entity": "worker-pool"
+    }
+  }
+}
