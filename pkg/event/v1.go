@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,7 +25,7 @@ var allowedSourceFormats = map[string]struct{}{
 	SourceFormatPlainText: {},
 }
 
-// Event is the v1 normalized log event shape.
+// Event mirrors the canonical v1 schema in proto/lapp/event/v1/event.proto.
 type Event struct {
 	Timestamp *time.Time        `json:"ts,omitempty"`
 	Text      string            `json:"text"`
@@ -38,7 +39,7 @@ type Inferred struct {
 	Entity  string `json:"entity,omitempty"`
 }
 
-// Fixture wraps an example event with provenance metadata.
+// Fixture mirrors the protobuf fixture contract for JSON-backed examples.
 type Fixture struct {
 	Name         string `json:"name"`
 	SourceFormat string `json:"source_format"`
@@ -55,7 +56,7 @@ func (f Fixture) Validate() error {
 		return goerrors.New("description is required")
 	}
 	if _, ok := allowedSourceFormats[f.SourceFormat]; !ok {
-		return goerrors.Errorf("validate source_format: expected one of %q, %q, %q, %q", SourceFormatJSON, SourceFormatLogfmt, SourceFormatKeyValue, SourceFormatPlainText)
+		return goerrors.Errorf("validate source_format: invalid format %q, must be one of %s", f.SourceFormat, strings.Join(allowedSourceFormatNames(), ", "))
 	}
 	if strings.TrimSpace(f.Event.Text) == "" {
 		return goerrors.New("event.text is required")
@@ -72,6 +73,15 @@ func (f Fixture) Validate() error {
 		}
 	}
 	return nil
+}
+
+func allowedSourceFormatNames() []string {
+	formats := make([]string, 0, len(allowedSourceFormats))
+	for format := range allowedSourceFormats {
+		formats = append(formats, format)
+	}
+	sort.Strings(formats)
+	return formats
 }
 
 // LoadFixtures reads all JSON fixture files from a directory.

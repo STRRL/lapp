@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package lapp.event.v1;
+
+option go_package = "github.com/STRRL/lapp/pkg/event/eventpb;eventpb";
+
+import "google/protobuf/timestamp.proto";
+
+// Event is the canonical v1 normalized log event.
+message Event {
+  // Optional because plain text logs may not provide a trustworthy timestamp.
+  google.protobuf.Timestamp ts = 1;
+
+  // Required. Preserve the raw log line verbatim as the source of truth.
+  string text = 2;
+
+  // Required. Parsed source attributes remain flat string pairs in v1.
+  map<string, string> attrs = 3;
+
+  // Required. Inferred metadata stays separate from source-derived attributes.
+  Inferred inferred = 4;
+}
+
+// Inferred contains metadata synthesized after parsing.
+message Inferred {
+  // Optional generalized template such as "user <*> authenticated".
+  string pattern = 1;
+
+  // Optional owning component, domain object, or actor inferred from context.
+  string entity = 2;
+}
+
+enum SourceFormat {
+  SOURCE_FORMAT_UNSPECIFIED = 0;
+  SOURCE_FORMAT_JSON = 1;
+  SOURCE_FORMAT_LOGFMT = 2;
+  SOURCE_FORMAT_KEY_VALUE = 3;
+  SOURCE_FORMAT_PLAIN_TEXT = 4;
+}
+
+// Fixture wraps a representative event example with provenance metadata.
+message Fixture {
+  // Required stable fixture identifier.
+  string name = 1;
+
+  // Required source representation used to produce the normalized event.
+  SourceFormat source_format = 2;
+
+  // Required short explanation of the scenario the fixture covers.
+  string description = 3;
+
+  // Required normalized event payload.
+  Event event = 4;
+}

@@ -8,7 +8,31 @@
 
 This keeps ingestion lossless while giving downstream steps a stable shape to work with even when log formats vary.
 
+The canonical schema definition lives in `proto/lapp/event/v1/event.proto`. This document explains how to use that schema and how the JSON fixtures map onto it.
+
 ## Canonical Shape
+
+### Protobuf
+
+```proto
+message Event {
+  google.protobuf.Timestamp ts = 1;
+  string text = 2;
+  map<string, string> attrs = 3;
+  Inferred inferred = 4;
+}
+```
+
+```proto
+message Fixture {
+  string name = 1;
+  SourceFormat source_format = 2;
+  string description = 3;
+  Event event = 4;
+}
+```
+
+### JSON Fixture Encoding
 
 ```json
 {
@@ -75,4 +99,4 @@ Representative fixtures live in `fixtures/events/v1/`:
 - `key-value-retry.json`
 - `plain-text-worker-stall.json`
 
-Each fixture wraps a normalized event with `name`, `source_format`, and `description` metadata so future parser and schema tests can consume them directly.
+Each fixture wraps a normalized event with `name`, `source_format`, and `description` metadata. This allows future parser and schema tests to consume them directly.
