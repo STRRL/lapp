@@ -392,9 +392,11 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("resolve workspace dir: %w", err)
 	}
 
+	tapePath := filepath.Join(absDir, ".tape.jsonl")
 	config := analyzer.Config{
 		Provider: analyzeWsACP,
 		Model:    analyzeWsModel,
+		TapePath: tapePath,
 	}
 
 	prompt := analyzer.BuildWorkspaceSystemPrompt(absDir)
