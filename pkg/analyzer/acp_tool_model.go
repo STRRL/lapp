@@ -3,12 +3,16 @@ package analyzer
 import (
 	"context"
 
+	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	einoacp "github.com/strrl/eino-acp"
 )
 
-var _ model.ToolCallingChatModel = (*acpToolCallingModel)(nil)
+var (
+	_ model.ToolCallingChatModel = (*acpToolCallingModel)(nil)
+	_ components.Checker         = (*acpToolCallingModel)(nil)
+)
 
 // acpToolCallingModel adapts eino-acp ChatModel to ToolCallingChatModel.
 // ACP agents manage tools in their own runtime, so WithTools is a no-op.
@@ -18,6 +22,10 @@ type acpToolCallingModel struct {
 
 func newACPToolCallingModel(base *einoacp.ChatModel) model.ToolCallingChatModel {
 	return &acpToolCallingModel{base: base}
+}
+
+func (m *acpToolCallingModel) IsCallbacksEnabled() bool {
+	return true
 }
 
 func (m *acpToolCallingModel) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
