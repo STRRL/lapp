@@ -1,27 +1,23 @@
+// Package tape implements append-only audit logs aligned with Republic's tape schema.
 package tape
 
 import "time"
 
-// Entry is a single append-only entry in a tape, modeled after republic's TapeEntry.
 type Entry struct {
-	ID      int            `json:"id"`
+	ID      int64          `json:"id"`
 	Kind    string         `json:"kind"`
 	Payload map[string]any `json:"payload"`
 	Meta    map[string]any `json:"meta,omitempty"`
 	Date    string         `json:"date"`
 }
 
-// Entry kinds.
-const (
-	KindMessage    = "message"
-	KindSystem     = "system"
-	KindToolCall   = "tool_call"
-	KindToolResult = "tool_result"
-	KindError      = "error"
-	KindEvent      = "event"
-)
-
 func newEntry(kind string, payload, meta map[string]any) Entry {
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	if meta == nil {
+		meta = map[string]any{}
+	}
 	return Entry{
 		Kind:    kind,
 		Payload: payload,
@@ -30,47 +26,46 @@ func newEntry(kind string, payload, meta map[string]any) Entry {
 	}
 }
 
-// MessageEntry creates a message entry.
-func MessageEntry(role, content string, meta map[string]any) Entry {
-	return newEntry(KindMessage, map[string]any{
-		"role":    role,
-		"content": content,
-	}, meta)
+func Message(msg, meta map[string]any) Entry {
+	p := map[string]any{}
+	for k, v := range msg {
+		p[k] = v
+	}
+	return newEntry("message", p, meta)
 }
 
-// SystemEntry creates a system prompt entry.
-func SystemEntry(content string, meta map[string]any) Entry {
-	return newEntry(KindSystem, map[string]any{
-		"content": content,
-	}, meta)
+func System(content string, meta map[string]any) Entry {
+	return newEntry("system", map[string]any{"content": content}, meta)
 }
 
-// ToolCallEntry creates a tool call entry.
-func ToolCallEntry(calls []map[string]any, meta map[string]any) Entry {
-	return newEntry(KindToolCall, map[string]any{
-		"calls": calls,
-	}, meta)
+func Anchor(name string, state, meta map[string]any) Entry {
+	p := map[string]any{"name": name}
+	if state != nil {
+		p["state"] = state
+	}
+	return newEntry("anchor", p, meta)
 }
 
-// ToolResultEntry creates a tool result entry.
-func ToolResultEntry(results []any, meta map[string]any) Entry {
-	return newEntry(KindToolResult, map[string]any{
-		"results": results,
-	}, meta)
+func ToolCall(calls []map[string]any, meta map[string]any) Entry {
+	return newEntry("tool_call", map[string]any{"calls": calls}, meta)
 }
 
-// ErrorEntry creates an error entry.
-func ErrorEntry(kind, message string, meta map[string]any) Entry {
-	return newEntry(KindError, map[string]any{
-		"kind":    kind,
-		"message": message,
-	}, meta)
+func ToolResult(results []any, meta map[string]any) Entry {
+	return newEntry("tool_result", map[string]any{"results": results}, meta)
 }
 
-// EventEntry creates a generic event entry.
-func EventEntry(name string, data, meta map[string]any) Entry {
-	return newEntry(KindEvent, map[string]any{
-		"name": name,
-		"data": data,
-	}, meta)
+func ErrorPayload(message string, extra, meta map[string]any) Entry {
+	p := map[string]any{"message": message}
+	for k, v := range extra {
+		p[k] = v
+	}
+	return newEntry("error", p, meta)
+}
+
+func Event(name string, data, meta map[string]any) Entry {
+	p := map[string]any{"name": name}
+	if data != nil {
+		p["data"] = data
+	}
+	return newEntry("event", p, meta)
 }
