@@ -4,7 +4,6 @@ go 1.25.7
 
 require (
 	github.com/cloudwego/eino v0.8.0
-	github.com/cloudwego/eino-ext/adk/backend/local v0.1.2-0.20260306073537-008f82264d85
 	github.com/cloudwego/eino-ext/callbacks/langfuse v0.0.0-20260227151421-e109b4ff9563
 	github.com/cloudwego/eino-ext/components/model/openrouter v0.1.2
 	github.com/duckdb/duckdb-go/v2 v2.5.5
@@ -13,7 +12,7 @@ require (
 	github.com/jaeyo/go-drain3 v0.1.2
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
-	github.com/strrl/eino-acp v0.0.0-20260320032654-943782f485e5
+	github.com/strrl/eino-acp v0.0.0-20260320160044-9f7d8d1bd2f5
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.40.0
@@ -24,7 +23,6 @@ require (
 require (
 	github.com/apache/arrow-go/v18 v18.5.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect

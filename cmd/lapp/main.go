@@ -4,10 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/cloudwego/eino/callbacks"
 	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
-	"github.com/strrl/lapp/pkg/tape"
 	"github.com/strrl/lapp/pkg/tracing"
 )
 
@@ -17,7 +15,6 @@ func main() {
 
 	flush := tracing.InitLangfuse()
 	otelShutdown := tracing.InitOTel(context.Background())
-	callbacks.AppendGlobalHandlers(tape.NewSlogHandler())
 
 	root := &cobra.Command{
 		Use:   "lapp",

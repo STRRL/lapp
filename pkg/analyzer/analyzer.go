@@ -7,9 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
-	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/go-errors/errors"
 	einoacp "github.com/strrl/eino-acp"
@@ -21,7 +19,7 @@ import (
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
-IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
+IMPORTANT: All file operations MUST use paths under %s.
 Do NOT access files outside this workspace directory.
 
 Your workspace contains pre-processed log data at %s:
@@ -30,8 +28,8 @@ Your workspace contains pre-processed log data at %s:
 - %s/errors.txt — error and warning patterns extracted from logs
 
 Start by reading %s/summary.txt and %s/errors.txt to understand the log patterns.
-Then use grep and read_file on %s/raw.log to investigate specific patterns in detail.
-You can also use the execute tool to run shell commands (e.g., awk, sort, wc) for deeper analysis.
+Then search and read %s/raw.log for specifics.
+Use shell only when it helps (e.g., awk, sort, wc).
 
 Provide:
 1. Key findings from the logs
@@ -55,7 +53,7 @@ type Config struct {
 func BuildWorkspaceSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
-IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
+IMPORTANT: All file operations MUST use paths under %s.
 Do NOT access files outside this workspace directory.
 
 Your workspace at %s contains structured log data:
@@ -68,8 +66,8 @@ Your workspace at %s contains structured log data:
 
 Start by reading %s/notes/summary.md and %s/notes/errors.md to understand the log patterns.
 Then drill into specific patterns under %s/patterns/ for details.
-Use grep on %s/logs/ to search for specific terms across all log files.
-You can also use the execute tool to run shell commands (e.g., awk, sort, wc) for deeper analysis.
+Search %s/logs/ for specific terms across log files.
+Use shell only when it helps (e.g., awk, sort, wc).
 
 Provide:
 1. Key findings from the logs
@@ -82,8 +80,6 @@ Be concise and actionable. Focus on what matters.`,
 }
 
 // RunAgentWithPrompt runs the AI agent on an existing workspace directory with a custom system prompt.
-//
-//nolint:gocyclo // sequential setup of model, backend, middleware, agent, and runner
 func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, systemPrompt string) (string, error) {
 	ctx, span := otel.Tracer("lapp/analyzer").Start(ctx, "analyzer.RunAgentWithPrompt")
 	defer span.End()
@@ -107,12 +103,6 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 		attribute.String("model", config.Model),
 	)
 
-	if config.TapePath != "" {
-		jsonlStore := tape.NewJSONLStore(config.TapePath)
-		callbacks.AppendGlobalHandlers(tape.NewHandler(jsonlStore))
-		slog.Info("Tape recording enabled", "path", config.TapePath)
-	}
-
 	slog.Info("Analyzing with ACP provider", "provider", provider, "model", config.Model)
 
 	chatModel, err := einoacp.NewChatModel(ctx, &einoacp.Config{
@@ -124,30 +114,24 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 		return "", errors.Errorf("create chat model: %w", err)
 	}
 
-	backend, err := local.NewBackend(ctx, &local.Config{})
-	if err != nil {
-		return "", errors.Errorf("create local backend: %w", err)
-	}
-	backendAdapter := newLocalBackendAdapter(backend)
-
-	fsHandler, err := fsmw.New(ctx, &fsmw.MiddlewareConfig{
-		Backend:        backendAdapter,
-		StreamingShell: backendAdapter,
-	})
-	if err != nil {
-		return "", errors.Errorf("create filesystem middleware: %w", err)
-	}
-
 	if systemPrompt == "" {
 		systemPrompt = buildSystemPrompt(absDir)
 	}
+
+	// Build per-query callback handlers
+	var queryHandlers []callbacks.Handler
+	if config.TapePath != "" {
+		tapeStore := tape.NewJSONLStore(config.TapePath)
+		queryHandlers = append(queryHandlers, tape.NewHandler(tapeStore))
+		slog.Info("Tape recording enabled", "path", config.TapePath)
+	}
+	queryHandlers = append(queryHandlers, tape.NewSlogHandler())
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "log-analyzer",
 		Description:   "Analyzes log files to find root causes",
 		Instruction:   systemPrompt,
 		Model:         newACPToolCallingModel(chatModel),
-		Handlers:      []adk.ChatModelAgentMiddleware{fsHandler},
 		MaxIterations: 15,
 	})
 	if err != nil {
@@ -160,7 +144,7 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-	iter := runner.Query(ctx, userMessage)
+	iter := runner.Query(ctx, userMessage, adk.WithCallbacks(queryHandlers...))
 
 	var result strings.Builder
 	for {

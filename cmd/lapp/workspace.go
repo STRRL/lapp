@@ -18,6 +18,7 @@ import (
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
+	"github.com/strrl/lapp/pkg/tape"
 	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -393,6 +394,8 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	tapePath := filepath.Join(absDir, ".tape.jsonl")
+	// Truncate tape file for a fresh recording each run
+	_ = os.Remove(tapePath)
 	config := analyzer.Config{
 		Provider: analyzeWsACP,
 		Model:    analyzeWsModel,
@@ -400,11 +403,20 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	prompt := analyzer.BuildWorkspaceSystemPrompt(absDir)
-	result, err := analyzer.RunAgentWithPrompt(ctx, config, absDir, question, prompt)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+	result, analyzeErr := analyzer.RunAgentWithPrompt(ctx, config, absDir, question, prompt)
+
+	// Always convert tape to OTLP trace, even if the agent errored
+	tracePath := filepath.Join(absDir, ".trace.json")
+	if convertErr := tape.ConvertTapeToOTLP(tapePath, tracePath); convertErr != nil {
+		slog.Warn("Failed to convert tape to OTLP", "err", convertErr)
+	} else {
+		slog.Info("OTLP trace written", "path", tracePath)
+	}
+
+	if analyzeErr != nil {
+		span.RecordError(analyzeErr)
+		span.SetStatus(codes.Error, analyzeErr.Error())
+		return analyzeErr
 	}
 
 	slog.Info(result)

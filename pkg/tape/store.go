@@ -14,8 +14,10 @@ type Recorder interface {
 var _ Recorder = (*JSONLStore)(nil)
 
 // JSONLStore is an append-only tape store that writes entries as JSONL to a file.
+// It keeps the file handle open for the lifetime of the store.
 type JSONLStore struct {
 	mu     sync.Mutex
+	file   *os.File
 	path   string
 	nextID int
 }
@@ -33,6 +35,15 @@ func (s *JSONLStore) Append(entry Entry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.file == nil {
+		//nolint:gosec // tape file path is controlled by the application
+		f, err := os.OpenFile(s.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		s.file = f
+	}
+
 	entry.ID = s.nextID
 	s.nextID++
 
@@ -42,13 +53,25 @@ func (s *JSONLStore) Append(entry Entry) error {
 	}
 	line = append(line, '\n')
 
-	//nolint:gosec // tape file is not sensitive; path is controlled by the application
-	f, err := os.OpenFile(s.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
+	if _, err := s.file.Write(line); err != nil {
 		return err
 	}
-	defer f.Close()
+	return s.file.Sync()
+}
 
-	_, err = f.Write(line)
+// Close closes the underlying file handle.
+func (s *JSONLStore) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.file == nil {
+		return nil
+	}
+	err := s.file.Close()
+	s.file = nil
 	return err
+}
+
+// Path returns the file path of the store.
+func (s *JSONLStore) Path() string {
+	return s.path
 }
