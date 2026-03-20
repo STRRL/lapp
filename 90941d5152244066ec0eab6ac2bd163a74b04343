@@ -1,0 +1,33 @@
+pkg/analyzer/analyzer.go
+  260f9b841d3f52ce 22,31-32,56,69-70,121-126,128,147
+pkg/analyzer/acp_tool_model.go
+  260f9b841d3f52ce 6,12-14,27-31
+cmd/lapp/workspace.go
+  260f9b841d3f52ce 397-398,406-419
+pkg/tape/otel.go
+  260f9b841d3f52ce 230-234,239-246,277-290,295,297,304-311,313,406-409
+pkg/tape/store.go
+  260f9b841d3f52ce 17,20,38-46,56,59-60,62-70,73-76
+pkg/tape/handler.go
+  260f9b841d3f52ce 5,11,15-21,26,29,51,58,63-70,78,81,93,186-193,196,199-205,207-217,219-224
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "90941d5152244066ec0eab6ac2bd163a74b04343",
+  "prompts": {
+    "260f9b841d3f52ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e181c78-fece-456e-8c06-de5c6f0c1a83",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 202,
+      "total_deletions": 129,
+      "accepted_lines": 175,
+      "overriden_lines": 0
+    }
+  }
+}
