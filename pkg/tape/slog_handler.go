@@ -23,6 +23,9 @@ func NewSlogHandler() callbacks.Handler {
 }
 
 func slogOnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.CallbackInput) context.Context {
+	if info == nil {
+		return ctx
+	}
 	if info.Component == components.ComponentOfChatModel {
 		if mi := model.ConvCallbackInput(input); mi != nil {
 			for _, msg := range mi.Messages {
@@ -48,6 +51,9 @@ func slogOnStart(ctx context.Context, info *callbacks.RunInfo, input callbacks.C
 }
 
 func slogOnEnd(ctx context.Context, info *callbacks.RunInfo, output callbacks.CallbackOutput) context.Context {
+	if info == nil {
+		return ctx
+	}
 	if info.Component == components.ComponentOfChatModel {
 		if mo := model.ConvCallbackOutput(output); mo != nil {
 			attrs := []any{
@@ -83,6 +89,9 @@ func slogOnEnd(ctx context.Context, info *callbacks.RunInfo, output callbacks.Ca
 }
 
 func slogOnError(ctx context.Context, info *callbacks.RunInfo, err error) context.Context {
+	if info == nil {
+		return ctx
+	}
 	slog.Error("tape.error",
 		"component", string(info.Component),
 		"name", info.Name,
@@ -92,6 +101,9 @@ func slogOnError(ctx context.Context, info *callbacks.RunInfo, err error) contex
 }
 
 func slogOnEndWithStream(ctx context.Context, info *callbacks.RunInfo, output *schema.StreamReader[callbacks.CallbackOutput]) context.Context {
+	if info == nil {
+		return ctx
+	}
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {

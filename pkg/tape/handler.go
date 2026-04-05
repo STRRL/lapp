@@ -41,6 +41,9 @@ func componentMeta(info *callbacks.RunInfo) map[string]any {
 }
 
 func onStart(store Recorder, info *callbacks.RunInfo, input callbacks.CallbackInput) {
+	if info == nil {
+		return
+	}
 	meta := componentMeta(info)
 
 	if info.Component == components.ComponentOfChatModel {
@@ -68,6 +71,9 @@ func onStart(store Recorder, info *callbacks.RunInfo, input callbacks.CallbackIn
 }
 
 func onEnd(store Recorder, info *callbacks.RunInfo, output callbacks.CallbackOutput) {
+	if info == nil {
+		return
+	}
 	meta := componentMeta(info)
 
 	if info.Component == components.ComponentOfChatModel {
@@ -91,12 +97,18 @@ func onEnd(store Recorder, info *callbacks.RunInfo, output callbacks.CallbackOut
 }
 
 func onError(store Recorder, info *callbacks.RunInfo, err error) {
+	if info == nil {
+		return
+	}
 	meta := componentMeta(info)
 	entry := ErrorEntry(string(info.Component), err.Error(), meta)
 	appendSafe(store, entry)
 }
 
 func onEndWithStream(store Recorder, info *callbacks.RunInfo, output *schema.StreamReader[callbacks.CallbackOutput]) {
+	if info == nil {
+		return
+	}
 	meta := componentMeta(info)
 
 	// Consume the stream in a goroutine to avoid blocking
