@@ -1,6 +1,7 @@
 package tape
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"sync"
@@ -21,11 +22,39 @@ type JSONLStore struct {
 }
 
 // NewJSONLStore creates a new JSONL store writing to the given file path.
+// It scans any existing file to resume IDs after the current maximum.
 func NewJSONLStore(path string) *JSONLStore {
+	nextID := scanMaxID(path)
 	return &JSONLStore{
 		path:   path,
-		nextID: 1,
+		nextID: nextID,
 	}
+}
+
+// scanMaxID reads an existing JSONL file and returns the next ID to use.
+// Returns 1 if the file does not exist or contains no entries.
+func scanMaxID(path string) int {
+	f, err := os.Open(path)
+	if err != nil {
+		return 1
+	}
+	defer f.Close()
+
+	var maxID int
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for sc.Scan() {
+		var row struct {
+			ID int `json:"id"`
+		}
+		if json.Unmarshal(sc.Bytes(), &row) == nil && row.ID > maxID {
+			maxID = row.ID
+		}
+	}
+	if maxID == 0 {
+		return 1
+	}
+	return maxID + 1
 }
 
 // Append adds an entry to the tape, assigns it an ID, and writes it as a JSON line.
