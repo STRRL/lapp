@@ -7,20 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
-	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/go-errors/errors"
+	"github.com/google/uuid"
 	einoacp "github.com/strrl/eino-acp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/strrl/lapp/pkg/tape"
+	"github.com/strrl/lapp/pkg/tracing"
 )
 
 func buildSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
-IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
-Do NOT access files outside this workspace directory.
+IMPORTANT: Stay within the workspace directory %s for any file or shell work (your runtime provides the tools).
 
 Your workspace contains pre-processed log data at %s:
 - %s/raw.log — the original log file
@@ -28,8 +29,8 @@ Your workspace contains pre-processed log data at %s:
 - %s/errors.txt — error and warning patterns extracted from logs
 
 Start by reading %s/summary.txt and %s/errors.txt to understand the log patterns.
-Then use grep and read_file on %s/raw.log to investigate specific patterns in detail.
-You can also use the execute tool to run shell commands (e.g., awk, sort, wc) for deeper analysis.
+Then search and read %s/raw.log for specifics (grep, read, or equivalents your environment exposes).
+Use shell only when it helps (e.g. awk, sort, wc).
 
 Provide:
 1. Key findings from the logs
@@ -51,8 +52,7 @@ type Config struct {
 func BuildWorkspaceSystemPrompt(workDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
-IMPORTANT: All file operations (read_file, grep, ls, glob, execute) MUST use paths under %s.
-Do NOT access files outside this workspace directory.
+IMPORTANT: Stay within the workspace directory %s for any file or shell work (your runtime provides the tools).
 
 Your workspace at %s contains structured log data:
 - %s/logs/ — original log files
@@ -64,8 +64,8 @@ Your workspace at %s contains structured log data:
 
 Start by reading %s/notes/summary.md and %s/notes/errors.md to understand the log patterns.
 Then drill into specific patterns under %s/patterns/ for details.
-Use grep on %s/logs/ to search for specific terms across all log files.
-You can also use the execute tool to run shell commands (e.g., awk, sort, wc) for deeper analysis.
+Search %s/logs/ for specific terms across log files.
+Use shell only when it helps (e.g., awk, sort, wc).
 
 Provide:
 1. Key findings from the logs
@@ -114,30 +114,28 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 		return "", errors.Errorf("create chat model: %w", err)
 	}
 
-	backend, err := local.NewBackend(ctx, &local.Config{})
-	if err != nil {
-		return "", errors.Errorf("create local backend: %w", err)
-	}
-	backendAdapter := newLocalBackendAdapter(backend)
-
-	fsHandler, err := fsmw.New(ctx, &fsmw.MiddlewareConfig{
-		Backend:        backendAdapter,
-		StreamingShell: backendAdapter,
-	})
-	if err != nil {
-		return "", errors.Errorf("create filesystem middleware: %w", err)
-	}
-
 	if systemPrompt == "" {
 		systemPrompt = buildSystemPrompt(absDir)
 	}
+
+	tapePath := filepath.Join(absDir, tape.FileName)
+	tapeStore, err := tape.OpenJSONL(tapePath)
+	if err != nil {
+		return "", errors.Errorf("open tape store: %w", err)
+	}
+	defer func() { _ = tapeStore.Close() }()
+
+	tapeHandler := tape.NewEinoHandler(tapeStore, tape.RunMeta{
+		RunID:    uuid.NewString(),
+		Provider: provider,
+		Model:    config.Model,
+	})
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:          "log-analyzer",
 		Description:   "Analyzes log files to find root causes",
 		Instruction:   systemPrompt,
 		Model:         newACPToolCallingModel(chatModel),
-		Handlers:      []adk.ChatModelAgentMiddleware{fsHandler},
 		MaxIterations: 15,
 	})
 	if err != nil {
@@ -150,7 +148,7 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-	iter := runner.Query(ctx, userMessage)
+	iter := runner.Query(ctx, userMessage, adk.WithCallbacks(tracing.NewSlogEinoHandler(nil), tapeHandler))
 
 	var result strings.Builder
 	for {
