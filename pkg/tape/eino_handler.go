@@ -230,6 +230,7 @@ func (h *EinoHandler) OnEndWithStreamOutput(ctx context.Context, info *callbacks
 			output.Close()
 		}()
 		var chunks []callbacks.CallbackOutput
+		var streamErr error
 		for {
 			ch, err := output.Recv()
 			if errors.Is(err, io.EOF) {
@@ -237,6 +238,7 @@ func (h *EinoHandler) OnEndWithStreamOutput(ctx context.Context, info *callbacks
 			}
 			if err != nil {
 				log.Printf("tape stream output recv: %v", err)
+				streamErr = err
 				break
 			}
 			chunks = append(chunks, ch)
@@ -250,7 +252,11 @@ func (h *EinoHandler) OnEndWithStreamOutput(ctx context.Context, info *callbacks
 		if msg != nil {
 			h.write(Message(messageToMap(msg), h.baseMeta()))
 		}
-		runData := map[string]any{"status": "ok"}
+		status := "ok"
+		if streamErr != nil {
+			status = "error"
+		}
+		runData := map[string]any{"status": status}
 		if usage != nil {
 			runData["usage"] = map[string]any{
 				"prompt_tokens":     usage.PromptTokens,

@@ -44,6 +44,8 @@ func scanMaxID(path string) (int64, error) {
 
 	var maxID int64
 	sc := bufio.NewScanner(f)
+	// Allow entries up to 10 MB to handle large tool outputs in tape lines.
+	sc.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	for sc.Scan() {
 		var row struct {
 			ID int64 `json:"id"`
