@@ -1,0 +1,25 @@
+pkg/tape/handler.go
+  e45db5b1993696b7 44-46,74-76,100-102,109-111
+pkg/tape/slog_handler.go
+  e45db5b1993696b7 26-28,54-56,92-94,104-106
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "511195df4f4cd3ef9eac85811fb86359f1ca042f",
+  "prompts": {
+    "e45db5b1993696b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c404bf10-a044-4892-b5ed-3c909ea5ca22",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU",
+      "messages": [],
+      "total_additions": 24,
+      "total_deletions": 0,
+      "accepted_lines": 24,
+      "overriden_lines": 0
+    }
+  }
+}
