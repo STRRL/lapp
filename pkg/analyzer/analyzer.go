@@ -10,8 +10,10 @@ import (
 	"github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
+	"github.com/cloudwego/eino/callbacks"
 	"github.com/go-errors/errors"
 	einoacp "github.com/strrl/eino-acp"
+	"github.com/strrl/lapp/pkg/tape"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -45,6 +47,8 @@ Be concise and actionable. Focus on what matters.`,
 type Config struct {
 	Provider string
 	Model    string
+	// TapePath, when set, enables tape recording to this JSONL file.
+	TapePath string
 }
 
 // BuildWorkspaceSystemPrompt builds a system prompt for the structured workspace layout.
@@ -102,6 +106,12 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 		attribute.String("provider", provider),
 		attribute.String("model", config.Model),
 	)
+
+	if config.TapePath != "" {
+		jsonlStore := tape.NewJSONLStore(config.TapePath)
+		callbacks.AppendGlobalHandlers(tape.NewHandler(jsonlStore))
+		slog.Info("Tape recording enabled", "path", config.TapePath)
+	}
 
 	slog.Info("Analyzing with ACP provider", "provider", provider, "model", config.Model)
 
