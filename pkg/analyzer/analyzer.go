@@ -10,7 +10,6 @@ import (
 	"github.com/cloudwego/eino-ext/adk/backend/local"
 	"github.com/cloudwego/eino/adk"
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
-	"github.com/cloudwego/eino/callbacks"
 	"github.com/go-errors/errors"
 	einoacp "github.com/strrl/eino-acp"
 	"github.com/strrl/lapp/pkg/tape"
@@ -107,12 +106,6 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 		attribute.String("model", config.Model),
 	)
 
-	if config.TapePath != "" {
-		jsonlStore := tape.NewJSONLStore(config.TapePath)
-		callbacks.AppendGlobalHandlers(tape.NewHandler(jsonlStore))
-		slog.Info("Tape recording enabled", "path", config.TapePath)
-	}
-
 	slog.Info("Analyzing with ACP provider", "provider", provider, "model", config.Model)
 
 	chatModel, err := einoacp.NewChatModel(ctx, &einoacp.Config{
@@ -160,7 +153,13 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-	iter := runner.Query(ctx, userMessage)
+	var runOptions []adk.AgentRunOption
+	if config.TapePath != "" {
+		jsonlStore := tape.NewJSONLStore(config.TapePath)
+		runOptions = append(runOptions, adk.WithCallbacks(tape.NewHandler(jsonlStore)))
+		slog.Info("Tape recording enabled", "path", config.TapePath)
+	}
+	iter := runner.Query(ctx, userMessage, runOptions...)
 
 	var result strings.Builder
 	for {
