@@ -1,0 +1,38 @@
+pkg/tape/jsonl.go
+  863eac4ac130d004 1-46,49-96
+  e45db5b1993696b7 47-48
+pkg/tape/eino_handler.go
+  863eac4ac130d004 1-232,234-240,242-254,260-393,258
+  e45db5b1993696b7 233,241,255-257,259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "cdeb3765b732446d4a6c8db319467182a46ab232",
+  "prompts": {
+    "863eac4ac130d004": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5577d485-f1b8-44ba-aea7-4156c3ced531",
+        "model": "composer-2-fast"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "total_additions": 1045,
+      "total_deletions": 312,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "e45db5b1993696b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c404bf10-a044-4892-b5ed-3c909ea5ca22",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU",
+      "total_additions": 9,
+      "total_deletions": 1,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}

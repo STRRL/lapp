@@ -1,0 +1,38 @@
+pkg/analyzer/analyzer.go
+  863eac4ac130d004 12,16-18,24,32-33,57,69-70,127,129,131,133-137,156
+pkg/analyzer/acp_tool_model.go
+  863eac4ac130d004 6,12-14,27-30
+pkg/tracing/slog_eino_test.go
+  863eac4ac130d004 1-12
+pkg/tape/jsonl_test.go
+  863eac4ac130d004 1-38
+pkg/tape/eino_handler_test.go
+  863eac4ac130d004 1-11
+pkg/tape/eino_handler.go
+  863eac4ac130d004 1-252,254-387
+pkg/tape/jsonl.go
+  863eac4ac130d004 1-94
+pkg/tracing/slog_eino.go
+  863eac4ac130d004 1-110
+pkg/tape/entry.go
+  863eac4ac130d004 2-3,5-71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "45b9bc4413de95e4bf1f5cca8067281118ecb354",
+  "prompts": {
+    "863eac4ac130d004": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5577d485-f1b8-44ba-aea7-4156c3ced531",
+        "model": "composer-2-fast"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "total_additions": 1045,
+      "total_deletions": 312,
+      "accepted_lines": 717,
+      "overriden_lines": 0
+    }
+  }
+}
