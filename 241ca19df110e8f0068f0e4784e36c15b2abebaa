@@ -1,0 +1,23 @@
+pkg/tape/store.go
+  e45db5b1993696b7 4,25,27,30,34-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "241ca19df110e8f0068f0e4784e36c15b2abebaa",
+  "prompts": {
+    "e45db5b1993696b7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c404bf10-a044-4892-b5ed-3c909ea5ca22",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 1,
+      "accepted_lines": 30,
+      "overriden_lines": 0
+    }
+  }
+}
