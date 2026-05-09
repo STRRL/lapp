@@ -12,6 +12,7 @@ import (
 	fsmw "github.com/cloudwego/eino/adk/middlewares/filesystem"
 	"github.com/go-errors/errors"
 	einoacp "github.com/strrl/eino-acp"
+	"github.com/strrl/lapp/pkg/tape"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -45,6 +46,8 @@ Be concise and actionable. Focus on what matters.`,
 type Config struct {
 	Provider string
 	Model    string
+	// TapePath, when set, enables tape recording to this JSONL file.
+	TapePath string
 }
 
 // BuildWorkspaceSystemPrompt builds a system prompt for the structured workspace layout.
@@ -150,7 +153,13 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	}
 
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
-	iter := runner.Query(ctx, userMessage)
+	var runOptions []adk.AgentRunOption
+	if config.TapePath != "" {
+		jsonlStore := tape.NewJSONLStore(config.TapePath)
+		runOptions = append(runOptions, adk.WithCallbacks(tape.NewHandler(jsonlStore)))
+		slog.Info("Tape recording enabled", "path", config.TapePath)
+	}
+	iter := runner.Query(ctx, userMessage, runOptions...)
 
 	var result strings.Builder
 	for {
