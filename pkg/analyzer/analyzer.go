@@ -46,7 +46,7 @@ Be concise and actionable. Focus on what matters.`,
 type Config struct {
 	Provider string
 	Model    string
-	// TapePath, when set, enables tape recording to this JSONL file.
+	// TapePath overrides the default workspace tape file.
 	TapePath string
 }
 
