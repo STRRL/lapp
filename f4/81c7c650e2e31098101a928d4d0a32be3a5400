@@ -1,0 +1,211 @@
+docs/web-app-plan.md
+  s_0cc26d0b17bece::t_f7bc820c3867bd 1-11,14,24-63
+  s_0cc26d0b17bece::t_d303995c1023f2 12
+  s_0cc26d0b17bece::t_f62d94fd6752ce 15-19,23
+  s_0cc26d0b17bece::t_6bd8c685711f88 20
+  s_0cc26d0b17bece::t_040366ee4a53aa 21-22
+  s_0cc26d0b17bece::t_80608ae747f667 13
+cmd/lapp/web.go
+  s_0cc26d0b17bece::t_54795d030b1b2e 45
+  s_0cc26d0b17bece::t_6981a88c086993 30,38
+  s_0cc26d0b17bece::t_ec87474e3434f4 5,12,47,57-58
+  s_0cc26d0b17bece::t_314aeb395f1b88 1-4,6-11,13-29,31-37,39-44,46,48-56,59-61
+frontend/package.json
+  s_0cc26d0b17bece::t_ffdaf52ef6862b 17-18
+  s_0cc26d0b17bece::t_848fc856f14e42 1-16,19-25
+pkg/analyzer/analyzer.go
+  s_0cc26d0b17bece::t_a2a7a6edd29397 101
+  s_0cc26d0b17bece::t_005f7d873f30ea 31-35,42
+  s_0cc26d0b17bece::t_de9b6d34fc5d8c 60
+pkg/analyzer/analyzer_test.go
+  s_0cc26d0b17bece::t_89505974eb5c9b 1-21
+frontend/tsconfig.json
+  s_0cc26d0b17bece::t_848fc856f14e42 1-20
+frontend/src/styles.css
+  s_0cc26d0b17bece::t_03a73fc3819c10 277-283,286,291-295,322,335-394,402-412,448-451
+  s_0cc26d0b17bece::t_d34128cbdf09c4 1-276,284-285,287-290,296-321,323-334,395-401,413-447,452-458
+cmd/lapp/workspace.go
+  s_0cc26d0b17bece::t_b0c24a80a0a061 158
+  s_0cc26d0b17bece::t_8974c3970fd5fa 191,196-199,209,227
+  s_0cc26d0b17bece::t_3a60ee9c295105 128,156,195,204
+  s_0cc26d0b17bece::t_ac06c7db2fd4fc 286-293,302-303
+  s_0cc26d0b17bece::t_9371daa4106de2 269,271
+frontend/vite.config.ts
+  s_0cc26d0b17bece::t_81a6ceee594374 5,8
+  s_0cc26d0b17bece::t_848fc856f14e42 1-4,6-7,9-11
+README.md
+  s_0cc26d0b17bece::t_1bdd575c60e519 60-61
+  s_0cc26d0b17bece::t_3567185e615326 89-91
+  s_0cc26d0b17bece::t_b8c6e5ff331887 111,114
+  s_0cc26d0b17bece::t_8c860c570b50f3 87
+  s_0cc26d0b17bece::t_c1b70af87d41a6 88
+  s_0cc26d0b17bece::t_50cdea3fb67baa 1,3-5,11,29-30,32-37,43-47,58,83,92,94,101,103
+  s_0cc26d0b17bece::t_c57a0124a531e8 16-17
+  s_0cc26d0b17bece::t_3ac671bb9b226b 19,38,48-55,75,82
+  s_0cc26d0b17bece::t_21d092c3b2656d 56-57
+pkg/workspace/pipeline_test.go
+  s_0cc26d0b17bece::t_db08173763b6ad 13,44
+  s_0cc26d0b17bece::t_2113257f45f335 27-29,53-54,57-58,62,65,68,70-77
+  s_0cc26d0b17bece::t_dd81dc1cff2344 1-12,14-26,30-43,45-52,55-56,59-61,63-64,66-67,69,78-108
+gen/go/lapp/web/v1/webv1connect/web.connect.go
+  s_0cc26d0b17bece::t_0c017f4a7f8317 1-457
+pkg/workspace/builder.go
+  s_0cc26d0b17bece::t_83cf44f7cc48af 71-85
+pkg/workspace/discovery.go
+  s_0cc26d0b17bece::t_dfcd572f344794 61
+  s_0cc26d0b17bece::t_b568f0913b13e9 1-60,62-64,67-72,87-149
+  s_0cc26d0b17bece::t_87d392851468d9 65-66,73-86
+pkg/workspace/pipeline.go
+  s_0cc26d0b17bece::t_009a5c7410973f 1-8,10-11,13-23,44-46,64-67,69-70,72-74,87-89,91-92,94-95,101-102,104-105,107-108,117-118,120-121,123-124,126-127,129-130,149-156,188-247,249-305
+  s_0cc26d0b17bece::t_2537aefb06e57e 62,79,84,98,111,139,187
+  s_0cc26d0b17bece::t_d34761732ee438 12,24-31,37,39-41,48,52,54-61,68,75-76,82-83,86,90,96-97,100,103,109-110,113-116,122,125,131-138,141-142,147,175-186
+  s_0cc26d0b17bece::t_5b03eb09db478e 43
+  s_0cc26d0b17bece::t_7d72eaea2efe67 9,34-36,38,77-78,81,144-146,148,248
+  s_0cc26d0b17bece::t_f75212cff6ef7d 32-33,42,47,63,71,80,85,93,99,106,112,119,128,140,143
+  s_0cc26d0b17bece::t_606a1e446c0a68 49-51,53,157-174
+pkg/webapp/service.go
+  s_0cc26d0b17bece::t_0d5c1a9d5da83d 12,16,212,230-231,233-242,244-245,248,250,256
+  s_0cc26d0b17bece::t_585a491a38c59f 29-34
+  s_0cc26d0b17bece::t_a51c5b91b23a32 96-98,149-151,166-168,197-199,215-217,274-276,485-498
+  s_0cc26d0b17bece::t_9572ee4a6614bd 1-11,13-15,17-28,35-52,54-58,64-91,95,99-129,133-146,153-161,165,169-192,196,200-211,219,228-229,246-247,249,251-255,257-259,263-271,278-293,297-309,313-326,330-364,367,369,371,373-445,499-504,515-637
+  s_0cc26d0b17bece::t_1e2f3b260347bb 53,59-63,446-484
+  s_0cc26d0b17bece::t_a409f0766aa4e7 220-227,232,243,505-514
+  s_0cc26d0b17bece::t_59389405ee82f1 92-94,130-132,147-148,152,162-164,193-195,213-214,218,260-262,272-273,277,294-296,310-312,327-329
+  s_0cc26d0b17bece::t_3dfed9adadfedb 365-366,368,370,372
+docs/adr/0001-local-workspaces-as-source-of-truth.md
+  s_0cc26d0b17bece::t_82909aaeceed20 3
+  s_0cc26d0b17bece::t_aaed768bd163a8 13
+  s_0cc26d0b17bece::t_80f178f27ab6fb 14
+  s_0cc26d0b17bece::t_71fb0a5a88c324 15-16
+  s_0cc26d0b17bece::t_f97a67e2ef82ff 1-2,4-12
+frontend/src/gen/lapp/event/v1/event_pb.ts
+  s_0cc26d0b17bece::t_0c017f4a7f8317 1-163
+buf.yaml
+  s_0cc26d0b17bece::t_37e9d81dbfca5d 1-9
+proto/lapp/web/v1/web.proto
+  s_0cc26d0b17bece::t_37e9d81dbfca5d 1-212
+pkg/webapp/server.go
+  s_0cc26d0b17bece::t_65003fa1c9f47b 1-5,7-20,26-63,69-71,73-74,76,86-87
+  s_0cc26d0b17bece::t_585a491a38c59f 21-25
+  s_0cc26d0b17bece::t_1d9407f5bd75c6 64-68,72,75
+  s_0cc26d0b17bece::t_65fe88b6406b72 6,77-85
+frontend/src/api.ts
+  s_0cc26d0b17bece::t_848fc856f14e42 1-10
+CONTEXT.md
+  s_0cc26d0b17bece::t_3af2b4bb92da66 13-16
+  s_0cc26d0b17bece::t_fc9daf3759e5ac 1-9
+  s_0cc26d0b17bece::t_66ce98ea3f3399 10-11
+  s_0cc26d0b17bece::t_d68cd5676849f5 12
+Makefile
+  s_0cc26d0b17bece::t_02007a48a51d27 1,4-10
+  s_0cc26d0b17bece::t_84a97adbc47b87 11-12
+  s_0cc26d0b17bece::t_0107d0d34bf110 3,61-63,65
+  s_0cc26d0b17bece::t_2345e4a2730161 18-20
+  s_0cc26d0b17bece::t_6269046ea300a8 21,25-28
+  s_0cc26d0b17bece::t_8e58a313e479c7 22-24,29-36
+  s_0cc26d0b17bece::t_6fdef147c799bd 14-15
+frontend/src/gen/lapp/web/v1/web_pb.ts
+  s_0cc26d0b17bece::t_0c017f4a7f8317 1-963
+.gitignore
+  s_0cc26d0b17bece::t_07b7761a6984f5 35-36
+docs/adr/0003-protobuf-connect-api-with-aip-resources.md
+  s_0cc26d0b17bece::t_4c9a9d6ca92288 33-34
+  s_0cc26d0b17bece::t_289f5c541ae717 25-26
+  s_0cc26d0b17bece::t_f9f78e4f04cd02 27-28
+  s_0cc26d0b17bece::t_e83091c507d35a 31-32
+  s_0cc26d0b17bece::t_1af4e455f08ed6 15-16
+  s_0cc26d0b17bece::t_53a6933070b8bf 9-10
+  s_0cc26d0b17bece::t_93eca9c1cb2512 21-22
+  s_0cc26d0b17bece::t_82f344693e7e0e 29-30
+  s_0cc26d0b17bece::t_08a0532fbc8aa2 13-14
+  s_0cc26d0b17bece::t_de0a9e80090dce 5
+  s_0cc26d0b17bece::t_a9dfda1c3f41a7 37-38
+  s_0cc26d0b17bece::t_8fdc274bd9f914 7-8
+  s_0cc26d0b17bece::t_bd5ed3fd34b4e0 11-12
+  s_0cc26d0b17bece::t_8e85db675e33b6 6
+  s_0cc26d0b17bece::t_aa717fce5016aa 3
+  s_0cc26d0b17bece::t_74b418cab6b555 17-18
+  s_0cc26d0b17bece::t_bb185379705d1c 1-2,4,39-47
+  s_0cc26d0b17bece::t_da239fee652024 19-20
+  s_0cc26d0b17bece::t_c3e61bd660aa5f 23-24
+  s_0cc26d0b17bece::t_0128c14c123109 35-36
+pkg/webapp/static/index.html
+  s_0cc26d0b17bece::t_d6aa71e1d8b8ed 9
+  s_0cc26d0b17bece::t_65003fa1c9f47b 1-8,10-11
+cmd/lapp/main.go
+  s_0cc26d0b17bece::t_e3e63c4f35063b 26
+frontend/.gitignore
+  s_0cc26d0b17bece::t_d3d34c454bc5a6 1-17
+docs/web-app-open-questions.md
+  s_0cc26d0b17bece::t_9572ee4a6614bd 1-2
+  s_0cc26d0b17bece::t_aae9fa8c0ba6b7 3
+CLAUDE.md
+  s_0cc26d0b17bece::t_1ca4c82ccc28df 14-16
+  s_0cc26d0b17bece::t_e691c43741d2d0 50-51,53-55,60-62,64
+  s_0cc26d0b17bece::t_494a6459e326df 13
+  s_0cc26d0b17bece::t_8f41d27aeaa6c2 52
+  s_0cc26d0b17bece::t_efbf45f74dced0 49
+  s_0cc26d0b17bece::t_f743699acb4961 12
+  s_0cc26d0b17bece::t_cb3c4296ec38f3 43,56-59,76-79
+  s_0cc26d0b17bece::t_3f27564ffe2000 42,63
+  s_0cc26d0b17bece::t_2e5c95bb94ee9d 26-29
+  s_0cc26d0b17bece::t_a83d4c18b5925e 45,83
+buf.gen.yaml
+  s_0cc26d0b17bece::t_37e9d81dbfca5d 1-17
+frontend/index.html
+  s_0cc26d0b17bece::t_848fc856f14e42 1-12
+frontend/src/store.ts
+  s_0cc26d0b17bece::t_78779d01d6b9b1 1-20,22-35,37-60,62-75,77-80,83-146,152-170,172-184,186-240
+  s_0cc26d0b17bece::t_c1609965f0aabf 21,36,61,76,81-82,147-151,171,185
+docs/adr/0002-go-local-server-with-embedded-frontend.md
+  s_0cc26d0b17bece::t_d510629542f894 1-2,4-9,11-14
+  s_0cc26d0b17bece::t_27df049118a158 3
+  s_0cc26d0b17bece::t_2eee54da7b376e 10
+skills/lapp-log-analysis/SKILL.md
+  s_0cc26d0b17bece::t_e8ee4d25b51c73 32,44,75-86,91,98-99
+  s_0cc26d0b17bece::t_6eea2c486c1b43 87-88
+frontend/src/main.tsx
+  s_0cc26d0b17bece::t_406f72198f17e2 27,39,60-63,244-255,283-293,295,304,308-337
+  s_0cc26d0b17bece::t_abd846b33a91a6 1-26,28-38,40-59,64-243,256-282,294,296-303,305-307,338-379
+pkg/webapp/service_test.go
+  s_0cc26d0b17bece::t_6421a37b75beb5 215-221
+  s_0cc26d0b17bece::t_bdf10747653fbf 1-4,7-47,49-54,56-74,80-112,222-236
+  s_0cc26d0b17bece::t_d8f175fbdc2c71 48,55
+  s_0cc26d0b17bece::t_ee4da851ebeaa3 75-79,136-154
+  s_0cc26d0b17bece::t_69f14fec8f92ea 113-135,212-214
+  s_0cc26d0b17bece::t_760d98ef5f315a 6,155-211
+  s_0cc26d0b17bece::t_73b33b96ad390e 5
+pkg/webapp/server_test.go
+  s_0cc26d0b17bece::t_2f081241204178 1-32,60-72,74-87
+  s_0cc26d0b17bece::t_0ff526686a0132 33-59
+  s_0cc26d0b17bece::t_f85878c242597d 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "f481c7c650e2e31098101a928d4d0a32be3a5400",
+  "prompts": {
+    "260f9b841d3f52ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e181c78-fece-456e-8c06-de5c6f0c1a83",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "total_additions": 601,
+      "total_deletions": 24,
+      "accepted_lines": 37,
+      "overriden_lines": 18
+    }
+  },
+  "sessions": {
+    "s_0cc26d0b17bece": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e9f70-9292-7b82-a444-7aff3919f38b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>"
+    }
+  }
+}
