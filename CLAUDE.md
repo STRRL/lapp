@@ -9,12 +9,11 @@ LAPP (Log Auto Pattern Pipeline) discovers log templates from log streams using 
 ## Commands
 
 ```bash
-make build              # Build binary to output/lapp
-make unit-test          # Run unit tests (./pkg/...)
-make integration-test   # Run integration tests (requires LOGHUB_PATH)
-make test               # Run all tests
-make lint               # golangci-lint
-make ci                 # fmt + vet + build + lint + unit-test
+make build              # Build embedded frontend assets, then output/lapp
+make clean              # Remove generated build artifacts
+make proto-gen          # Generate protobuf/Connect code
+make test               # Run unit and integration tests
+make check              # Run formatting, linting, type checks, build, and unit tests
 
 # Run a single test
 go test -v -run TestFunctionName ./pkg/pattern/
@@ -27,6 +26,7 @@ go run ./cmd/lapp/ workspace create <topic>
 go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile> [--model <model>]
 go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin [--model <model>]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
+go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
 ```
 
 Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/workspaces/<topic>/`.
@@ -39,26 +39,28 @@ pkg/logsource/           Read log files → channel of LogLine
 pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
 pkg/semantic/            LLM-based semantic labeling of Drain patterns
-pkg/workspace/           Structured workspace builder (patterns/, notes/, AGENTS.md)
-pkg/store/               DuckDB storage (log_entries + patterns tables)
+pkg/workspace/           DiscoveryRun execution and run-scoped file writer
+pkg/store/               DuckDB storage primitives (not yet on the CLI add-log path)
 pkg/config/              Model resolution (flag → $MODEL_NAME → default)
-pkg/analyzer/            Agentic log analysis via eino ADK + OpenRouter
+pkg/analyzer/            Agentic log analysis via eino ADK + ACP providers
 integration_test/        Integration tests against Loghub-2.0 datasets
 ```
 
-### Workspace Pipeline (add-log)
+### DiscoveryRun (add-log)
 
-Full rebuild on each `add-log`: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, regenerates `patterns/` and `notes/` entirely.
+Each `add-log` copies a log file, then starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
+When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns as failed because those local workers no longer exist.
 
 ```
-Read all logs/ files → multiline.MergeSlice() per file → tagged lines
+workspace.Discover(ctx, cfg)
+  → Read all logs/ files → multiline.MergeSlice() per file → tagged lines
   → pattern.DrainParser.Feed(all content) → Templates() → filter Count > 1
   → semantic.Label(ctx, cfg, patterns)  ← single LLM batch call
   → workspace.NewBuilder(...).BuildAll()
-    → patterns/<semantic-id>/pattern.md + samples.log
-    → patterns/unmatched/samples.log
-    → notes/summary.md + errors.md
-    → AGENTS.md
+    → discovery-runs/<run-id>/patterns/<semantic-id>/pattern.md + samples.log
+    → discovery-runs/<run-id>/patterns/unmatched/samples.log
+    → discovery-runs/<run-id>/notes/summary.md + errors.md
+    → discovery-runs/<run-id>/AGENTS.md
 ```
 
 ### Multiline Detection
@@ -71,13 +73,14 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for `workspace add-log` and `workspace analyze`
+- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace add-log`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
+- ACP provider credentials/login: Required for `workspace analyze` through the selected provider
 - `.env` file is auto-loaded via godotenv
 
 ## Tech Stack
 
-- Go, cobra CLI, go-drain3, DuckDB (duckdb-go/v2), cloudwego/eino ADK + OpenRouter
+- Go, cobra CLI, go-drain3, DuckDB (duckdb-go/v2), cloudwego/eino ADK, OpenRouter semantic labeling, ACP providers
 
 ## Code Style
 

@@ -18,30 +18,6 @@ import (
 	"github.com/strrl/lapp/pkg/tracing"
 )
 
-func buildSystemPrompt(workDir string) string {
-	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
-
-IMPORTANT: Stay within the workspace directory %s for any file or shell work (your runtime provides the tools).
-
-Your workspace contains pre-processed log data at %s:
-- %s/raw.log — the original log file
-- %s/summary.txt — log templates discovered by automated parsing, with occurrence counts and samples
-- %s/errors.txt — error and warning patterns extracted from logs
-
-Start by reading %s/summary.txt and %s/errors.txt to understand the log patterns.
-Then search and read %s/raw.log for specifics (grep, read, or equivalents your environment exposes).
-Use shell only when it helps (e.g. awk, sort, wc).
-
-Provide:
-1. Key findings from the logs
-2. Anomalies or error patterns detected
-3. Root cause analysis (if a problem description is provided)
-4. Suggested next steps for debugging
-
-Be concise and actionable. Focus on what matters.`,
-		workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir)
-}
-
 // Config holds configuration for the analyzer.
 type Config struct {
 	Provider string
@@ -52,13 +28,18 @@ type Config struct {
 
 // BuildWorkspaceSystemPrompt builds a system prompt for the structured workspace layout.
 func BuildWorkspaceSystemPrompt(workDir string) string {
+	return BuildDiscoveryRunSystemPrompt(workDir, workDir)
+}
+
+// BuildDiscoveryRunSystemPrompt builds a system prompt for run-scoped discovery results.
+func BuildDiscoveryRunSystemPrompt(workDir, resultDir string) string {
 	return fmt.Sprintf(`You are a log analysis expert helping developers troubleshoot issues.
 
 IMPORTANT: Stay within the workspace directory %s for any file or shell work (your runtime provides the tools).
 
 Your workspace at %s contains structured log data:
 - %s/logs/ — original log files
-- %s/patterns/ — discovered log patterns, one directory per pattern
+- %s/patterns/ — discovered log patterns from the selected DiscoveryRun, one directory per pattern
   - Each pattern directory contains pattern.md (metadata) and samples.log (sample lines)
   - %s/patterns/unmatched/samples.log — lines that did not match any pattern
 - %s/notes/summary.md — overview of all patterns sorted by frequency
@@ -76,7 +57,7 @@ Provide:
 4. Suggested next steps for debugging
 
 Be concise and actionable. Focus on what matters.`,
-		workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir, workDir)
+		workDir, workDir, workDir, resultDir, resultDir, resultDir, resultDir, resultDir, resultDir, resultDir, workDir)
 }
 
 // RunAgentWithPrompt runs the AI agent on an existing workspace directory with a custom system prompt.
@@ -117,7 +98,7 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	}
 
 	if systemPrompt == "" {
-		systemPrompt = buildSystemPrompt(absDir)
+		systemPrompt = BuildWorkspaceSystemPrompt(absDir)
 	}
 
 	tapePath := config.TapePath

@@ -1,0 +1,212 @@
+syntax = "proto3";
+
+package lapp.web.v1;
+
+option go_package = "github.com/strrl/lapp/gen/go/lapp/web/v1;webv1";
+
+import "google/protobuf/timestamp.proto";
+
+service WorkspaceService {
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (GetWorkspaceResponse);
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
+
+  rpc ListLogFiles(ListLogFilesRequest) returns (ListLogFilesResponse);
+  rpc UploadLogFile(UploadLogFileRequest) returns (UploadLogFileResponse);
+  rpc DeleteLogFile(DeleteLogFileRequest) returns (DeleteLogFileResponse);
+
+  rpc CreateDiscoveryRun(CreateDiscoveryRunRequest) returns (CreateDiscoveryRunResponse);
+  rpc GetDiscoveryRun(GetDiscoveryRunRequest) returns (GetDiscoveryRunResponse);
+  rpc ListDiscoveryRuns(ListDiscoveryRunsRequest) returns (ListDiscoveryRunsResponse);
+
+  rpc ListPatterns(ListPatternsRequest) returns (ListPatternsResponse);
+  rpc GetPattern(GetPatternRequest) returns (GetPatternResponse);
+  rpc GetErrorsView(GetErrorsViewRequest) returns (GetErrorsViewResponse);
+}
+
+message Workspace {
+  string name = 1;
+  string workspace_id = 2;
+  WorkspaceStatus status = 3;
+  int32 log_file_count = 4;
+  int32 pattern_count = 5;
+  DiscoveryRun latest_discovery_run = 6;
+  DiscoveryRun latest_successful_discovery_run = 7;
+}
+
+enum WorkspaceStatus {
+  WORKSPACE_STATUS_UNSPECIFIED = 0;
+  WORKSPACE_STATUS_EMPTY = 1;
+  WORKSPACE_STATUS_DISCOVERING = 2;
+  WORKSPACE_STATUS_READY = 3;
+  WORKSPACE_STATUS_FAILED = 4;
+}
+
+message LogFile {
+  string name = 1;
+  string file_name = 2;
+  int64 size_bytes = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+message DiscoveryRun {
+  string name = 1;
+  string discovery_run_id = 2;
+  DiscoveryRunState state = 3;
+  DiscoveryStep current_step = 4;
+  string progress_message = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp finished_at = 8;
+  int32 log_file_count = 9;
+  int32 pattern_count = 10;
+  int32 unmatched_count = 11;
+}
+
+enum DiscoveryRunState {
+  DISCOVERY_RUN_STATE_UNSPECIFIED = 0;
+  DISCOVERY_RUN_STATE_QUEUED = 1;
+  DISCOVERY_RUN_STATE_RUNNING = 2;
+  DISCOVERY_RUN_STATE_SUCCEEDED = 3;
+  DISCOVERY_RUN_STATE_FAILED = 4;
+}
+
+enum DiscoveryStep {
+  DISCOVERY_STEP_UNSPECIFIED = 0;
+  DISCOVERY_STEP_READING_LOGS = 1;
+  DISCOVERY_STEP_MERGING_ENTRIES = 2;
+  DISCOVERY_STEP_DISCOVERING_PATTERNS = 3;
+  DISCOVERY_STEP_LABELING_PATTERNS = 4;
+  DISCOVERY_STEP_WRITING_RESULTS = 5;
+}
+
+message Pattern {
+  string name = 1;
+  string pattern_id = 2;
+  string semantic_id = 3;
+  string description = 4;
+  string template = 5;
+  int32 count = 6;
+  LineRef first_seen = 7;
+  LineRef last_seen = 8;
+  repeated LineRef line_refs = 9;
+  repeated string samples = 10;
+}
+
+message LineRef {
+  string file_name = 1;
+  int32 line_number = 2;
+}
+
+message ErrorPattern {
+  Pattern pattern = 1;
+}
+
+message UnmatchedErrorLine {
+  string file_name = 1;
+  int32 line_number = 2;
+  string content = 3;
+}
+
+message ListWorkspacesRequest {}
+
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
+}
+
+message GetWorkspaceRequest {
+  string name = 1;
+}
+
+message GetWorkspaceResponse {
+  Workspace workspace = 1;
+}
+
+message CreateWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message CreateWorkspaceResponse {
+  Workspace workspace = 1;
+}
+
+message DeleteWorkspaceRequest {
+  string name = 1;
+}
+
+message DeleteWorkspaceResponse {}
+
+message ListLogFilesRequest {
+  string parent = 1;
+}
+
+message ListLogFilesResponse {
+  repeated LogFile log_files = 1;
+}
+
+message UploadLogFileRequest {
+  string parent = 1;
+  string file_name = 2;
+  bytes content = 3;
+}
+
+message UploadLogFileResponse {
+  LogFile log_file = 1;
+}
+
+message DeleteLogFileRequest {
+  string name = 1;
+}
+
+message DeleteLogFileResponse {}
+
+message CreateDiscoveryRunRequest {
+  string parent = 1;
+  string model = 2;
+}
+
+message CreateDiscoveryRunResponse {
+  DiscoveryRun discovery_run = 1;
+}
+
+message GetDiscoveryRunRequest {
+  string name = 1;
+}
+
+message GetDiscoveryRunResponse {
+  DiscoveryRun discovery_run = 1;
+}
+
+message ListDiscoveryRunsRequest {
+  string parent = 1;
+}
+
+message ListDiscoveryRunsResponse {
+  repeated DiscoveryRun discovery_runs = 1;
+}
+
+message ListPatternsRequest {
+  string parent = 1;
+}
+
+message ListPatternsResponse {
+  repeated Pattern patterns = 1;
+}
+
+message GetPatternRequest {
+  string name = 1;
+}
+
+message GetPatternResponse {
+  Pattern pattern = 1;
+}
+
+message GetErrorsViewRequest {
+  string parent = 1;
+}
+
+message GetErrorsViewResponse {
+  repeated ErrorPattern error_patterns = 1;
+  repeated UnmatchedErrorLine unmatched_error_lines = 2;
+}

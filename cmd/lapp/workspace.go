@@ -1,28 +1,22 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
-	"github.com/strrl/lapp/pkg/multiline"
-	"github.com/strrl/lapp/pkg/pattern"
-	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var nonAlphaNum = regexp.MustCompile(`[^a-z0-9]+`)
@@ -131,7 +125,7 @@ func runWorkspaceCreate(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	for _, sub := range []string{"logs", "patterns", "notes"} {
+	for _, sub := range []string{"logs", workspace.DiscoveryRunsDirName} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return errors.Errorf("create %s: %w", sub, err)
 		}
@@ -159,9 +153,9 @@ var addLogTopic string
 func workspaceAddLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add-log [logfile]",
-		Short: "Add a log file to the workspace and rebuild patterns",
+		Short: "Add a log file to the workspace and start discovery",
 		Long: `Copy a log file into the workspace's logs/ directory, then run the full
-pipeline (Drain clustering + semantic labeling) to regenerate patterns/ and notes/.
+DiscoveryRun flow (Drain clustering + semantic labeling) to generate run-scoped results.
 
 Requires OPENROUTER_API_KEY environment variable.`,
 		Args: cobra.MaximumNArgs(1),
@@ -194,42 +188,25 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceAddLog")
 	defer span.End()
 
-	if err := copyLogToWorkspace(dir, args, span); err != nil {
+	if err := copyLogToWorkspace(dir, args, span.SetAttributes); err != nil {
 		return err
 	}
 
-	allTagged, allContent, fileCount, err := mergeAllLogs(ctx, dir)
+	result, err := workspace.Discover(ctx, workspace.DiscoveryConfig{
+		Dir:    dir,
+		APIKey: apiKey,
+		Model:  addLogModel,
+	})
 	if err != nil {
 		return err
 	}
 
-	slog.Info("Processing logs", "files", fileCount, "lines", len(allTagged))
-
-	filtered, err := runDrain(ctx, allContent)
-	if err != nil {
-		return err
-	}
-
-	labels, err := labelPatterns(ctx, filtered, allContent, apiKey)
-	if err != nil {
-		return err
-	}
-
-	if err := resetWorkspaceDirs(dir); err != nil {
-		return err
-	}
-
-	builder := workspace.NewBuilder(dir, allTagged, filtered, labels)
-	if err := builder.BuildAll(); err != nil {
-		return errors.Errorf("build workspace: %w", err)
-	}
-
-	slog.Info("Workspace rebuilt", "patterns", len(filtered))
+	slog.Info("Discovery completed", "run", result.RunID, "patterns", result.PatternCount)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
-func copyLogToWorkspace(dir string, args []string, span trace.Span) error {
+func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...attribute.KeyValue)) error {
 	if addLogStdin {
 		name := fmt.Sprintf("stdin-%d.log", time.Now().UnixNano())
 		data, err := io.ReadAll(os.Stdin)
@@ -247,7 +224,7 @@ func copyLogToWorkspace(dir string, args []string, span trace.Span) error {
 		return errors.New("logfile argument required (or use --stdin)")
 	}
 	logFile := args[0]
-	span.SetAttributes(attribute.String("log.file", logFile))
+	setSpanAttributes(attribute.String("log.file", logFile))
 
 	data, err := os.ReadFile(logFile)
 	if err != nil {
@@ -258,91 +235,6 @@ func copyLogToWorkspace(dir string, args []string, span trace.Span) error {
 		return errors.Errorf("copy log file: %w", err)
 	}
 	slog.Info("Added log file", "file", filepath.Base(logFile))
-	return nil
-}
-
-func mergeAllLogs(ctx context.Context, dir string) (tagged []workspace.TaggedLine, content []string, fileCount int, err error) {
-	allLogs, err := workspace.ReadAllLogs(dir)
-	if err != nil {
-		return nil, nil, 0, errors.Errorf("read all logs: %w", err)
-	}
-
-	// Sort filenames for deterministic output across rebuilds
-	fileNames := make([]string, 0, len(allLogs))
-	for name := range allLogs {
-		fileNames = append(fileNames, name)
-	}
-	sort.Strings(fileNames)
-
-	var allTagged []workspace.TaggedLine
-	var allContent []string
-	for _, fileName := range fileNames {
-		lines := allLogs[fileName]
-		detector, err := multiline.NewDetector(multiline.DetectorConfig{})
-		if err != nil {
-			return nil, nil, 0, errors.Errorf("multiline detector: %w", err)
-		}
-		merged := multiline.MergeSlice(ctx, lines, detector)
-		for _, m := range merged {
-			allTagged = append(allTagged, workspace.TaggedLine{
-				Content:  m.Content,
-				FileName: fileName,
-				LineNum:  m.StartLine,
-			})
-			allContent = append(allContent, m.Content)
-		}
-	}
-	return allTagged, allContent, len(allLogs), nil
-}
-
-func runDrain(ctx context.Context, content []string) ([]pattern.DrainCluster, error) {
-	drainParser, err := pattern.NewDrainParser()
-	if err != nil {
-		return nil, errors.Errorf("drain parser: %w", err)
-	}
-	if err := drainParser.Feed(ctx, content); err != nil {
-		return nil, errors.Errorf("drain feed: %w", err)
-	}
-	templates, err := drainParser.Templates(ctx)
-	if err != nil {
-		return nil, errors.Errorf("drain templates: %w", err)
-	}
-
-	var filtered []pattern.DrainCluster
-	for _, t := range templates {
-		if t.Count > 1 {
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered, nil
-}
-
-func labelPatterns(ctx context.Context, filtered []pattern.DrainCluster, content []string, apiKey string) ([]semantic.SemanticLabel, error) {
-	if len(filtered) == 0 {
-		return nil, nil
-	}
-	inputs := buildLabelInputs(ctx, filtered, content)
-	slog.Info("Labeling patterns", "count", len(inputs))
-	labels, err := semantic.Label(ctx, semantic.Config{
-		APIKey: apiKey,
-		Model:  addLogModel,
-	}, inputs)
-	if err != nil {
-		return nil, errors.Errorf("label: %w", err)
-	}
-	return labels, nil
-}
-
-func resetWorkspaceDirs(dir string) error {
-	for _, sub := range []string{"patterns", "notes"} {
-		subDir := filepath.Join(dir, sub)
-		if err := os.RemoveAll(subDir); err != nil {
-			return errors.Errorf("remove %s: %w", sub, err)
-		}
-		if err := os.MkdirAll(subDir, 0o755); err != nil {
-			return errors.Errorf("create %s: %w", sub, err)
-		}
-	}
 	return nil
 }
 
@@ -374,9 +266,9 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 
 	// Validate workspace exists
-	if _, err := os.Stat(filepath.Join(dir, "patterns")); os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "logs")); os.IsNotExist(err) {
 		hint := availableWorkspacesHint()
-		return errors.Errorf("not a workspace: %s (no patterns/ directory)%s", dir, hint)
+		return errors.Errorf("not a workspace: %s (no logs/ directory)%s", dir, hint)
 	}
 
 	var question string
@@ -391,6 +283,14 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.Errorf("resolve workspace dir: %w", err)
 	}
+	records, err := workspace.ListDiscoveryRunRecords(absDir)
+	if err != nil {
+		return errors.Errorf("list discovery runs: %w", err)
+	}
+	latestSuccess := workspace.LatestSuccessfulDiscoveryRun(records)
+	if latestSuccess == nil {
+		return errors.Errorf("no successful discovery run found for workspace %q; run `lapp workspace add-log --topic %s <logfile>` first", filepath.Base(absDir), filepath.Base(absDir))
+	}
 
 	tapePath := filepath.Join(absDir, ".tape.jsonl")
 	config := analyzer.Config{
@@ -399,7 +299,8 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 		TapePath: tapePath,
 	}
 
-	prompt := analyzer.BuildWorkspaceSystemPrompt(absDir)
+	resultDir := workspace.DiscoveryRunDir(absDir, latestSuccess.ID)
+	prompt := analyzer.BuildDiscoveryRunSystemPrompt(absDir, resultDir)
 	result, err := analyzer.RunAgentWithPrompt(ctx, config, absDir, question, prompt)
 	if err != nil {
 		span.RecordError(err)
@@ -411,30 +312,4 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 
 	span.SetStatus(codes.Ok, "")
 	return nil
-}
-
-func buildLabelInputs(ctx context.Context, templates []pattern.DrainCluster, lines []string) []semantic.PatternInput {
-	_, span := otel.Tracer("lapp/pipeline").Start(ctx, "pipeline.BuildLabelInputs")
-	defer span.End()
-
-	span.SetAttributes(attribute.Int("template.count", len(templates)))
-
-	var inputs []semantic.PatternInput
-	for _, t := range templates {
-		var samples []string
-		for _, line := range lines {
-			if _, ok := pattern.MatchTemplate(line, []pattern.DrainCluster{t}); ok {
-				samples = append(samples, line)
-				if len(samples) >= 3 {
-					break
-				}
-			}
-		}
-		inputs = append(inputs, semantic.PatternInput{
-			PatternUUIDString: t.ID.String(),
-			Pattern:           t.Pattern,
-			Samples:           samples,
-		})
-	}
-	return inputs
 }

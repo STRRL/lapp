@@ -23,6 +23,7 @@ func main() {
 	}
 
 	root.AddCommand(workspaceCmd())
+	root.AddCommand(webCmd())
 
 	err := root.Execute()
 	otelShutdown()

@@ -68,6 +68,21 @@ func (b *Builder) BuildAll() error {
 	return b.writeAgentsMD()
 }
 
+// Patterns returns the pattern results computed during BuildAll.
+func (b *Builder) Patterns() []PatternInfo {
+	return append([]PatternInfo(nil), b.patterns...)
+}
+
+// Unmatched returns log lines that did not match any generated pattern.
+func (b *Builder) Unmatched() []TaggedLine {
+	return append([]TaggedLine(nil), b.unmatched...)
+}
+
+// LogFiles returns source log filenames included in this build.
+func (b *Builder) LogFiles() []string {
+	return append([]string(nil), b.logFiles...)
+}
+
 func (b *Builder) computePatterns() {
 	// Build label map
 	labelMap := make(map[string]semantic.SemanticLabel, len(b.labels))

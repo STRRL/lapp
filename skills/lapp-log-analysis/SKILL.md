@@ -29,7 +29,7 @@ This creates the directory structure at `~/.lapp/workspaces/<topic>/`.
 
 ### Step 2: Ingest log files (required)
 
-Feed one or more log files into the workspace. Each `add-log` triggers a full rebuild: reads ALL files in `logs/`, runs Drain clustering + LLM semantic labeling, and regenerates the `patterns/` and `notes/` directories.
+Feed one or more log files into the workspace. Each `add-log` starts a DiscoveryRun: reads ALL files in `logs/`, runs Drain clustering + LLM semantic labeling, and writes run-scoped `patterns/` and `notes/` results.
 
 From a file:
 ```bash
@@ -41,7 +41,7 @@ From stdin (useful for piping from kubectl, docker, journalctl, etc.):
 kubectl logs my-pod | lapp workspace add-log --topic <topic> --stdin
 ```
 
-You can call `add-log` multiple times to add more log files. Each call rebuilds the entire workspace from all ingested logs.
+You can call `add-log` multiple times to add more log files. Each call creates a new DiscoveryRun from all current log files. Earlier runs remain available under `discovery-runs/`.
 
 To override the default LLM model:
 ```bash
@@ -72,25 +72,29 @@ Then explore the workspace directory structure yourself:
 ```
 ~/.lapp/workspaces/<topic>/
 ├── logs/                    # Raw log files (as ingested)
-├── patterns/                # One directory per discovered pattern
-│   ├── <semantic-id>/       # e.g. "connection-timeout"
-│   │   ├── pattern.md       # Template, count, description, first/last seen
-│   │   └── samples.log      # Up to 20 representative log lines
-│   └── unmatched/
-│       └── samples.log      # Lines that didn't match any pattern
-├── notes/
-│   ├── summary.md           # Overview: file count, patterns, samples
-│   └── errors.md            # Error patterns and error lines
-└── AGENTS.md                # Context guide for AI agents
+├── discovery-runs/
+│   └── <run-id>/
+│       ├── run.json         # Status, progress, counts, and result summary
+│       ├── patterns/        # One directory per discovered pattern
+│       │   ├── <semantic-id>/
+│       │   │   ├── pattern.md
+│       │   │   └── samples.log
+│       │   └── unmatched/
+│       │       └── samples.log
+│       └── notes/
+│           ├── summary.md
+│           └── errors.md
+│       └── AGENTS.md        # Context guide for AI agents
+└── AGENTS.md                # Initial workspace note before discovery
 ```
 
-Start with `notes/summary.md` for an overview, then drill into specific `patterns/<id>/` directories for details. The `errors.md` file is especially useful for quickly finding error-related patterns.
+Start with `discovery-runs/<run-id>/notes/summary.md` for an overview, then drill into specific `discovery-runs/<run-id>/patterns/<id>/` directories for details. The `errors.md` file is especially useful for quickly finding error-related patterns.
 
 This approach is ideal for coding agents (Claude Code, Codex, etc.) that can freely navigate the filesystem and form their own investigation strategy.
 
 ## Tips
 
 - **Topic naming**: Use descriptive names like `api-gateway-5xx`, `auth-service-oom`, `deploy-2024-03-15`. They become directory names.
-- **Multiple log sources**: You can ingest logs from different sources into the same workspace. The pipeline processes all files in `logs/` together, finding cross-file patterns.
-- **Iterative investigation**: Add more logs and re-analyze as you narrow down the issue. The workspace rebuilds cleanly each time.
+- **Multiple log sources**: You can ingest logs from different sources into the same workspace. Discovery processes all files in `logs/` together, finding cross-file patterns.
+- **Iterative investigation**: Add more logs and re-analyze as you narrow down the issue. Each DiscoveryRun is a new snapshot of the current logs.
 - **Pattern counts**: Patterns with high counts are "normal" behavior. Focus on patterns in `errors.md` or low-count patterns that might indicate anomalies.

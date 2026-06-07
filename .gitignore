@@ -32,5 +32,7 @@ go.work.sum
 
 # Project specific
 /output/
+/pkg/webapp/static/app/
+/pkg/webapp/static/assets/
 *.duckdb
 *.duckdb.wal

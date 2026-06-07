@@ -1,8 +1,39 @@
-.PHONY: build run unit-test integration-test test fmt vet lint ci tidy prek-all prek-install
+.DEFAULT_GOAL := help
 
-# Build the CLI binary
-build:
+.PHONY: help build clean check run unit-test integration-test test fmt vet lint ci tidy proto-gen proto-lint frontend-typecheck web-assets prek-all prek-install
+
+# Show available commands
+help:
+	@echo "Available targets:"
+	@echo "  make build              Build embedded frontend assets and output/lapp"
+	@echo "  make clean              Remove generated build artifacts"
+	@echo "  make proto-gen          Generate protobuf/Connect code"
+	@echo "  make test               Run all tests"
+	@echo "  make check              Run all checks"
+
+# Build embedded frontend assets and the CLI binary
+build: web-assets
 	go build -o output/lapp ./cmd/lapp/
+
+# Remove generated build artifacts
+clean:
+	rm -rf output frontend/dist frontend/.vite pkg/webapp/static/app pkg/webapp/static/assets
+
+# Generate protobuf/Connect code
+proto-gen:
+	buf generate
+
+# Lint protobuf schemas
+proto-lint:
+	buf lint
+
+# Type-check the web frontend
+frontend-typecheck:
+	cd frontend && pnpm typecheck
+
+# Build frontend assets into pkg/webapp/static for embedding
+web-assets:
+	cd frontend && pnpm build
 
 # Run unit tests only
 unit-test:
@@ -27,8 +58,11 @@ vet:
 lint:
 	golangci-lint run
 
+# Run local checks
+check: tidy fmt vet proto-lint frontend-typecheck build lint unit-test
+
 # Run all CI checks (same as pre-commit)
-ci: fmt vet build lint unit-test
+ci: check
 
 # Tidy go modules
 tidy:

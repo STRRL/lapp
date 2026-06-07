@@ -1,0 +1,17 @@
+node_modules/
+
+# Vite / TypeScript local caches
+.vite/
+*.tsbuildinfo
+
+# Local logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
