@@ -11,7 +11,9 @@ import {
   Upload
 } from "lucide-react";
 import {
+  DiscoveryRun,
   DiscoveryRunState,
+  DiscoveryStep,
   Pattern,
   WorkspaceStatus
 } from "./gen/lapp/web/v1/web_pb";
@@ -168,10 +170,10 @@ function App() {
 
             {notice && <div className="notice">{notice}</div>}
 
-            <section className="run-strip">
+            <section className={selectedRun?.state === DiscoveryRunState.FAILED ? "run-strip failed" : "run-strip"}>
               <div>
                 <strong>{selectedRun ? discoveryStateLabel(selectedRun.state) : "No successful discovery"}</strong>
-                <span>{selectedRun?.progressMessage || "Upload logs and start discovery."}</span>
+                <span>{discoveryRunMessage(selectedRun)}</span>
               </div>
               <select value={selectedRunName} onChange={(event) => selectRun(event.target.value)}>
                 <option value="">No run selected</option>
@@ -361,6 +363,65 @@ function workspaceStatusLabel(status: WorkspaceStatus) {
 
 function discoveryStateLabel(state: DiscoveryRunState) {
   return DiscoveryRunState[state]?.toLowerCase() ?? "unknown";
+}
+
+function discoveryRunMessage(run: DiscoveryRun | undefined) {
+  if (!run) return "Upload logs and start discovery.";
+  if (run.state === DiscoveryRunState.FAILED) {
+    if (run.error?.message) {
+      return `${discoveryStepLabel(run.error.step || run.currentStep)} failed: ${run.error.message}`;
+    }
+    return run.errorMessage || "Discovery failed without an error message.";
+  }
+  if (run.state === DiscoveryRunState.SUCCEEDED) return "Discovery completed.";
+  return discoveryProgressMessage(run) || run.progressMessage || "Discovery is waiting for progress.";
+}
+
+function discoveryProgressMessage(run: DiscoveryRun) {
+  const progress = run.progress;
+  const labelBatch = progress?.labelBatch;
+  if (labelBatch) {
+    if (labelBatch.event === "retrying") {
+      return `Retrying label batch ${labelBatch.batchNumber}/${labelBatch.batchCount}, attempt ${labelBatch.attempt}/${labelBatch.maxAttempts} (${labelBatch.completedCount} completed).`;
+    }
+    if (labelBatch.event === "completed") {
+      return `Labeled pattern batches ${labelBatch.completedCount}/${labelBatch.batchCount}.`;
+    }
+    return `Labeling batch ${labelBatch.batchNumber}/${labelBatch.batchCount}, attempt ${labelBatch.attempt}/${labelBatch.maxAttempts} (${labelBatch.batchSize} patterns, ${labelBatch.completedCount} completed).`;
+  }
+
+  const step = progress?.step || run.currentStep;
+  switch (step) {
+    case DiscoveryStep.READING_LOGS:
+      return "Reading log files.";
+    case DiscoveryStep.MERGING_ENTRIES:
+      return `Merging log entries from ${run.logFileCount} files.`;
+    case DiscoveryStep.DISCOVERING_PATTERNS:
+      return `Discovering log patterns across ${run.logFileCount} files.`;
+    case DiscoveryStep.LABELING_PATTERNS:
+      return "Preparing pattern labels.";
+    case DiscoveryStep.WRITING_RESULTS:
+      return "Writing discovery results.";
+    default:
+      return "";
+  }
+}
+
+function discoveryStepLabel(step: DiscoveryStep) {
+  switch (step) {
+    case DiscoveryStep.READING_LOGS:
+      return "Reading logs";
+    case DiscoveryStep.MERGING_ENTRIES:
+      return "Merging entries";
+    case DiscoveryStep.DISCOVERING_PATTERNS:
+      return "Discovering patterns";
+    case DiscoveryStep.LABELING_PATTERNS:
+      return "Labeling patterns";
+    case DiscoveryStep.WRITING_RESULTS:
+      return "Writing results";
+    default:
+      return "Discovery";
+  }
 }
 
 function formatBytes(value: bigint) {

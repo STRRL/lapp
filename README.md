@@ -10,6 +10,9 @@ It clusters repeated log lines with Drain, asks an LLM to assign semantic IDs to
 # Build
 make build
 
+# Clean, rebuild, and start the local web app
+make dev
+
 # Create a workspace
 go run ./cmd/lapp/ workspace create app-incident
 
@@ -34,11 +37,11 @@ workspace add-log
   -> read all files in logs/
   -> merge multiline entries
   -> discover repeated Drain patterns
-  -> label repeated patterns with one LLM batch call
+  -> label repeated patterns with retried LLM batches
   -> write discovery-runs/<run-id>/patterns/, notes/, and AGENTS.md
 ```
 
-**Core idea**: Drain clusters logs into templates cheaply (no API cost), then LLM semantifies the templates in a single call. This follows the IBM "Label Broadcasting" pattern — cluster first (90%+ volume reduction), apply LLM to representatives, broadcast labels back.
+**Core idea**: Drain clusters logs into templates cheaply (no API cost), then LLM semantifies the templates in bounded batches. This follows the IBM "Label Broadcasting" pattern — cluster first (90%+ volume reduction), apply LLM to representatives, broadcast labels back.
 
 Generated workspace layout:
 
@@ -86,6 +89,7 @@ The event parser and DuckDB store packages are library-level building blocks. Th
 ```bash
 make build                           # Build embedded web assets and output/lapp
 make clean                           # Remove generated build artifacts
+make dev                             # Clean, build, and start lapp web on 127.0.0.1:8080
 make proto-gen                       # Generate protobuf/Connect code
 make test                            # Run unit and integration tests
 make check                           # Run formatting, linting, type checks, build, and unit tests
@@ -93,6 +97,8 @@ make check                           # Run formatting, linting, type checks, bui
 LOGHUB_PATH=/path/to/2k_dataset \
   go test -v ./integration_test/...  # Integration tests (14 Loghub-2.0 datasets)
 ```
+
+Override the local web address with `WEB_ADDR=127.0.0.1:3000 make dev`.
 
 ## Roadmap
 

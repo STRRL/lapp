@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/openrouter"
 	"github.com/cloudwego/eino/schema"
@@ -53,6 +54,12 @@ func Label(ctx context.Context, config Config, patterns []PatternInput) ([]Seman
 
 	if len(patterns) == 0 {
 		return nil, nil
+	}
+	if strings.TrimSpace(config.APIKey) == "" {
+		err := errors.New("OPENROUTER_API_KEY is required for semantic labeling")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 
 	config.Model = llmconfig.ResolveModel(config.Model)
@@ -112,6 +119,7 @@ func callLLM(ctx context.Context, config Config, prompt string) (string, error) 
 	if httpClient == nil {
 		httpClient = &http.Client{
 			Transport: otelhttp.NewTransport(http.DefaultTransport),
+			Timeout:   90 * time.Second,
 		}
 	}
 

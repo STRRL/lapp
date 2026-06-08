@@ -2,8 +2,10 @@ package webapp
 
 import (
 	"context"
+	stderrors "errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -155,6 +157,46 @@ func TestWorkspaceServiceRejectsDiscoveryWithoutLogFiles(t *testing.T) {
 	}
 }
 
+func TestWorkspaceServiceDiscoveryFailureRecordsErrorMessage(t *testing.T) {
+	service, err := NewWorkspaceService(ServiceConfig{
+		Root: t.TempDir(),
+		Labeler: func(context.Context, semantic.Config, []semantic.PatternInput) ([]semantic.SemanticLabel, error) {
+			return nil, stderrors.New("semantic labeling unavailable")
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewWorkspaceService: %v", err)
+	}
+	createWorkspace, err := service.CreateWorkspace(context.Background(), connect.NewRequest(&webv1.CreateWorkspaceRequest{
+		WorkspaceId: "failing",
+	}))
+	if err != nil {
+		t.Fatalf("CreateWorkspace: %v", err)
+	}
+	workspaceName := createWorkspace.Msg.Workspace.Name
+	if _, err := service.UploadLogFile(context.Background(), connect.NewRequest(&webv1.UploadLogFileRequest{
+		Parent:   workspaceName,
+		FileName: "app.log",
+		Content:  []byte("2026-06-06 10:00:01 ERROR db timeout user=42\n2026-06-06 10:00:02 ERROR db timeout user=43\n"),
+	})); err != nil {
+		t.Fatalf("UploadLogFile: %v", err)
+	}
+
+	runResponse, err := service.CreateDiscoveryRun(context.Background(), connect.NewRequest(&webv1.CreateDiscoveryRunRequest{
+		Parent: workspaceName,
+	}))
+	if err != nil {
+		t.Fatalf("CreateDiscoveryRun: %v", err)
+	}
+	run := waitForRunState(t, service, runResponse.Msg.DiscoveryRun.Name, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_FAILED)
+	if run.Error == nil || !strings.Contains(run.Error.Message, "semantic labeling unavailable") {
+		t.Fatalf("expected failed run to expose semantic error, got %+v", run)
+	}
+	if run.Error.Code != "LABEL_PATTERNS_FAILED" {
+		t.Fatalf("expected structured label failure code, got %+v", run.Error)
+	}
+}
+
 func TestNewWorkspaceServiceMarksInterruptedDiscoveryRunsFailed(t *testing.T) {
 	root := t.TempDir()
 	workspaceDir := filepath.Join(root, "payment-timeout")
@@ -162,27 +204,30 @@ func TestNewWorkspaceServiceMarksInterruptedDiscoveryRunsFailed(t *testing.T) {
 
 	startedAt := time.Now().Add(-time.Minute).UTC()
 	if err := workspace.WriteDiscoveryRunRecord(workspaceDir, workspace.DiscoveryRunRecord{
-		ID:              "01900000-0000-7000-8000-000000000001",
-		State:           workspace.DiscoveryRunStateRunning,
-		CurrentStep:     workspace.DiscoveryStepLabelingPatterns,
-		ProgressMessage: "Labeling discovered patterns",
-		StartedAt:       startedAt,
+		ID:          "01900000-0000-7000-8000-000000000001",
+		State:       workspace.DiscoveryRunStateRunning,
+		CurrentStep: workspace.DiscoveryStepLabelingPatterns,
+		Progress: &workspace.DiscoveryRunProgress{
+			Step: workspace.DiscoveryStepLabelingPatterns,
+		},
+		StartedAt: startedAt,
 	}); err != nil {
 		t.Fatalf("WriteDiscoveryRunRecord running: %v", err)
 	}
 	if err := workspace.WriteDiscoveryRunRecord(workspaceDir, workspace.DiscoveryRunRecord{
-		ID:              "01900000-0000-7000-8000-000000000002",
-		State:           workspace.DiscoveryRunStateQueued,
-		ProgressMessage: "Discovery is queued",
-		StartedAt:       startedAt,
+		ID:    "01900000-0000-7000-8000-000000000002",
+		State: workspace.DiscoveryRunStateQueued,
+		Progress: &workspace.DiscoveryRunProgress{
+			Step: workspace.DiscoveryStepReadingLogs,
+		},
+		StartedAt: startedAt,
 	}); err != nil {
 		t.Fatalf("WriteDiscoveryRunRecord queued: %v", err)
 	}
 	if err := workspace.WriteDiscoveryRunRecord(workspaceDir, workspace.DiscoveryRunRecord{
-		ID:              "01900000-0000-7000-8000-000000000003",
-		State:           workspace.DiscoveryRunStateSucceeded,
-		ProgressMessage: "Discovery completed",
-		StartedAt:       startedAt,
+		ID:        "01900000-0000-7000-8000-000000000003",
+		State:     workspace.DiscoveryRunStateSucceeded,
+		StartedAt: startedAt,
 	}); err != nil {
 		t.Fatalf("WriteDiscoveryRunRecord succeeded: %v", err)
 	}
@@ -202,6 +247,9 @@ func TestNewWorkspaceServiceMarksInterruptedDiscoveryRunsFailed(t *testing.T) {
 		if record.State != workspace.DiscoveryRunStateFailed || record.FinishedAt == nil {
 			t.Fatalf("expected interrupted run %s to be failed, got %+v", runID, record)
 		}
+		if record.Error == nil || record.Error.Code != "DISCOVERY_INTERRUPTED" {
+			t.Fatalf("expected interrupted run %s to record structured error, got %+v", runID, record)
+		}
 	}
 	record, err := workspace.ReadDiscoveryRunRecord(workspaceDir, "01900000-0000-7000-8000-000000000003")
 	if err != nil {
@@ -219,7 +267,7 @@ func mustMkdir(t *testing.T, path string) {
 	}
 }
 
-func waitForRunState(t *testing.T, service *WorkspaceService, runName string, state webv1.DiscoveryRunState) {
+func waitForRunState(t *testing.T, service *WorkspaceService, runName string, state webv1.DiscoveryRunState) *webv1.DiscoveryRun {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
@@ -228,9 +276,10 @@ func waitForRunState(t *testing.T, service *WorkspaceService, runName string, st
 			t.Fatalf("GetDiscoveryRun: %v", err)
 		}
 		if response.Msg.DiscoveryRun.State == state {
-			return
+			return response.Msg.DiscoveryRun
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("discovery run did not reach %s", state)
+	return nil
 }

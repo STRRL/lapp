@@ -55,13 +55,36 @@ message DiscoveryRun {
   string discovery_run_id = 2;
   DiscoveryRunState state = 3;
   DiscoveryStep current_step = 4;
-  string progress_message = 5;
-  string error_message = 6;
+  string progress_message = 5 [deprecated = true];
+  string error_message = 6 [deprecated = true];
   google.protobuf.Timestamp started_at = 7;
   google.protobuf.Timestamp finished_at = 8;
   int32 log_file_count = 9;
   int32 pattern_count = 10;
   int32 unmatched_count = 11;
+  DiscoveryRunProgress progress = 12;
+  DiscoveryRunError error = 13;
+}
+
+message DiscoveryRunProgress {
+  DiscoveryStep step = 1;
+  DiscoveryLabelBatchProgress label_batch = 2;
+}
+
+message DiscoveryLabelBatchProgress {
+  string event = 1;
+  int32 batch_number = 2;
+  int32 batch_count = 3;
+  int32 batch_size = 4;
+  int32 attempt = 5;
+  int32 max_attempts = 6;
+  int32 completed_count = 7;
+}
+
+message DiscoveryRunError {
+  string code = 1;
+  string message = 2;
+  DiscoveryStep step = 3;
 }
 
 enum DiscoveryRunState {

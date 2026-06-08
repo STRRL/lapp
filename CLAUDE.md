@@ -11,6 +11,7 @@ LAPP (Log Auto Pattern Pipeline) discovers log templates from log streams using 
 ```bash
 make build              # Build embedded frontend assets, then output/lapp
 make clean              # Remove generated build artifacts
+make dev                # Clean, build, and start lapp web on 127.0.0.1:8080
 make proto-gen          # Generate protobuf/Connect code
 make test               # Run unit and integration tests
 make check              # Run formatting, linting, type checks, build, and unit tests
@@ -50,12 +51,13 @@ integration_test/        Integration tests against Loghub-2.0 datasets
 
 Each `add-log` copies a log file, then starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
 When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns as failed because those local workers no longer exist.
+DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
 
 ```
 workspace.Discover(ctx, cfg)
   → Read all logs/ files → multiline.MergeSlice() per file → tagged lines
   → pattern.DrainParser.Feed(all content) → Templates() → filter Count > 1
-  → semantic.Label(ctx, cfg, patterns)  ← single LLM batch call
+  → semantic.Label(ctx, cfg, patterns)  ← LLM batches with per-batch retry
   → workspace.NewBuilder(...).BuildAll()
     → discovery-runs/<run-id>/patterns/<semantic-id>/pattern.md + samples.log
     → discovery-runs/<run-id>/patterns/unmatched/samples.log

@@ -31,19 +31,42 @@ const (
 )
 
 type DiscoveryRunRecord struct {
-	ID              string            `json:"id"`
-	State           DiscoveryRunState `json:"state"`
-	CurrentStep     DiscoveryStep     `json:"current_step,omitempty"`
-	ProgressMessage string            `json:"progress_message,omitempty"`
-	ErrorMessage    string            `json:"error_message,omitempty"`
-	StartedAt       time.Time         `json:"started_at"`
-	FinishedAt      *time.Time        `json:"finished_at,omitempty"`
-	LogFileCount    int               `json:"log_file_count"`
-	LineCount       int               `json:"line_count"`
-	PatternCount    int               `json:"pattern_count"`
-	UnmatchedCount  int               `json:"unmatched_count"`
-	Patterns        []PatternInfo     `json:"patterns,omitempty"`
-	Unmatched       []TaggedLine      `json:"unmatched,omitempty"`
+	ID              string                `json:"id"`
+	State           DiscoveryRunState     `json:"state"`
+	CurrentStep     DiscoveryStep         `json:"current_step,omitempty"`
+	ProgressMessage string                `json:"progress_message,omitempty"`
+	ErrorMessage    string                `json:"error_message,omitempty"`
+	Progress        *DiscoveryRunProgress `json:"progress,omitempty"`
+	Error           *DiscoveryRunError    `json:"error,omitempty"`
+	StartedAt       time.Time             `json:"started_at"`
+	FinishedAt      *time.Time            `json:"finished_at,omitempty"`
+	LogFileCount    int                   `json:"log_file_count"`
+	LineCount       int                   `json:"line_count"`
+	PatternCount    int                   `json:"pattern_count"`
+	UnmatchedCount  int                   `json:"unmatched_count"`
+	Patterns        []PatternInfo         `json:"patterns,omitempty"`
+	Unmatched       []TaggedLine          `json:"unmatched,omitempty"`
+}
+
+type DiscoveryRunProgress struct {
+	Step       DiscoveryStep                `json:"step,omitempty"`
+	LabelBatch *DiscoveryLabelBatchProgress `json:"label_batch,omitempty"`
+}
+
+type DiscoveryLabelBatchProgress struct {
+	Event          string `json:"event,omitempty"`
+	BatchNumber    int    `json:"batch_number"`
+	BatchCount     int    `json:"batch_count"`
+	BatchSize      int    `json:"batch_size"`
+	Attempt        int    `json:"attempt"`
+	MaxAttempts    int    `json:"max_attempts"`
+	CompletedCount int    `json:"completed_count"`
+}
+
+type DiscoveryRunError struct {
+	Code    string        `json:"code"`
+	Message string        `json:"message"`
+	Step    DiscoveryStep `json:"step,omitempty"`
 }
 
 func DiscoveryRunsDir(workspaceDir string) string {

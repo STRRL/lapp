@@ -3,6 +3,7 @@ package webapp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -233,11 +234,13 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 		return nil, connect.NewError(connect.CodeInternal, uuidErr)
 	}
 	record := workspace.DiscoveryRunRecord{
-		ID:              runID.String(),
-		State:           workspace.DiscoveryRunStateRunning,
-		CurrentStep:     workspace.DiscoveryStepReadingLogs,
-		ProgressMessage: "Discovery is starting",
-		StartedAt:       time.Now().UTC(),
+		ID:          runID.String(),
+		State:       workspace.DiscoveryRunStateRunning,
+		CurrentStep: workspace.DiscoveryStepReadingLogs,
+		Progress: &workspace.DiscoveryRunProgress{
+			Step: workspace.DiscoveryStepReadingLogs,
+		},
+		StartedAt: time.Now().UTC(),
 	}
 	if err := workspace.WriteDiscoveryRunRecord(s.workspaceDir(id), record); err != nil {
 		s.setRunning(id, false)
@@ -245,13 +248,27 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 	}
 	go func() {
 		defer s.setRunning(id, false)
-		_, _ = workspace.Discover(context.Background(), workspace.DiscoveryConfig{
+		slog.Info("DiscoveryRun started", "workspace", id, "run", runID.String())
+		result, err := workspace.Discover(context.Background(), workspace.DiscoveryConfig{
 			Dir:     s.workspaceDir(id),
 			RunID:   runID.String(),
 			APIKey:  s.apiKey,
 			Model:   firstNonEmpty(req.Msg.Model, s.model),
 			Labeler: s.labeler,
 		})
+		if err != nil {
+			slog.Error("DiscoveryRun failed", "workspace", id, "run", runID.String(), "error", err)
+			return
+		}
+		slog.Info(
+			"DiscoveryRun completed",
+			"workspace", id,
+			"run", runID.String(),
+			"files", result.FileCount,
+			"lines", result.LineCount,
+			"patterns", result.PatternCount,
+			"unmatched", result.UnmatchedCount,
+		)
 	}()
 	return connect.NewResponse(&webv1.CreateDiscoveryRunResponse{DiscoveryRun: s.discoveryRunMessage(id, record)}), nil
 }
@@ -424,21 +441,51 @@ func (s *WorkspaceService) logFileMessage(id, fileName string) (*webv1.LogFile, 
 
 func (s *WorkspaceService) discoveryRunMessage(workspaceID string, record workspace.DiscoveryRunRecord) *webv1.DiscoveryRun {
 	msg := &webv1.DiscoveryRun{
-		Name:            fmt.Sprintf("%s/discoveryRuns/%s", workspaceName(workspaceID), record.ID),
-		DiscoveryRunId:  record.ID,
-		State:           discoveryRunState(record.State),
-		CurrentStep:     discoveryStep(record.CurrentStep),
-		ProgressMessage: record.ProgressMessage,
-		ErrorMessage:    record.ErrorMessage,
-		StartedAt:       timestamppb.New(record.StartedAt),
-		LogFileCount:    int32(record.LogFileCount),
-		PatternCount:    int32(record.PatternCount),
-		UnmatchedCount:  int32(record.UnmatchedCount),
+		Name:           fmt.Sprintf("%s/discoveryRuns/%s", workspaceName(workspaceID), record.ID),
+		DiscoveryRunId: record.ID,
+		State:          discoveryRunState(record.State),
+		CurrentStep:    discoveryStep(record.CurrentStep),
+		StartedAt:      timestamppb.New(record.StartedAt),
+		LogFileCount:   int32(record.LogFileCount),
+		PatternCount:   int32(record.PatternCount),
+		UnmatchedCount: int32(record.UnmatchedCount),
+	}
+	if record.Progress != nil {
+		msg.Progress = discoveryProgress(record.Progress)
+	}
+	if record.Error != nil {
+		msg.Error = discoveryError(record.Error)
 	}
 	if record.FinishedAt != nil {
 		msg.FinishedAt = timestamppb.New(*record.FinishedAt)
 	}
 	return msg
+}
+
+func discoveryProgress(progress *workspace.DiscoveryRunProgress) *webv1.DiscoveryRunProgress {
+	msg := &webv1.DiscoveryRunProgress{
+		Step: discoveryStep(progress.Step),
+	}
+	if progress.LabelBatch != nil {
+		msg.LabelBatch = &webv1.DiscoveryLabelBatchProgress{
+			Event:          progress.LabelBatch.Event,
+			BatchNumber:    int32(progress.LabelBatch.BatchNumber),
+			BatchCount:     int32(progress.LabelBatch.BatchCount),
+			BatchSize:      int32(progress.LabelBatch.BatchSize),
+			Attempt:        int32(progress.LabelBatch.Attempt),
+			MaxAttempts:    int32(progress.LabelBatch.MaxAttempts),
+			CompletedCount: int32(progress.LabelBatch.CompletedCount),
+		}
+	}
+	return msg
+}
+
+func discoveryError(runError *workspace.DiscoveryRunError) *webv1.DiscoveryRunError {
+	return &webv1.DiscoveryRunError{
+		Code:    runError.Code,
+		Message: runError.Message,
+		Step:    discoveryStep(runError.Step),
+	}
 }
 
 func (s *WorkspaceService) workspaceDir(id string) string {
@@ -467,10 +514,17 @@ func (s *WorkspaceService) recoverInterruptedDiscoveryRuns() error {
 			if !isInterruptedDiscoveryRun(record.State) {
 				continue
 			}
+			if record.CurrentStep == "" {
+				record.CurrentStep = workspace.DiscoveryStepReadingLogs
+			}
 			finishedAt := time.Now().UTC()
 			record.State = workspace.DiscoveryRunStateFailed
 			record.FinishedAt = &finishedAt
-			record.ProgressMessage = "Discovery interrupted"
+			record.Error = &workspace.DiscoveryRunError{
+				Code:    "DISCOVERY_INTERRUPTED",
+				Message: "Discovery did not complete before the web server stopped",
+				Step:    record.CurrentStep,
+			}
 			record.ErrorMessage = "Discovery did not complete before the web server stopped"
 			if err := workspace.WriteDiscoveryRunRecord(workspaceDir, record); err != nil {
 				return errors.Errorf("mark discovery run %s interrupted: %w", record.ID, err)

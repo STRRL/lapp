@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -33,6 +34,21 @@ func TestBuildPrompt(t *testing.T) {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("prompt missing expected content %q", want)
 		}
+	}
+}
+
+func TestLabelRequiresAPIKey(t *testing.T) {
+	_, err := Label(context.Background(), Config{}, []PatternInput{
+		{
+			PatternUUIDString: "00000000-0000-0000-0000-000000000001",
+			Pattern:           "Connection timeout after <*> ms",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected missing API key error")
+	}
+	if !strings.Contains(err.Error(), "OPENROUTER_API_KEY") {
+		t.Fatalf("expected actionable API key error, got %v", err)
 	}
 }
 

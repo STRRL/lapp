@@ -1,12 +1,15 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help build clean check run unit-test integration-test test fmt vet lint ci tidy proto-gen proto-lint frontend-typecheck web-assets prek-all prek-install
+WEB_ADDR ?= 127.0.0.1:8080
+
+.PHONY: help build clean dev check run unit-test integration-test test fmt vet lint ci tidy proto-gen proto-lint frontend-typecheck web-assets prek-all prek-install
 
 # Show available commands
 help:
 	@echo "Available targets:"
 	@echo "  make build              Build embedded frontend assets and output/lapp"
 	@echo "  make clean              Remove generated build artifacts"
+	@echo "  make dev                Clean, build, and start the local web app"
 	@echo "  make proto-gen          Generate protobuf/Connect code"
 	@echo "  make test               Run all tests"
 	@echo "  make check              Run all checks"
@@ -18,6 +21,10 @@ build: web-assets
 # Remove generated build artifacts
 clean:
 	rm -rf output frontend/dist frontend/.vite pkg/webapp/static/app pkg/webapp/static/assets
+
+# Clean, build, and start the local web app
+dev: clean build
+	./output/lapp web --addr $(WEB_ADDR)
 
 # Generate protobuf/Connect code
 proto-gen:

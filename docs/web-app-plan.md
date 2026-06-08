@@ -11,6 +11,8 @@ LAPP Web is a local web app for working with local LAPP workspaces. It starts fr
 - Workspace views default to the latest successful discovery run.
 - DiscoveryRun creation requires at least one log file and rejects concurrent runs for the same workspace at the API layer.
 - If the web server starts and finds local `QUEUED` or `RUNNING` DiscoveryRuns from a previous process, it marks them as failed because no worker is still attached to them.
+- Semantic labeling runs in batches of 25 patterns with default concurrency 12, a per-batch timeout, and up to 3 attempts per batch.
+- DiscoveryRun records store structured `progress` and `error` fields. Backend code records facts; frontend code renders user-facing text.
 
 ## Implementation Shape
 

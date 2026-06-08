@@ -210,6 +210,15 @@ select {
   font-size: 14px;
 }
 
+.run-strip.failed {
+  border-color: #e7a7a7;
+  background: #fff5f5;
+}
+
+.run-strip.failed span {
+  color: #8f1d1d;
+}
+
 .tabs {
   display: flex;
   gap: 6px;

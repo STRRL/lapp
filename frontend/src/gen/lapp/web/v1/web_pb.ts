@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file lapp/web/v1/web.proto.
  */
 export const file_lapp_web_v1_web: GenFile = /*@__PURE__*/
-  fileDesc("ChVsYXBwL3dlYi92MS93ZWIucHJvdG8SC2xhcHAud2ViLnYxIokCCglXb3Jrc3BhY2USDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSLAoGc3RhdHVzGAMgASgOMhwubGFwcC53ZWIudjEuV29ya3NwYWNlU3RhdHVzEhYKDmxvZ19maWxlX2NvdW50GAQgASgFEhUKDXBhdHRlcm5fY291bnQYBSABKAUSNwoUbGF0ZXN0X2Rpc2NvdmVyeV9ydW4YBiABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4SQgofbGF0ZXN0X3N1Y2Nlc3NmdWxfZGlzY292ZXJ5X3J1bhgHIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biJuCgdMb2dGaWxlEgwKBG5hbWUYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEhIKCnNpemVfYnl0ZXMYAyABKAMSLgoKdXBkYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAi8QIKDERpc2NvdmVyeVJ1bhIMCgRuYW1lGAEgASgJEhgKEGRpc2NvdmVyeV9ydW5faWQYAiABKAkSLQoFc3RhdGUYAyABKA4yHi5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW5TdGF0ZRIwCgxjdXJyZW50X3N0ZXAYBCABKA4yGi5sYXBwLndlYi52MS5EaXNjb3ZlcnlTdGVwEhgKEHByb2dyZXNzX21lc3NhZ2UYBSABKAkSFQoNZXJyb3JfbWVzc2FnZRgGIAEoCRIuCgpzdGFydGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtmaW5pc2hlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFgoObG9nX2ZpbGVfY291bnQYCSABKAUSFQoNcGF0dGVybl9jb3VudBgKIAEoBRIXCg91bm1hdGNoZWRfY291bnQYCyABKAUigwIKB1BhdHRlcm4SDAoEbmFtZRgBIAEoCRISCgpwYXR0ZXJuX2lkGAIgASgJEhMKC3NlbWFudGljX2lkGAMgASgJEhMKC2Rlc2NyaXB0aW9uGAQgASgJEhAKCHRlbXBsYXRlGAUgASgJEg0KBWNvdW50GAYgASgFEigKCmZpcnN0X3NlZW4YByABKAsyFC5sYXBwLndlYi52MS5MaW5lUmVmEicKCWxhc3Rfc2VlbhgIIAEoCzIULmxhcHAud2ViLnYxLkxpbmVSZWYSJwoJbGluZV9yZWZzGAkgAygLMhQubGFwcC53ZWIudjEuTGluZVJlZhIPCgdzYW1wbGVzGAogAygJIjEKB0xpbmVSZWYSEQoJZmlsZV9uYW1lGAEgASgJEhMKC2xpbmVfbnVtYmVyGAIgASgFIjUKDEVycm9yUGF0dGVybhIlCgdwYXR0ZXJuGAEgASgLMhQubGFwcC53ZWIudjEuUGF0dGVybiJNChJVbm1hdGNoZWRFcnJvckxpbmUSEQoJZmlsZV9uYW1lGAEgASgJEhMKC2xpbmVfbnVtYmVyGAIgASgFEg8KB2NvbnRlbnQYAyABKAkiFwoVTGlzdFdvcmtzcGFjZXNSZXF1ZXN0IkQKFkxpc3RXb3Jrc3BhY2VzUmVzcG9uc2USKgoKd29ya3NwYWNlcxgBIAMoCzIWLmxhcHAud2ViLnYxLldvcmtzcGFjZSIjChNHZXRXb3Jrc3BhY2VSZXF1ZXN0EgwKBG5hbWUYASABKAkiQQoUR2V0V29ya3NwYWNlUmVzcG9uc2USKQoJd29ya3NwYWNlGAEgASgLMhYubGFwcC53ZWIudjEuV29ya3NwYWNlIi4KFkNyZWF0ZVdvcmtzcGFjZVJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJIkQKF0NyZWF0ZVdvcmtzcGFjZVJlc3BvbnNlEikKCXdvcmtzcGFjZRgBIAEoCzIWLmxhcHAud2ViLnYxLldvcmtzcGFjZSImChZEZWxldGVXb3Jrc3BhY2VSZXF1ZXN0EgwKBG5hbWUYASABKAkiGQoXRGVsZXRlV29ya3NwYWNlUmVzcG9uc2UiJQoTTGlzdExvZ0ZpbGVzUmVxdWVzdBIOCgZwYXJlbnQYASABKAkiPwoUTGlzdExvZ0ZpbGVzUmVzcG9uc2USJwoJbG9nX2ZpbGVzGAEgAygLMhQubGFwcC53ZWIudjEuTG9nRmlsZSJKChRVcGxvYWRMb2dGaWxlUmVxdWVzdBIOCgZwYXJlbnQYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEg8KB2NvbnRlbnQYAyABKAwiPwoVVXBsb2FkTG9nRmlsZVJlc3BvbnNlEiYKCGxvZ19maWxlGAEgASgLMhQubGFwcC53ZWIudjEuTG9nRmlsZSIkChREZWxldGVMb2dGaWxlUmVxdWVzdBIMCgRuYW1lGAEgASgJIhcKFURlbGV0ZUxvZ0ZpbGVSZXNwb25zZSI6ChlDcmVhdGVEaXNjb3ZlcnlSdW5SZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCRINCgVtb2RlbBgCIAEoCSJOChpDcmVhdGVEaXNjb3ZlcnlSdW5SZXNwb25zZRIwCg1kaXNjb3ZlcnlfcnVuGAEgASgLMhkubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuIiYKFkdldERpc2NvdmVyeVJ1blJlcXVlc3QSDAoEbmFtZRgBIAEoCSJLChdHZXREaXNjb3ZlcnlSdW5SZXNwb25zZRIwCg1kaXNjb3ZlcnlfcnVuGAEgASgLMhkubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuIioKGExpc3REaXNjb3ZlcnlSdW5zUmVxdWVzdBIOCgZwYXJlbnQYASABKAkiTgoZTGlzdERpc2NvdmVyeVJ1bnNSZXNwb25zZRIxCg5kaXNjb3ZlcnlfcnVucxgBIAMoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biIlChNMaXN0UGF0dGVybnNSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCSI+ChRMaXN0UGF0dGVybnNSZXNwb25zZRImCghwYXR0ZXJucxgBIAMoCzIULmxhcHAud2ViLnYxLlBhdHRlcm4iIQoRR2V0UGF0dGVyblJlcXVlc3QSDAoEbmFtZRgBIAEoCSI7ChJHZXRQYXR0ZXJuUmVzcG9uc2USJQoHcGF0dGVybhgBIAEoCzIULmxhcHAud2ViLnYxLlBhdHRlcm4iJgoUR2V0RXJyb3JzVmlld1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIooBChVHZXRFcnJvcnNWaWV3UmVzcG9uc2USMQoOZXJyb3JfcGF0dGVybnMYASADKAsyGS5sYXBwLndlYi52MS5FcnJvclBhdHRlcm4SPgoVdW5tYXRjaGVkX2Vycm9yX2xpbmVzGAIgAygLMh8ubGFwcC53ZWIudjEuVW5tYXRjaGVkRXJyb3JMaW5lKqoBCg9Xb3Jrc3BhY2VTdGF0dXMSIAocV09SS1NQQUNFX1NUQVRVU19VTlNQRUNJRklFRBAAEhoKFldPUktTUEFDRV9TVEFUVVNfRU1QVFkQARIgChxXT1JLU1BBQ0VfU1RBVFVTX0RJU0NPVkVSSU5HEAISGgoWV09SS1NQQUNFX1NUQVRVU19SRUFEWRADEhsKF1dPUktTUEFDRV9TVEFUVVNfRkFJTEVEEAQqvAEKEURpc2NvdmVyeVJ1blN0YXRlEiMKH0RJU0NPVkVSWV9SVU5fU1RBVEVfVU5TUEVDSUZJRUQQABIeChpESVNDT1ZFUllfUlVOX1NUQVRFX1FVRVVFRBABEh8KG0RJU0NPVkVSWV9SVU5fU1RBVEVfUlVOTklORxACEiEKHURJU0NPVkVSWV9SVU5fU1RBVEVfU1VDQ0VFREVEEAMSHgoaRElTQ09WRVJZX1JVTl9TVEFURV9GQUlMRUQQBCrnAQoNRGlzY292ZXJ5U3RlcBIeChpESVNDT1ZFUllfU1RFUF9VTlNQRUNJRklFRBAAEh8KG0RJU0NPVkVSWV9TVEVQX1JFQURJTkdfTE9HUxABEiIKHkRJU0NPVkVSWV9TVEVQX01FUkdJTkdfRU5UUklFUxACEicKI0RJU0NPVkVSWV9TVEVQX0RJU0NPVkVSSU5HX1BBVFRFUk5TEAMSJAogRElTQ09WRVJZX1NURVBfTEFCRUxJTkdfUEFUVEVSTlMQBBIiCh5ESVNDT1ZFUllfU1RFUF9XUklUSU5HX1JFU1VMVFMQBTKoCQoQV29ya3NwYWNlU2VydmljZRJZCg5MaXN0V29ya3NwYWNlcxIiLmxhcHAud2ViLnYxLkxpc3RXb3Jrc3BhY2VzUmVxdWVzdBojLmxhcHAud2ViLnYxLkxpc3RXb3Jrc3BhY2VzUmVzcG9uc2USUwoMR2V0V29ya3NwYWNlEiAubGFwcC53ZWIudjEuR2V0V29ya3NwYWNlUmVxdWVzdBohLmxhcHAud2ViLnYxLkdldFdvcmtzcGFjZVJlc3BvbnNlElwKD0NyZWF0ZVdvcmtzcGFjZRIjLmxhcHAud2ViLnYxLkNyZWF0ZVdvcmtzcGFjZVJlcXVlc3QaJC5sYXBwLndlYi52MS5DcmVhdGVXb3Jrc3BhY2VSZXNwb25zZRJcCg9EZWxldGVXb3Jrc3BhY2USIy5sYXBwLndlYi52MS5EZWxldGVXb3Jrc3BhY2VSZXF1ZXN0GiQubGFwcC53ZWIudjEuRGVsZXRlV29ya3NwYWNlUmVzcG9uc2USUwoMTGlzdExvZ0ZpbGVzEiAubGFwcC53ZWIudjEuTGlzdExvZ0ZpbGVzUmVxdWVzdBohLmxhcHAud2ViLnYxLkxpc3RMb2dGaWxlc1Jlc3BvbnNlElYKDVVwbG9hZExvZ0ZpbGUSIS5sYXBwLndlYi52MS5VcGxvYWRMb2dGaWxlUmVxdWVzdBoiLmxhcHAud2ViLnYxLlVwbG9hZExvZ0ZpbGVSZXNwb25zZRJWCg1EZWxldGVMb2dGaWxlEiEubGFwcC53ZWIudjEuRGVsZXRlTG9nRmlsZVJlcXVlc3QaIi5sYXBwLndlYi52MS5EZWxldGVMb2dGaWxlUmVzcG9uc2USZQoSQ3JlYXRlRGlzY292ZXJ5UnVuEiYubGFwcC53ZWIudjEuQ3JlYXRlRGlzY292ZXJ5UnVuUmVxdWVzdBonLmxhcHAud2ViLnYxLkNyZWF0ZURpc2NvdmVyeVJ1blJlc3BvbnNlElwKD0dldERpc2NvdmVyeVJ1bhIjLmxhcHAud2ViLnYxLkdldERpc2NvdmVyeVJ1blJlcXVlc3QaJC5sYXBwLndlYi52MS5HZXREaXNjb3ZlcnlSdW5SZXNwb25zZRJiChFMaXN0RGlzY292ZXJ5UnVucxIlLmxhcHAud2ViLnYxLkxpc3REaXNjb3ZlcnlSdW5zUmVxdWVzdBomLmxhcHAud2ViLnYxLkxpc3REaXNjb3ZlcnlSdW5zUmVzcG9uc2USUwoMTGlzdFBhdHRlcm5zEiAubGFwcC53ZWIudjEuTGlzdFBhdHRlcm5zUmVxdWVzdBohLmxhcHAud2ViLnYxLkxpc3RQYXR0ZXJuc1Jlc3BvbnNlEk0KCkdldFBhdHRlcm4SHi5sYXBwLndlYi52MS5HZXRQYXR0ZXJuUmVxdWVzdBofLmxhcHAud2ViLnYxLkdldFBhdHRlcm5SZXNwb25zZRJWCg1HZXRFcnJvcnNWaWV3EiEubGFwcC53ZWIudjEuR2V0RXJyb3JzVmlld1JlcXVlc3QaIi5sYXBwLndlYi52MS5HZXRFcnJvcnNWaWV3UmVzcG9uc2VCMFouZ2l0aHViLmNvbS9zdHJybC9sYXBwL2dlbi9nby9sYXBwL3dlYi92MTt3ZWJ2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChVsYXBwL3dlYi92MS93ZWIucHJvdG8SC2xhcHAud2ViLnYxIokCCglXb3Jrc3BhY2USDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSLAoGc3RhdHVzGAMgASgOMhwubGFwcC53ZWIudjEuV29ya3NwYWNlU3RhdHVzEhYKDmxvZ19maWxlX2NvdW50GAQgASgFEhUKDXBhdHRlcm5fY291bnQYBSABKAUSNwoUbGF0ZXN0X2Rpc2NvdmVyeV9ydW4YBiABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4SQgofbGF0ZXN0X3N1Y2Nlc3NmdWxfZGlzY292ZXJ5X3J1bhgHIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biJuCgdMb2dGaWxlEgwKBG5hbWUYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEhIKCnNpemVfYnl0ZXMYAyABKAMSLgoKdXBkYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAi3QMKDERpc2NvdmVyeVJ1bhIMCgRuYW1lGAEgASgJEhgKEGRpc2NvdmVyeV9ydW5faWQYAiABKAkSLQoFc3RhdGUYAyABKA4yHi5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW5TdGF0ZRIwCgxjdXJyZW50X3N0ZXAYBCABKA4yGi5sYXBwLndlYi52MS5EaXNjb3ZlcnlTdGVwEhwKEHByb2dyZXNzX21lc3NhZ2UYBSABKAlCAhgBEhkKDWVycm9yX21lc3NhZ2UYBiABKAlCAhgBEi4KCnN0YXJ0ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2ZpbmlzaGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIWCg5sb2dfZmlsZV9jb3VudBgJIAEoBRIVCg1wYXR0ZXJuX2NvdW50GAogASgFEhcKD3VubWF0Y2hlZF9jb3VudBgLIAEoBRIzCghwcm9ncmVzcxgMIAEoCzIhLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1blByb2dyZXNzEi0KBWVycm9yGA0gASgLMh4ubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuRXJyb3IifwoURGlzY292ZXJ5UnVuUHJvZ3Jlc3MSKAoEc3RlcBgBIAEoDjIaLmxhcHAud2ViLnYxLkRpc2NvdmVyeVN0ZXASPQoLbGFiZWxfYmF0Y2gYAiABKAsyKC5sYXBwLndlYi52MS5EaXNjb3ZlcnlMYWJlbEJhdGNoUHJvZ3Jlc3MiqwEKG0Rpc2NvdmVyeUxhYmVsQmF0Y2hQcm9ncmVzcxINCgVldmVudBgBIAEoCRIUCgxiYXRjaF9udW1iZXIYAiABKAUSEwoLYmF0Y2hfY291bnQYAyABKAUSEgoKYmF0Y2hfc2l6ZRgEIAEoBRIPCgdhdHRlbXB0GAUgASgFEhQKDG1heF9hdHRlbXB0cxgGIAEoBRIXCg9jb21wbGV0ZWRfY291bnQYByABKAUiXAoRRGlzY292ZXJ5UnVuRXJyb3ISDAoEY29kZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEigKBHN0ZXAYAyABKA4yGi5sYXBwLndlYi52MS5EaXNjb3ZlcnlTdGVwIoMCCgdQYXR0ZXJuEgwKBG5hbWUYASABKAkSEgoKcGF0dGVybl9pZBgCIAEoCRITCgtzZW1hbnRpY19pZBgDIAEoCRITCgtkZXNjcmlwdGlvbhgEIAEoCRIQCgh0ZW1wbGF0ZRgFIAEoCRINCgVjb3VudBgGIAEoBRIoCgpmaXJzdF9zZWVuGAcgASgLMhQubGFwcC53ZWIudjEuTGluZVJlZhInCglsYXN0X3NlZW4YCCABKAsyFC5sYXBwLndlYi52MS5MaW5lUmVmEicKCWxpbmVfcmVmcxgJIAMoCzIULmxhcHAud2ViLnYxLkxpbmVSZWYSDwoHc2FtcGxlcxgKIAMoCSIxCgdMaW5lUmVmEhEKCWZpbGVfbmFtZRgBIAEoCRITCgtsaW5lX251bWJlchgCIAEoBSI1CgxFcnJvclBhdHRlcm4SJQoHcGF0dGVybhgBIAEoCzIULmxhcHAud2ViLnYxLlBhdHRlcm4iTQoSVW5tYXRjaGVkRXJyb3JMaW5lEhEKCWZpbGVfbmFtZRgBIAEoCRITCgtsaW5lX251bWJlchgCIAEoBRIPCgdjb250ZW50GAMgASgJIhcKFUxpc3RXb3Jrc3BhY2VzUmVxdWVzdCJEChZMaXN0V29ya3NwYWNlc1Jlc3BvbnNlEioKCndvcmtzcGFjZXMYASADKAsyFi5sYXBwLndlYi52MS5Xb3Jrc3BhY2UiIwoTR2V0V29ya3NwYWNlUmVxdWVzdBIMCgRuYW1lGAEgASgJIkEKFEdldFdvcmtzcGFjZVJlc3BvbnNlEikKCXdvcmtzcGFjZRgBIAEoCzIWLmxhcHAud2ViLnYxLldvcmtzcGFjZSIuChZDcmVhdGVXb3Jrc3BhY2VSZXF1ZXN0EhQKDHdvcmtzcGFjZV9pZBgBIAEoCSJEChdDcmVhdGVXb3Jrc3BhY2VSZXNwb25zZRIpCgl3b3Jrc3BhY2UYASABKAsyFi5sYXBwLndlYi52MS5Xb3Jrc3BhY2UiJgoWRGVsZXRlV29ya3NwYWNlUmVxdWVzdBIMCgRuYW1lGAEgASgJIhkKF0RlbGV0ZVdvcmtzcGFjZVJlc3BvbnNlIiUKE0xpc3RMb2dGaWxlc1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIj8KFExpc3RMb2dGaWxlc1Jlc3BvbnNlEicKCWxvZ19maWxlcxgBIAMoCzIULmxhcHAud2ViLnYxLkxvZ0ZpbGUiSgoUVXBsb2FkTG9nRmlsZVJlcXVlc3QSDgoGcGFyZW50GAEgASgJEhEKCWZpbGVfbmFtZRgCIAEoCRIPCgdjb250ZW50GAMgASgMIj8KFVVwbG9hZExvZ0ZpbGVSZXNwb25zZRImCghsb2dfZmlsZRgBIAEoCzIULmxhcHAud2ViLnYxLkxvZ0ZpbGUiJAoURGVsZXRlTG9nRmlsZVJlcXVlc3QSDAoEbmFtZRgBIAEoCSIXChVEZWxldGVMb2dGaWxlUmVzcG9uc2UiOgoZQ3JlYXRlRGlzY292ZXJ5UnVuUmVxdWVzdBIOCgZwYXJlbnQYASABKAkSDQoFbW9kZWwYAiABKAkiTgoaQ3JlYXRlRGlzY292ZXJ5UnVuUmVzcG9uc2USMAoNZGlzY292ZXJ5X3J1bhgBIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biImChZHZXREaXNjb3ZlcnlSdW5SZXF1ZXN0EgwKBG5hbWUYASABKAkiSwoXR2V0RGlzY292ZXJ5UnVuUmVzcG9uc2USMAoNZGlzY292ZXJ5X3J1bhgBIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biIqChhMaXN0RGlzY292ZXJ5UnVuc1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIk4KGUxpc3REaXNjb3ZlcnlSdW5zUmVzcG9uc2USMQoOZGlzY292ZXJ5X3J1bnMYASADKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4iJQoTTGlzdFBhdHRlcm5zUmVxdWVzdBIOCgZwYXJlbnQYASABKAkiPgoUTGlzdFBhdHRlcm5zUmVzcG9uc2USJgoIcGF0dGVybnMYASADKAsyFC5sYXBwLndlYi52MS5QYXR0ZXJuIiEKEUdldFBhdHRlcm5SZXF1ZXN0EgwKBG5hbWUYASABKAkiOwoSR2V0UGF0dGVyblJlc3BvbnNlEiUKB3BhdHRlcm4YASABKAsyFC5sYXBwLndlYi52MS5QYXR0ZXJuIiYKFEdldEVycm9yc1ZpZXdSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCSKKAQoVR2V0RXJyb3JzVmlld1Jlc3BvbnNlEjEKDmVycm9yX3BhdHRlcm5zGAEgAygLMhkubGFwcC53ZWIudjEuRXJyb3JQYXR0ZXJuEj4KFXVubWF0Y2hlZF9lcnJvcl9saW5lcxgCIAMoCzIfLmxhcHAud2ViLnYxLlVubWF0Y2hlZEVycm9yTGluZSqqAQoPV29ya3NwYWNlU3RhdHVzEiAKHFdPUktTUEFDRV9TVEFUVVNfVU5TUEVDSUZJRUQQABIaChZXT1JLU1BBQ0VfU1RBVFVTX0VNUFRZEAESIAocV09SS1NQQUNFX1NUQVRVU19ESVNDT1ZFUklORxACEhoKFldPUktTUEFDRV9TVEFUVVNfUkVBRFkQAxIbChdXT1JLU1BBQ0VfU1RBVFVTX0ZBSUxFRBAEKrwBChFEaXNjb3ZlcnlSdW5TdGF0ZRIjCh9ESVNDT1ZFUllfUlVOX1NUQVRFX1VOU1BFQ0lGSUVEEAASHgoaRElTQ09WRVJZX1JVTl9TVEFURV9RVUVVRUQQARIfChtESVNDT1ZFUllfUlVOX1NUQVRFX1JVTk5JTkcQAhIhCh1ESVNDT1ZFUllfUlVOX1NUQVRFX1NVQ0NFRURFRBADEh4KGkRJU0NPVkVSWV9SVU5fU1RBVEVfRkFJTEVEEAQq5wEKDURpc2NvdmVyeVN0ZXASHgoaRElTQ09WRVJZX1NURVBfVU5TUEVDSUZJRUQQABIfChtESVNDT1ZFUllfU1RFUF9SRUFESU5HX0xPR1MQARIiCh5ESVNDT1ZFUllfU1RFUF9NRVJHSU5HX0VOVFJJRVMQAhInCiNESVNDT1ZFUllfU1RFUF9ESVNDT1ZFUklOR19QQVRURVJOUxADEiQKIERJU0NPVkVSWV9TVEVQX0xBQkVMSU5HX1BBVFRFUk5TEAQSIgoeRElTQ09WRVJZX1NURVBfV1JJVElOR19SRVNVTFRTEAUyqAkKEFdvcmtzcGFjZVNlcnZpY2USWQoOTGlzdFdvcmtzcGFjZXMSIi5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIy5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1Jlc3BvbnNlElMKDEdldFdvcmtzcGFjZRIgLmxhcHAud2ViLnYxLkdldFdvcmtzcGFjZVJlcXVlc3QaIS5sYXBwLndlYi52MS5HZXRXb3Jrc3BhY2VSZXNwb25zZRJcCg9DcmVhdGVXb3Jrc3BhY2USIy5sYXBwLndlYi52MS5DcmVhdGVXb3Jrc3BhY2VSZXF1ZXN0GiQubGFwcC53ZWIudjEuQ3JlYXRlV29ya3NwYWNlUmVzcG9uc2USXAoPRGVsZXRlV29ya3NwYWNlEiMubGFwcC53ZWIudjEuRGVsZXRlV29ya3NwYWNlUmVxdWVzdBokLmxhcHAud2ViLnYxLkRlbGV0ZVdvcmtzcGFjZVJlc3BvbnNlElMKDExpc3RMb2dGaWxlcxIgLmxhcHAud2ViLnYxLkxpc3RMb2dGaWxlc1JlcXVlc3QaIS5sYXBwLndlYi52MS5MaXN0TG9nRmlsZXNSZXNwb25zZRJWCg1VcGxvYWRMb2dGaWxlEiEubGFwcC53ZWIudjEuVXBsb2FkTG9nRmlsZVJlcXVlc3QaIi5sYXBwLndlYi52MS5VcGxvYWRMb2dGaWxlUmVzcG9uc2USVgoNRGVsZXRlTG9nRmlsZRIhLmxhcHAud2ViLnYxLkRlbGV0ZUxvZ0ZpbGVSZXF1ZXN0GiIubGFwcC53ZWIudjEuRGVsZXRlTG9nRmlsZVJlc3BvbnNlEmUKEkNyZWF0ZURpc2NvdmVyeVJ1bhImLmxhcHAud2ViLnYxLkNyZWF0ZURpc2NvdmVyeVJ1blJlcXVlc3QaJy5sYXBwLndlYi52MS5DcmVhdGVEaXNjb3ZlcnlSdW5SZXNwb25zZRJcCg9HZXREaXNjb3ZlcnlSdW4SIy5sYXBwLndlYi52MS5HZXREaXNjb3ZlcnlSdW5SZXF1ZXN0GiQubGFwcC53ZWIudjEuR2V0RGlzY292ZXJ5UnVuUmVzcG9uc2USYgoRTGlzdERpc2NvdmVyeVJ1bnMSJS5sYXBwLndlYi52MS5MaXN0RGlzY292ZXJ5UnVuc1JlcXVlc3QaJi5sYXBwLndlYi52MS5MaXN0RGlzY292ZXJ5UnVuc1Jlc3BvbnNlElMKDExpc3RQYXR0ZXJucxIgLmxhcHAud2ViLnYxLkxpc3RQYXR0ZXJuc1JlcXVlc3QaIS5sYXBwLndlYi52MS5MaXN0UGF0dGVybnNSZXNwb25zZRJNCgpHZXRQYXR0ZXJuEh4ubGFwcC53ZWIudjEuR2V0UGF0dGVyblJlcXVlc3QaHy5sYXBwLndlYi52MS5HZXRQYXR0ZXJuUmVzcG9uc2USVgoNR2V0RXJyb3JzVmlldxIhLmxhcHAud2ViLnYxLkdldEVycm9yc1ZpZXdSZXF1ZXN0GiIubGFwcC53ZWIudjEuR2V0RXJyb3JzVmlld1Jlc3BvbnNlQjBaLmdpdGh1Yi5jb20vc3RycmwvbGFwcC9nZW4vZ28vbGFwcC93ZWIvdjE7d2VidjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message lapp.web.v1.Workspace
@@ -118,12 +118,14 @@ export type DiscoveryRun = Message<"lapp.web.v1.DiscoveryRun"> & {
   currentStep: DiscoveryStep;
 
   /**
-   * @generated from field: string progress_message = 5;
+   * @generated from field: string progress_message = 5 [deprecated = true];
+   * @deprecated
    */
   progressMessage: string;
 
   /**
-   * @generated from field: string error_message = 6;
+   * @generated from field: string error_message = 6 [deprecated = true];
+   * @deprecated
    */
   errorMessage: string;
 
@@ -151,6 +153,16 @@ export type DiscoveryRun = Message<"lapp.web.v1.DiscoveryRun"> & {
    * @generated from field: int32 unmatched_count = 11;
    */
   unmatchedCount: number;
+
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryRunProgress progress = 12;
+   */
+  progress?: DiscoveryRunProgress | undefined;
+
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryRunError error = 13;
+   */
+  error?: DiscoveryRunError | undefined;
 };
 
 /**
@@ -159,6 +171,102 @@ export type DiscoveryRun = Message<"lapp.web.v1.DiscoveryRun"> & {
  */
 export const DiscoveryRunSchema: GenMessage<DiscoveryRun> = /*@__PURE__*/
   messageDesc(file_lapp_web_v1_web, 2);
+
+/**
+ * @generated from message lapp.web.v1.DiscoveryRunProgress
+ */
+export type DiscoveryRunProgress = Message<"lapp.web.v1.DiscoveryRunProgress"> & {
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryStep step = 1;
+   */
+  step: DiscoveryStep;
+
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryLabelBatchProgress label_batch = 2;
+   */
+  labelBatch?: DiscoveryLabelBatchProgress | undefined;
+};
+
+/**
+ * Describes the message lapp.web.v1.DiscoveryRunProgress.
+ * Use `create(DiscoveryRunProgressSchema)` to create a new message.
+ */
+export const DiscoveryRunProgressSchema: GenMessage<DiscoveryRunProgress> = /*@__PURE__*/
+  messageDesc(file_lapp_web_v1_web, 3);
+
+/**
+ * @generated from message lapp.web.v1.DiscoveryLabelBatchProgress
+ */
+export type DiscoveryLabelBatchProgress = Message<"lapp.web.v1.DiscoveryLabelBatchProgress"> & {
+  /**
+   * @generated from field: string event = 1;
+   */
+  event: string;
+
+  /**
+   * @generated from field: int32 batch_number = 2;
+   */
+  batchNumber: number;
+
+  /**
+   * @generated from field: int32 batch_count = 3;
+   */
+  batchCount: number;
+
+  /**
+   * @generated from field: int32 batch_size = 4;
+   */
+  batchSize: number;
+
+  /**
+   * @generated from field: int32 attempt = 5;
+   */
+  attempt: number;
+
+  /**
+   * @generated from field: int32 max_attempts = 6;
+   */
+  maxAttempts: number;
+
+  /**
+   * @generated from field: int32 completed_count = 7;
+   */
+  completedCount: number;
+};
+
+/**
+ * Describes the message lapp.web.v1.DiscoveryLabelBatchProgress.
+ * Use `create(DiscoveryLabelBatchProgressSchema)` to create a new message.
+ */
+export const DiscoveryLabelBatchProgressSchema: GenMessage<DiscoveryLabelBatchProgress> = /*@__PURE__*/
+  messageDesc(file_lapp_web_v1_web, 4);
+
+/**
+ * @generated from message lapp.web.v1.DiscoveryRunError
+ */
+export type DiscoveryRunError = Message<"lapp.web.v1.DiscoveryRunError"> & {
+  /**
+   * @generated from field: string code = 1;
+   */
+  code: string;
+
+  /**
+   * @generated from field: string message = 2;
+   */
+  message: string;
+
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryStep step = 3;
+   */
+  step: DiscoveryStep;
+};
+
+/**
+ * Describes the message lapp.web.v1.DiscoveryRunError.
+ * Use `create(DiscoveryRunErrorSchema)` to create a new message.
+ */
+export const DiscoveryRunErrorSchema: GenMessage<DiscoveryRunError> = /*@__PURE__*/
+  messageDesc(file_lapp_web_v1_web, 5);
 
 /**
  * @generated from message lapp.web.v1.Pattern
@@ -220,7 +328,7 @@ export type Pattern = Message<"lapp.web.v1.Pattern"> & {
  * Use `create(PatternSchema)` to create a new message.
  */
 export const PatternSchema: GenMessage<Pattern> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 3);
+  messageDesc(file_lapp_web_v1_web, 6);
 
 /**
  * @generated from message lapp.web.v1.LineRef
@@ -242,7 +350,7 @@ export type LineRef = Message<"lapp.web.v1.LineRef"> & {
  * Use `create(LineRefSchema)` to create a new message.
  */
 export const LineRefSchema: GenMessage<LineRef> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 4);
+  messageDesc(file_lapp_web_v1_web, 7);
 
 /**
  * @generated from message lapp.web.v1.ErrorPattern
@@ -259,7 +367,7 @@ export type ErrorPattern = Message<"lapp.web.v1.ErrorPattern"> & {
  * Use `create(ErrorPatternSchema)` to create a new message.
  */
 export const ErrorPatternSchema: GenMessage<ErrorPattern> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 5);
+  messageDesc(file_lapp_web_v1_web, 8);
 
 /**
  * @generated from message lapp.web.v1.UnmatchedErrorLine
@@ -286,7 +394,7 @@ export type UnmatchedErrorLine = Message<"lapp.web.v1.UnmatchedErrorLine"> & {
  * Use `create(UnmatchedErrorLineSchema)` to create a new message.
  */
 export const UnmatchedErrorLineSchema: GenMessage<UnmatchedErrorLine> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 6);
+  messageDesc(file_lapp_web_v1_web, 9);
 
 /**
  * @generated from message lapp.web.v1.ListWorkspacesRequest
@@ -299,7 +407,7 @@ export type ListWorkspacesRequest = Message<"lapp.web.v1.ListWorkspacesRequest">
  * Use `create(ListWorkspacesRequestSchema)` to create a new message.
  */
 export const ListWorkspacesRequestSchema: GenMessage<ListWorkspacesRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 7);
+  messageDesc(file_lapp_web_v1_web, 10);
 
 /**
  * @generated from message lapp.web.v1.ListWorkspacesResponse
@@ -316,7 +424,7 @@ export type ListWorkspacesResponse = Message<"lapp.web.v1.ListWorkspacesResponse
  * Use `create(ListWorkspacesResponseSchema)` to create a new message.
  */
 export const ListWorkspacesResponseSchema: GenMessage<ListWorkspacesResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 8);
+  messageDesc(file_lapp_web_v1_web, 11);
 
 /**
  * @generated from message lapp.web.v1.GetWorkspaceRequest
@@ -333,7 +441,7 @@ export type GetWorkspaceRequest = Message<"lapp.web.v1.GetWorkspaceRequest"> & {
  * Use `create(GetWorkspaceRequestSchema)` to create a new message.
  */
 export const GetWorkspaceRequestSchema: GenMessage<GetWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 9);
+  messageDesc(file_lapp_web_v1_web, 12);
 
 /**
  * @generated from message lapp.web.v1.GetWorkspaceResponse
@@ -350,7 +458,7 @@ export type GetWorkspaceResponse = Message<"lapp.web.v1.GetWorkspaceResponse"> &
  * Use `create(GetWorkspaceResponseSchema)` to create a new message.
  */
 export const GetWorkspaceResponseSchema: GenMessage<GetWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 10);
+  messageDesc(file_lapp_web_v1_web, 13);
 
 /**
  * @generated from message lapp.web.v1.CreateWorkspaceRequest
@@ -367,7 +475,7 @@ export type CreateWorkspaceRequest = Message<"lapp.web.v1.CreateWorkspaceRequest
  * Use `create(CreateWorkspaceRequestSchema)` to create a new message.
  */
 export const CreateWorkspaceRequestSchema: GenMessage<CreateWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 11);
+  messageDesc(file_lapp_web_v1_web, 14);
 
 /**
  * @generated from message lapp.web.v1.CreateWorkspaceResponse
@@ -384,7 +492,7 @@ export type CreateWorkspaceResponse = Message<"lapp.web.v1.CreateWorkspaceRespon
  * Use `create(CreateWorkspaceResponseSchema)` to create a new message.
  */
 export const CreateWorkspaceResponseSchema: GenMessage<CreateWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 12);
+  messageDesc(file_lapp_web_v1_web, 15);
 
 /**
  * @generated from message lapp.web.v1.DeleteWorkspaceRequest
@@ -401,7 +509,7 @@ export type DeleteWorkspaceRequest = Message<"lapp.web.v1.DeleteWorkspaceRequest
  * Use `create(DeleteWorkspaceRequestSchema)` to create a new message.
  */
 export const DeleteWorkspaceRequestSchema: GenMessage<DeleteWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 13);
+  messageDesc(file_lapp_web_v1_web, 16);
 
 /**
  * @generated from message lapp.web.v1.DeleteWorkspaceResponse
@@ -414,7 +522,7 @@ export type DeleteWorkspaceResponse = Message<"lapp.web.v1.DeleteWorkspaceRespon
  * Use `create(DeleteWorkspaceResponseSchema)` to create a new message.
  */
 export const DeleteWorkspaceResponseSchema: GenMessage<DeleteWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 14);
+  messageDesc(file_lapp_web_v1_web, 17);
 
 /**
  * @generated from message lapp.web.v1.ListLogFilesRequest
@@ -431,7 +539,7 @@ export type ListLogFilesRequest = Message<"lapp.web.v1.ListLogFilesRequest"> & {
  * Use `create(ListLogFilesRequestSchema)` to create a new message.
  */
 export const ListLogFilesRequestSchema: GenMessage<ListLogFilesRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 15);
+  messageDesc(file_lapp_web_v1_web, 18);
 
 /**
  * @generated from message lapp.web.v1.ListLogFilesResponse
@@ -448,7 +556,7 @@ export type ListLogFilesResponse = Message<"lapp.web.v1.ListLogFilesResponse"> &
  * Use `create(ListLogFilesResponseSchema)` to create a new message.
  */
 export const ListLogFilesResponseSchema: GenMessage<ListLogFilesResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 16);
+  messageDesc(file_lapp_web_v1_web, 19);
 
 /**
  * @generated from message lapp.web.v1.UploadLogFileRequest
@@ -475,7 +583,7 @@ export type UploadLogFileRequest = Message<"lapp.web.v1.UploadLogFileRequest"> &
  * Use `create(UploadLogFileRequestSchema)` to create a new message.
  */
 export const UploadLogFileRequestSchema: GenMessage<UploadLogFileRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 17);
+  messageDesc(file_lapp_web_v1_web, 20);
 
 /**
  * @generated from message lapp.web.v1.UploadLogFileResponse
@@ -492,7 +600,7 @@ export type UploadLogFileResponse = Message<"lapp.web.v1.UploadLogFileResponse">
  * Use `create(UploadLogFileResponseSchema)` to create a new message.
  */
 export const UploadLogFileResponseSchema: GenMessage<UploadLogFileResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 18);
+  messageDesc(file_lapp_web_v1_web, 21);
 
 /**
  * @generated from message lapp.web.v1.DeleteLogFileRequest
@@ -509,7 +617,7 @@ export type DeleteLogFileRequest = Message<"lapp.web.v1.DeleteLogFileRequest"> &
  * Use `create(DeleteLogFileRequestSchema)` to create a new message.
  */
 export const DeleteLogFileRequestSchema: GenMessage<DeleteLogFileRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 19);
+  messageDesc(file_lapp_web_v1_web, 22);
 
 /**
  * @generated from message lapp.web.v1.DeleteLogFileResponse
@@ -522,7 +630,7 @@ export type DeleteLogFileResponse = Message<"lapp.web.v1.DeleteLogFileResponse">
  * Use `create(DeleteLogFileResponseSchema)` to create a new message.
  */
 export const DeleteLogFileResponseSchema: GenMessage<DeleteLogFileResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 20);
+  messageDesc(file_lapp_web_v1_web, 23);
 
 /**
  * @generated from message lapp.web.v1.CreateDiscoveryRunRequest
@@ -544,7 +652,7 @@ export type CreateDiscoveryRunRequest = Message<"lapp.web.v1.CreateDiscoveryRunR
  * Use `create(CreateDiscoveryRunRequestSchema)` to create a new message.
  */
 export const CreateDiscoveryRunRequestSchema: GenMessage<CreateDiscoveryRunRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 21);
+  messageDesc(file_lapp_web_v1_web, 24);
 
 /**
  * @generated from message lapp.web.v1.CreateDiscoveryRunResponse
@@ -561,7 +669,7 @@ export type CreateDiscoveryRunResponse = Message<"lapp.web.v1.CreateDiscoveryRun
  * Use `create(CreateDiscoveryRunResponseSchema)` to create a new message.
  */
 export const CreateDiscoveryRunResponseSchema: GenMessage<CreateDiscoveryRunResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 22);
+  messageDesc(file_lapp_web_v1_web, 25);
 
 /**
  * @generated from message lapp.web.v1.GetDiscoveryRunRequest
@@ -578,7 +686,7 @@ export type GetDiscoveryRunRequest = Message<"lapp.web.v1.GetDiscoveryRunRequest
  * Use `create(GetDiscoveryRunRequestSchema)` to create a new message.
  */
 export const GetDiscoveryRunRequestSchema: GenMessage<GetDiscoveryRunRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 23);
+  messageDesc(file_lapp_web_v1_web, 26);
 
 /**
  * @generated from message lapp.web.v1.GetDiscoveryRunResponse
@@ -595,7 +703,7 @@ export type GetDiscoveryRunResponse = Message<"lapp.web.v1.GetDiscoveryRunRespon
  * Use `create(GetDiscoveryRunResponseSchema)` to create a new message.
  */
 export const GetDiscoveryRunResponseSchema: GenMessage<GetDiscoveryRunResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 24);
+  messageDesc(file_lapp_web_v1_web, 27);
 
 /**
  * @generated from message lapp.web.v1.ListDiscoveryRunsRequest
@@ -612,7 +720,7 @@ export type ListDiscoveryRunsRequest = Message<"lapp.web.v1.ListDiscoveryRunsReq
  * Use `create(ListDiscoveryRunsRequestSchema)` to create a new message.
  */
 export const ListDiscoveryRunsRequestSchema: GenMessage<ListDiscoveryRunsRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 25);
+  messageDesc(file_lapp_web_v1_web, 28);
 
 /**
  * @generated from message lapp.web.v1.ListDiscoveryRunsResponse
@@ -629,7 +737,7 @@ export type ListDiscoveryRunsResponse = Message<"lapp.web.v1.ListDiscoveryRunsRe
  * Use `create(ListDiscoveryRunsResponseSchema)` to create a new message.
  */
 export const ListDiscoveryRunsResponseSchema: GenMessage<ListDiscoveryRunsResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 26);
+  messageDesc(file_lapp_web_v1_web, 29);
 
 /**
  * @generated from message lapp.web.v1.ListPatternsRequest
@@ -646,7 +754,7 @@ export type ListPatternsRequest = Message<"lapp.web.v1.ListPatternsRequest"> & {
  * Use `create(ListPatternsRequestSchema)` to create a new message.
  */
 export const ListPatternsRequestSchema: GenMessage<ListPatternsRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 27);
+  messageDesc(file_lapp_web_v1_web, 30);
 
 /**
  * @generated from message lapp.web.v1.ListPatternsResponse
@@ -663,7 +771,7 @@ export type ListPatternsResponse = Message<"lapp.web.v1.ListPatternsResponse"> &
  * Use `create(ListPatternsResponseSchema)` to create a new message.
  */
 export const ListPatternsResponseSchema: GenMessage<ListPatternsResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 28);
+  messageDesc(file_lapp_web_v1_web, 31);
 
 /**
  * @generated from message lapp.web.v1.GetPatternRequest
@@ -680,7 +788,7 @@ export type GetPatternRequest = Message<"lapp.web.v1.GetPatternRequest"> & {
  * Use `create(GetPatternRequestSchema)` to create a new message.
  */
 export const GetPatternRequestSchema: GenMessage<GetPatternRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 29);
+  messageDesc(file_lapp_web_v1_web, 32);
 
 /**
  * @generated from message lapp.web.v1.GetPatternResponse
@@ -697,7 +805,7 @@ export type GetPatternResponse = Message<"lapp.web.v1.GetPatternResponse"> & {
  * Use `create(GetPatternResponseSchema)` to create a new message.
  */
 export const GetPatternResponseSchema: GenMessage<GetPatternResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 30);
+  messageDesc(file_lapp_web_v1_web, 33);
 
 /**
  * @generated from message lapp.web.v1.GetErrorsViewRequest
@@ -714,7 +822,7 @@ export type GetErrorsViewRequest = Message<"lapp.web.v1.GetErrorsViewRequest"> &
  * Use `create(GetErrorsViewRequestSchema)` to create a new message.
  */
 export const GetErrorsViewRequestSchema: GenMessage<GetErrorsViewRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 31);
+  messageDesc(file_lapp_web_v1_web, 34);
 
 /**
  * @generated from message lapp.web.v1.GetErrorsViewResponse
@@ -736,7 +844,7 @@ export type GetErrorsViewResponse = Message<"lapp.web.v1.GetErrorsViewResponse">
  * Use `create(GetErrorsViewResponseSchema)` to create a new message.
  */
 export const GetErrorsViewResponseSchema: GenMessage<GetErrorsViewResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 32);
+  messageDesc(file_lapp_web_v1_web, 35);
 
 /**
  * @generated from enum lapp.web.v1.WorkspaceStatus
