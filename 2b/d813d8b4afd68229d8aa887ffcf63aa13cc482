@@ -1,0 +1,86 @@
+Makefile
+  s_0cc26d0b17bece::t_0dfa28cf12d604 3-5,12,25-27
+CLAUDE.md
+  s_0cc26d0b17bece::t_416ee2b3ca7b4b 60
+  s_0cc26d0b17bece::t_be7967e5de27f7 14
+  s_0cc26d0b17bece::t_7c665c2c5c8734 54
+pkg/workspace/pipeline.go
+  s_0cc26d0b17bece::t_b34e9458f46aac 25,30-31,441-442,553-554,572
+  s_0cc26d0b17bece::t_76c4c934644699 355,363
+  s_0cc26d0b17bece::t_1923de04c16a1f 84-88,90,106-107,111-112,125-126,131,141-142
+  s_0cc26d0b17bece::t_12e49ec26a575b 230-243,245-254,259-263,269-283
+  s_0cc26d0b17bece::t_7f7ba57f5b63f2 9,27,37,130,208-212
+  s_0cc26d0b17bece::t_61f5aa0f3ebb46 28,38,55,64-65
+  s_0cc26d0b17bece::t_04cae6f5c2a6ac 265
+  s_0cc26d0b17bece::t_c530ec4956ba1f 390-396,398,404,449-548
+  s_0cc26d0b17bece::t_1021fb63e129a5 132-133
+  s_0cc26d0b17bece::t_7876967739d026 215-225
+  s_0cc26d0b17bece::t_6dccd77e721679 26,29,33-36,39
+  s_0cc26d0b17bece::t_5cc971fcdff0fd 51-54,56-63,66-68,347,354,356-362,364-389,397,399-403,405-410,412-440,443-444,549-552,555-571,573
+  s_0cc26d0b17bece::t_84072150582646 411
+  s_0cc26d0b17bece::t_7e0bc4534105c4 244
+pkg/semantic/labeler.go
+  s_0cc26d0b17bece::t_72d6e0b8961be7 122
+  s_0cc26d0b17bece::t_460934a35dc273 58-63
+  s_0cc26d0b17bece::t_e9076f2dd58415 9
+pkg/webapp/service_test.go
+  s_0cc26d0b17bece::t_0e82dc5a43e246 192,195-199,207-213,218-223,228-230,250-251
+  s_0cc26d0b17bece::t_a2afa8461645bf 5,160-191,193
+  s_0cc26d0b17bece::t_542cb0dd46a8f9 8,270,279,284
+pkg/webapp/service.go
+  s_0cc26d0b17bece::t_bfc00e7d6a50c7 453-457,465-470,472-488
+  s_0cc26d0b17bece::t_27dfc17e6a5daa 6,251-252,259-271
+  s_0cc26d0b17bece::t_6b2e27671fcabb 471
+  s_0cc26d0b17bece::t_e36801e0cc9e1f 517-519
+  s_0cc26d0b17bece::t_0c1041489af5b5 444-451
+  s_0cc26d0b17bece::t_d7fef5bd4071b1 237-243,523-527
+docs/web-app-plan.md
+  s_0cc26d0b17bece::t_308530c24562d8 14
+  s_0cc26d0b17bece::t_673c94fe61a455 15
+frontend/src/gen/lapp/web/v1/web_pb.ts
+  s_0cc26d0b17bece::t_0cf8b0a95448d7 121-122,127-128,156-165,175-201,203,209-211,213-216,218-221,223-226,228-231,233-270,331,353,370,397,410,427,444,461,478,495,512,525,542,559,586,603,620,633,655,672,689,706,723,740,757,774,791,808,825,847
+  s_0cc26d0b17bece::t_df04847f1aac8e 15,202,204-208,212,217,222,227,232
+pkg/workspace/discovery.go
+  s_0cc26d0b17bece::t_c6da471f42c13c 49-51,53-56,64-69
+  s_0cc26d0b17bece::t_0c1041489af5b5 34-38,41-48,52,58-63
+  s_0cc26d0b17bece::t_dd6bfad165065d 39-40
+  s_0cc26d0b17bece::t_0c4be87ab216fc 57
+proto/lapp/web/v1/web.proto
+  s_0cc26d0b17bece::t_0d757cc09fd413 58-59,65-74,82-87
+  s_0cc26d0b17bece::t_6ab4f55432f0b6 75-81
+pkg/workspace/pipeline_test.go
+  s_0cc26d0b17bece::t_2382623710998d 105,138-139,158
+  s_0cc26d0b17bece::t_97ec6c6425bcaa 15-16,88-92,95-102,104,108-110,112,123-135,140-143,146,150,154
+  s_0cc26d0b17bece::t_159bf662e5070b 85-87
+  s_0cc26d0b17bece::t_a64575497fddc3 94
+  s_0cc26d0b17bece::t_e31a053472524c 5,164-259,291-309
+  s_0cc26d0b17bece::t_50f46bcda66cca 6
+  s_0cc26d0b17bece::t_0b23e884f22b85 9,11,13,93,103,106-107,111,113-122,136-137,144-145,147-149,151-153,155-157,159-160
+frontend/src/main.tsx
+  s_0cc26d0b17bece::t_2f61cb45bab1df 176,369-370,424
+  s_0cc26d0b17bece::t_a3c72750fdd6c5 14,16,368,371-423
+  s_0cc26d0b17bece::t_8b7ba7fc09a744 173
+frontend/src/styles.css
+  s_0cc26d0b17bece::t_1684953091500e 213-221
+pkg/semantic/labeler_test.go
+  s_0cc26d0b17bece::t_7037fea42cfe73 4,40-51
+README.md
+  s_0cc26d0b17bece::t_c0c40ae9235c0c 40,44
+  s_0cc26d0b17bece::t_2637f9b6743878 13-15,92,101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.3",
+  "base_commit_sha": "2bd813d8b4afd68229d8aa887ffcf63aa13cc482",
+  "prompts": {},
+  "sessions": {
+    "s_0cc26d0b17bece": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e9f70-9292-7b82-a444-7aff3919f38b",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>"
+    }
+  }
+}
