@@ -20,6 +20,10 @@ service WorkspaceService {
   rpc GetDiscoveryRun(GetDiscoveryRunRequest) returns (GetDiscoveryRunResponse);
   rpc ListDiscoveryRuns(ListDiscoveryRunsRequest) returns (ListDiscoveryRunsResponse);
 
+  rpc ImportLogs(ImportLogsRequest) returns (ImportLogsResponse);
+  rpc GetImportRun(GetImportRunRequest) returns (GetImportRunResponse);
+  rpc ListImportRuns(ListImportRunsRequest) returns (ListImportRunsResponse);
+
   rpc ListPatterns(ListPatternsRequest) returns (ListPatternsResponse);
   rpc GetPattern(GetPatternRequest) returns (GetPatternResponse);
   rpc GetErrorsView(GetErrorsViewRequest) returns (GetErrorsViewResponse);
@@ -102,6 +106,44 @@ enum DiscoveryStep {
   DISCOVERY_STEP_DISCOVERING_PATTERNS = 3;
   DISCOVERY_STEP_LABELING_PATTERNS = 4;
   DISCOVERY_STEP_WRITING_RESULTS = 5;
+}
+
+message ImportRun {
+  string name = 1;
+  string import_run_id = 2;
+  ImportRunState state = 3;
+  string source = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp finished_at = 6;
+  int32 entry_count = 7;
+  string log_file_name = 8;
+  ImportRunProgress progress = 9;
+  ImportRunError error = 10;
+}
+
+enum ImportRunState {
+  IMPORT_RUN_STATE_UNSPECIFIED = 0;
+  IMPORT_RUN_STATE_QUEUED = 1;
+  IMPORT_RUN_STATE_RUNNING = 2;
+  IMPORT_RUN_STATE_SUCCEEDED = 3;
+  IMPORT_RUN_STATE_FAILED = 4;
+}
+
+message ImportRunProgress {
+  int32 fetched_count = 1;
+}
+
+message ImportRunError {
+  string code = 1;
+  string message = 2;
+}
+
+message GcpLoggingSource {
+  string project_id = 1;
+  string filter = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  int32 limit = 5;
 }
 
 message Pattern {
@@ -207,6 +249,33 @@ message ListDiscoveryRunsRequest {
 
 message ListDiscoveryRunsResponse {
   repeated DiscoveryRun discovery_runs = 1;
+}
+
+message ImportLogsRequest {
+  string parent = 1;
+  oneof source {
+    GcpLoggingSource gcp_logging = 2;
+  }
+}
+
+message ImportLogsResponse {
+  ImportRun import_run = 1;
+}
+
+message GetImportRunRequest {
+  string name = 1;
+}
+
+message GetImportRunResponse {
+  ImportRun import_run = 1;
+}
+
+message ListImportRunsRequest {
+  string parent = 1;
+}
+
+message ListImportRunsResponse {
+  repeated ImportRun import_runs = 1;
 }
 
 message ListPatternsRequest {

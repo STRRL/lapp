@@ -63,6 +63,15 @@ const (
 	// WorkspaceServiceListDiscoveryRunsProcedure is the fully-qualified name of the WorkspaceService's
 	// ListDiscoveryRuns RPC.
 	WorkspaceServiceListDiscoveryRunsProcedure = "/lapp.web.v1.WorkspaceService/ListDiscoveryRuns"
+	// WorkspaceServiceImportLogsProcedure is the fully-qualified name of the WorkspaceService's
+	// ImportLogs RPC.
+	WorkspaceServiceImportLogsProcedure = "/lapp.web.v1.WorkspaceService/ImportLogs"
+	// WorkspaceServiceGetImportRunProcedure is the fully-qualified name of the WorkspaceService's
+	// GetImportRun RPC.
+	WorkspaceServiceGetImportRunProcedure = "/lapp.web.v1.WorkspaceService/GetImportRun"
+	// WorkspaceServiceListImportRunsProcedure is the fully-qualified name of the WorkspaceService's
+	// ListImportRuns RPC.
+	WorkspaceServiceListImportRunsProcedure = "/lapp.web.v1.WorkspaceService/ListImportRuns"
 	// WorkspaceServiceListPatternsProcedure is the fully-qualified name of the WorkspaceService's
 	// ListPatterns RPC.
 	WorkspaceServiceListPatternsProcedure = "/lapp.web.v1.WorkspaceService/ListPatterns"
@@ -86,6 +95,9 @@ type WorkspaceServiceClient interface {
 	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error)
 	GetDiscoveryRun(context.Context, *connect.Request[v1.GetDiscoveryRunRequest]) (*connect.Response[v1.GetDiscoveryRunResponse], error)
 	ListDiscoveryRuns(context.Context, *connect.Request[v1.ListDiscoveryRunsRequest]) (*connect.Response[v1.ListDiscoveryRunsResponse], error)
+	ImportLogs(context.Context, *connect.Request[v1.ImportLogsRequest]) (*connect.Response[v1.ImportLogsResponse], error)
+	GetImportRun(context.Context, *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error)
+	ListImportRuns(context.Context, *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error)
 	ListPatterns(context.Context, *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error)
 	GetPattern(context.Context, *connect.Request[v1.GetPatternRequest]) (*connect.Response[v1.GetPatternResponse], error)
 	GetErrorsView(context.Context, *connect.Request[v1.GetErrorsViewRequest]) (*connect.Response[v1.GetErrorsViewResponse], error)
@@ -162,6 +174,24 @@ func NewWorkspaceServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(workspaceServiceMethods.ByName("ListDiscoveryRuns")),
 			connect.WithClientOptions(opts...),
 		),
+		importLogs: connect.NewClient[v1.ImportLogsRequest, v1.ImportLogsResponse](
+			httpClient,
+			baseURL+WorkspaceServiceImportLogsProcedure,
+			connect.WithSchema(workspaceServiceMethods.ByName("ImportLogs")),
+			connect.WithClientOptions(opts...),
+		),
+		getImportRun: connect.NewClient[v1.GetImportRunRequest, v1.GetImportRunResponse](
+			httpClient,
+			baseURL+WorkspaceServiceGetImportRunProcedure,
+			connect.WithSchema(workspaceServiceMethods.ByName("GetImportRun")),
+			connect.WithClientOptions(opts...),
+		),
+		listImportRuns: connect.NewClient[v1.ListImportRunsRequest, v1.ListImportRunsResponse](
+			httpClient,
+			baseURL+WorkspaceServiceListImportRunsProcedure,
+			connect.WithSchema(workspaceServiceMethods.ByName("ListImportRuns")),
+			connect.WithClientOptions(opts...),
+		),
 		listPatterns: connect.NewClient[v1.ListPatternsRequest, v1.ListPatternsResponse](
 			httpClient,
 			baseURL+WorkspaceServiceListPatternsProcedure,
@@ -195,6 +225,9 @@ type workspaceServiceClient struct {
 	createDiscoveryRun *connect.Client[v1.CreateDiscoveryRunRequest, v1.CreateDiscoveryRunResponse]
 	getDiscoveryRun    *connect.Client[v1.GetDiscoveryRunRequest, v1.GetDiscoveryRunResponse]
 	listDiscoveryRuns  *connect.Client[v1.ListDiscoveryRunsRequest, v1.ListDiscoveryRunsResponse]
+	importLogs         *connect.Client[v1.ImportLogsRequest, v1.ImportLogsResponse]
+	getImportRun       *connect.Client[v1.GetImportRunRequest, v1.GetImportRunResponse]
+	listImportRuns     *connect.Client[v1.ListImportRunsRequest, v1.ListImportRunsResponse]
 	listPatterns       *connect.Client[v1.ListPatternsRequest, v1.ListPatternsResponse]
 	getPattern         *connect.Client[v1.GetPatternRequest, v1.GetPatternResponse]
 	getErrorsView      *connect.Client[v1.GetErrorsViewRequest, v1.GetErrorsViewResponse]
@@ -250,6 +283,21 @@ func (c *workspaceServiceClient) ListDiscoveryRuns(ctx context.Context, req *con
 	return c.listDiscoveryRuns.CallUnary(ctx, req)
 }
 
+// ImportLogs calls lapp.web.v1.WorkspaceService.ImportLogs.
+func (c *workspaceServiceClient) ImportLogs(ctx context.Context, req *connect.Request[v1.ImportLogsRequest]) (*connect.Response[v1.ImportLogsResponse], error) {
+	return c.importLogs.CallUnary(ctx, req)
+}
+
+// GetImportRun calls lapp.web.v1.WorkspaceService.GetImportRun.
+func (c *workspaceServiceClient) GetImportRun(ctx context.Context, req *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error) {
+	return c.getImportRun.CallUnary(ctx, req)
+}
+
+// ListImportRuns calls lapp.web.v1.WorkspaceService.ListImportRuns.
+func (c *workspaceServiceClient) ListImportRuns(ctx context.Context, req *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error) {
+	return c.listImportRuns.CallUnary(ctx, req)
+}
+
 // ListPatterns calls lapp.web.v1.WorkspaceService.ListPatterns.
 func (c *workspaceServiceClient) ListPatterns(ctx context.Context, req *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error) {
 	return c.listPatterns.CallUnary(ctx, req)
@@ -277,6 +325,9 @@ type WorkspaceServiceHandler interface {
 	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error)
 	GetDiscoveryRun(context.Context, *connect.Request[v1.GetDiscoveryRunRequest]) (*connect.Response[v1.GetDiscoveryRunResponse], error)
 	ListDiscoveryRuns(context.Context, *connect.Request[v1.ListDiscoveryRunsRequest]) (*connect.Response[v1.ListDiscoveryRunsResponse], error)
+	ImportLogs(context.Context, *connect.Request[v1.ImportLogsRequest]) (*connect.Response[v1.ImportLogsResponse], error)
+	GetImportRun(context.Context, *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error)
+	ListImportRuns(context.Context, *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error)
 	ListPatterns(context.Context, *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error)
 	GetPattern(context.Context, *connect.Request[v1.GetPatternRequest]) (*connect.Response[v1.GetPatternResponse], error)
 	GetErrorsView(context.Context, *connect.Request[v1.GetErrorsViewRequest]) (*connect.Response[v1.GetErrorsViewResponse], error)
@@ -349,6 +400,24 @@ func NewWorkspaceServiceHandler(svc WorkspaceServiceHandler, opts ...connect.Han
 		connect.WithSchema(workspaceServiceMethods.ByName("ListDiscoveryRuns")),
 		connect.WithHandlerOptions(opts...),
 	)
+	workspaceServiceImportLogsHandler := connect.NewUnaryHandler(
+		WorkspaceServiceImportLogsProcedure,
+		svc.ImportLogs,
+		connect.WithSchema(workspaceServiceMethods.ByName("ImportLogs")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workspaceServiceGetImportRunHandler := connect.NewUnaryHandler(
+		WorkspaceServiceGetImportRunProcedure,
+		svc.GetImportRun,
+		connect.WithSchema(workspaceServiceMethods.ByName("GetImportRun")),
+		connect.WithHandlerOptions(opts...),
+	)
+	workspaceServiceListImportRunsHandler := connect.NewUnaryHandler(
+		WorkspaceServiceListImportRunsProcedure,
+		svc.ListImportRuns,
+		connect.WithSchema(workspaceServiceMethods.ByName("ListImportRuns")),
+		connect.WithHandlerOptions(opts...),
+	)
 	workspaceServiceListPatternsHandler := connect.NewUnaryHandler(
 		WorkspaceServiceListPatternsProcedure,
 		svc.ListPatterns,
@@ -389,6 +458,12 @@ func NewWorkspaceServiceHandler(svc WorkspaceServiceHandler, opts ...connect.Han
 			workspaceServiceGetDiscoveryRunHandler.ServeHTTP(w, r)
 		case WorkspaceServiceListDiscoveryRunsProcedure:
 			workspaceServiceListDiscoveryRunsHandler.ServeHTTP(w, r)
+		case WorkspaceServiceImportLogsProcedure:
+			workspaceServiceImportLogsHandler.ServeHTTP(w, r)
+		case WorkspaceServiceGetImportRunProcedure:
+			workspaceServiceGetImportRunHandler.ServeHTTP(w, r)
+		case WorkspaceServiceListImportRunsProcedure:
+			workspaceServiceListImportRunsHandler.ServeHTTP(w, r)
 		case WorkspaceServiceListPatternsProcedure:
 			workspaceServiceListPatternsHandler.ServeHTTP(w, r)
 		case WorkspaceServiceGetPatternProcedure:
@@ -442,6 +517,18 @@ func (UnimplementedWorkspaceServiceHandler) GetDiscoveryRun(context.Context, *co
 
 func (UnimplementedWorkspaceServiceHandler) ListDiscoveryRuns(context.Context, *connect.Request[v1.ListDiscoveryRunsRequest]) (*connect.Response[v1.ListDiscoveryRunsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.ListDiscoveryRuns is not implemented"))
+}
+
+func (UnimplementedWorkspaceServiceHandler) ImportLogs(context.Context, *connect.Request[v1.ImportLogsRequest]) (*connect.Response[v1.ImportLogsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.ImportLogs is not implemented"))
+}
+
+func (UnimplementedWorkspaceServiceHandler) GetImportRun(context.Context, *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.GetImportRun is not implemented"))
+}
+
+func (UnimplementedWorkspaceServiceHandler) ListImportRuns(context.Context, *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.ListImportRuns is not implemented"))
 }
 
 func (UnimplementedWorkspaceServiceHandler) ListPatterns(context.Context, *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error) {

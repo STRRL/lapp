@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/gcplog"
 	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -149,6 +151,10 @@ Use ` + "`lapp workspace add-log --topic " + topic + " <logfile>`" + ` to add lo
 var addLogModel string
 var addLogStdin bool
 var addLogTopic string
+var addLogGCPProject string
+var addLogGCPFilter string
+var addLogGCPSince time.Duration
+var addLogGCPLimit int
 
 func workspaceAddLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -157,6 +163,9 @@ func workspaceAddLogCmd() *cobra.Command {
 		Long: `Copy a log file into the workspace's logs/ directory, then run the full
 DiscoveryRun flow (Drain clustering + semantic labeling) to generate run-scoped results.
 
+Logs can come from a file, stdin, or Google Cloud Logging (--gcp-project,
+requires Application Default Credentials).
+
 Requires OPENROUTER_API_KEY environment variable.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAddLog,
@@ -164,6 +173,10 @@ Requires OPENROUTER_API_KEY environment variable.`,
 	cmd.Flags().StringVar(&addLogTopic, "topic", "", "workspace topic (required)")
 	cmd.Flags().StringVar(&addLogModel, "model", "", "override LLM model")
 	cmd.Flags().BoolVar(&addLogStdin, "stdin", false, "read log from stdin")
+	cmd.Flags().StringVar(&addLogGCPProject, "gcp-project", "", "import logs from this Google Cloud project")
+	cmd.Flags().StringVar(&addLogGCPFilter, "gcp-filter", "", "Cloud Logging filter expression")
+	cmd.Flags().DurationVar(&addLogGCPSince, "since", time.Hour, "how far back to fetch Cloud Logging entries")
+	cmd.Flags().IntVar(&addLogGCPLimit, "limit", 10000, "maximum number of Cloud Logging entries to fetch")
 	_ = cmd.MarkFlagRequired("topic")
 	return cmd
 }
@@ -188,7 +201,7 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceAddLog")
 	defer span.End()
 
-	if err := copyLogToWorkspace(dir, args, span.SetAttributes); err != nil {
+	if err := copyLogToWorkspace(ctx, dir, args, span.SetAttributes); err != nil {
 		return err
 	}
 
@@ -206,7 +219,17 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...attribute.KeyValue)) error {
+func copyLogToWorkspace(ctx context.Context, dir string, args []string, setSpanAttributes func(...attribute.KeyValue)) error {
+	if addLogGCPProject != "" {
+		if addLogStdin {
+			return errors.New("--stdin and --gcp-project are mutually exclusive")
+		}
+		if len(args) > 0 {
+			return errors.New("logfile argument and --gcp-project are mutually exclusive")
+		}
+		return importGCPLogs(ctx, dir, setSpanAttributes)
+	}
+
 	if addLogStdin {
 		name := fmt.Sprintf("stdin-%d.log", time.Now().UnixNano())
 		data, err := io.ReadAll(os.Stdin)
@@ -235,6 +258,45 @@ func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...att
 		return errors.Errorf("copy log file: %w", err)
 	}
 	slog.Info("Added log file", "file", filepath.Base(logFile))
+	return nil
+}
+
+// importGCPLogs fetches Cloud Logging entries into the workspace logs
+// directory as a regular log file.
+func importGCPLogs(ctx context.Context, dir string, setSpanAttributes func(...attribute.KeyValue)) error {
+	setSpanAttributes(attribute.String("gcp.project", addLogGCPProject))
+
+	name := fmt.Sprintf("gcp-%s-%s.log", addLogGCPProject, time.Now().UTC().Format("20060102-150405"))
+	path := filepath.Join(dir, "logs", name)
+	file, err := os.Create(path)
+	if err != nil {
+		return errors.Errorf("create import log file: %w", err)
+	}
+
+	count, fetchErr := gcplog.NewFetcher().Fetch(ctx, gcplog.FetchConfig{
+		ProjectID: addLogGCPProject,
+		Filter:    addLogGCPFilter,
+		Since:     time.Now().Add(-addLogGCPSince),
+		Limit:     addLogGCPLimit,
+		OnProgress: func(fetched int) {
+			slog.Info("Fetching GCP logs", "entries", fetched)
+		},
+	}, file)
+	closeErr := file.Close()
+	if fetchErr != nil || closeErr != nil || count == 0 {
+		_ = os.Remove(path)
+	}
+	if fetchErr != nil {
+		return errors.Errorf("fetch gcp logs: %w", fetchErr)
+	}
+	if closeErr != nil {
+		return errors.Errorf("close import log file: %w", closeErr)
+	}
+	if count == 0 {
+		return errors.New("no log entries matched the filter and time range")
+	}
+
+	slog.Info("Imported GCP logs", "name", name, "entries", count)
 	return nil
 }
 

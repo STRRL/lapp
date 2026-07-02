@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertTriangle,
+  CloudDownload,
   FileText,
   FolderOpen,
   Play,
@@ -14,10 +15,12 @@ import {
   DiscoveryRun,
   DiscoveryRunState,
   DiscoveryStep,
+  ImportRun,
+  ImportRunState,
   Pattern,
   WorkspaceStatus
 } from "./gen/lapp/web/v1/web_pb";
-import { useAppStore } from "./store";
+import { GcpImportParams, useAppStore } from "./store";
 import "./styles.css";
 
 function App() {
@@ -49,6 +52,11 @@ function App() {
   const uploadFiles = useAppStore((state) => state.uploadFiles);
   const deleteLogFile = useAppStore((state) => state.deleteLogFile);
   const startDiscovery = useAppStore((state) => state.startDiscovery);
+  const importDialogOpen = useAppStore((state) => state.importDialogOpen);
+  const activeImportRun = useAppStore((state) => state.activeImportRun);
+  const setImportDialogOpen = useAppStore((state) => state.setImportDialogOpen);
+  const startGcpImport = useAppStore((state) => state.startGcpImport);
+  const refreshActiveImportRun = useAppStore((state) => state.refreshActiveImportRun);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedWorkspace = useMemo(
@@ -64,6 +72,7 @@ function App() {
     [patterns, selectedPatternName]
   );
   const isDiscovering = selectedWorkspace?.status === WorkspaceStatus.DISCOVERING;
+  const isImporting = activeImportRun?.state === ImportRunState.RUNNING;
 
   useEffect(() => {
     void runAction(refreshWorkspaces);
@@ -98,6 +107,20 @@ function App() {
     }, 1500);
     return () => window.clearInterval(timer);
   }, [refreshSelectedWorkspace, runAction, selectedRun?.name, selectedRun?.state]);
+
+  useEffect(() => {
+    if (!isImporting) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshActiveImportRun().catch((error: unknown) => {
+        void runAction(async () => {
+          throw error;
+        });
+      });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [isImporting, refreshActiveImportRun, runAction, activeImportRun?.name]);
 
   return (
     <main className="app-shell">
@@ -202,6 +225,7 @@ function App() {
 
             {activeTab === "logs" && (
               <section className="panel">
+                {activeImportRun && <ImportStrip run={activeImportRun} />}
                 <div className="panel-toolbar">
                   <input
                     ref={fileInputRef}
@@ -217,7 +241,11 @@ function App() {
                       });
                     }}
                   />
-                  <button onClick={() => fileInputRef.current?.click()} disabled={busy || isDiscovering}>
+                  <button onClick={() => setImportDialogOpen(true)} disabled={busy || isDiscovering || isImporting}>
+                    <CloudDownload size={17} />
+                    Import from GCP
+                  </button>
+                  <button onClick={() => fileInputRef.current?.click()} disabled={busy || isDiscovering || isImporting}>
                     <Upload size={17} />
                     Upload
                   </button>
@@ -278,8 +306,113 @@ function App() {
           <div className="empty-state">Create or select a workspace.</div>
         )}
       </section>
+
+      {importDialogOpen && (
+        <GcpImportDialog
+          busy={busy}
+          onCancel={() => setImportDialogOpen(false)}
+          onSubmit={(params) => void runAction(() => startGcpImport(params))}
+        />
+      )}
     </main>
   );
+}
+
+function GcpImportDialog({
+  busy,
+  onCancel,
+  onSubmit
+}: {
+  busy: boolean;
+  onCancel: () => void;
+  onSubmit: (params: GcpImportParams) => void;
+}) {
+  const [projectId, setProjectId] = useState("");
+  const [filter, setFilter] = useState("");
+  const [sinceHours, setSinceHours] = useState(1);
+  const [limit, setLimit] = useState(10000);
+
+  return (
+    <div className="dialog-backdrop" onClick={onCancel}>
+      <form
+        className="dialog"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit({ projectId: projectId.trim(), filter: filter.trim(), sinceHours, limit });
+        }}
+      >
+        <h2>Import from Google Cloud Logging</h2>
+        <p>Fetches entries with local Application Default Credentials and adds them as a log file.</p>
+        <label>
+          Project ID
+          <input value={projectId} onChange={(event) => setProjectId(event.target.value)} placeholder="my-gcp-project" required />
+        </label>
+        <label>
+          Filter (optional)
+          <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder='resource.type="k8s_container" AND severity>=WARNING' />
+        </label>
+        <div className="dialog-row">
+          <label>
+            Time range (hours)
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={sinceHours}
+              onChange={(event) => setSinceHours(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Max entries
+            <input
+              type="number"
+              min={1}
+              max={100000}
+              value={limit}
+              onChange={(event) => setLimit(Number(event.target.value))}
+            />
+          </label>
+        </div>
+        <footer>
+          <button type="button" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy || !projectId.trim()}>
+            <CloudDownload size={17} />
+            Import
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+function ImportStrip({ run }: { run: ImportRun }) {
+  const failed = run.state === ImportRunState.FAILED;
+  return (
+    <section className={failed ? "run-strip failed" : "run-strip"}>
+      <div>
+        <strong>{importStateLabel(run.state)}</strong>
+        <span>{importRunMessage(run)}</span>
+      </div>
+    </section>
+  );
+}
+
+function importStateLabel(state: ImportRunState) {
+  return `GCP import ${ImportRunState[state]?.toLowerCase() ?? "unknown"}`;
+}
+
+function importRunMessage(run: ImportRun) {
+  if (run.state === ImportRunState.FAILED) {
+    return run.error?.message || "Import failed without an error message.";
+  }
+  if (run.state === ImportRunState.SUCCEEDED) {
+    return `Imported ${run.entryCount} entries into ${run.logFileName}.`;
+  }
+  const fetched = run.progress?.fetchedCount ?? 0;
+  return fetched > 0 ? `Fetching entries, ${fetched} so far.` : "Fetching entries from Cloud Logging.";
 }
 
 function PatternRow({

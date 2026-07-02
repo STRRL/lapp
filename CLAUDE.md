@@ -26,6 +26,7 @@ go test -v -run TestFunctionName ./pkg/pattern/
 go run ./cmd/lapp/ workspace create <topic>
 go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile> [--model <model>]
 go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin [--model <model>]
+go run ./cmd/lapp/ workspace add-log --topic <topic> --gcp-project <project> [--gcp-filter <filter>] [--since 1h] [--limit 10000]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
 ```
@@ -37,6 +38,7 @@ Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/wo
 ```
 cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/analyze)
 pkg/logsource/           Read log files → channel of LogLine
+pkg/gcplog/              Fetch Google Cloud Logging entries → text log lines
 pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
 pkg/semantic/            LLM-based semantic labeling of Drain patterns
@@ -78,6 +80,7 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 - `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace add-log`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - ACP provider credentials/login: Required for `workspace analyze` through the selected provider
+- Google Application Default Credentials: Required for GCP log import (`add-log --gcp-project` and the web ImportLogs RPC); run `gcloud auth application-default login`
 - `.env` file is auto-loaded via godotenv
 
 ## Tech Stack

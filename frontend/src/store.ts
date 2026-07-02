@@ -1,9 +1,12 @@
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { ConnectError } from "@connectrpc/connect";
 import { create } from "zustand";
 import { workspaceClient } from "./api";
 import {
   DiscoveryRun,
   DiscoveryRunState,
+  ImportRun,
+  ImportRunState,
   LogFile,
   Pattern,
   UnmatchedErrorLine,
@@ -11,6 +14,13 @@ import {
 } from "./gen/lapp/web/v1/web_pb";
 
 export type Tab = "logs" | "patterns" | "errors";
+
+export type GcpImportParams = {
+  projectId: string;
+  filter: string;
+  sinceHours: number;
+  limit: number;
+};
 
 type AppState = {
   workspaces: Workspace[];
@@ -26,6 +36,8 @@ type AppState = {
   newWorkspaceID: string;
   notice: string;
   busy: boolean;
+  importDialogOpen: boolean;
+  activeImportRun: ImportRun | undefined;
 };
 
 type AppActions = {
@@ -44,6 +56,9 @@ type AppActions = {
   uploadFiles: (files: FileList | null) => Promise<void>;
   deleteLogFile: (logFile: LogFile) => Promise<void>;
   startDiscovery: () => Promise<void>;
+  setImportDialogOpen: (open: boolean) => void;
+  startGcpImport: (params: GcpImportParams) => Promise<void>;
+  refreshActiveImportRun: () => Promise<void>;
 };
 
 const emptyResults = {
@@ -66,6 +81,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   newWorkspaceID: "",
   notice: "",
   busy: false,
+  importDialogOpen: false,
+  activeImportRun: undefined,
 
   setActiveTab: (activeTab) => set({ activeTab }),
   setNewWorkspaceID: (newWorkspaceID) => set({ newWorkspaceID }),
@@ -76,6 +93,7 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       selectedPatternName: "",
       logFiles: [],
       discoveryRuns: [],
+      activeImportRun: undefined,
       ...emptyResults
     }),
   selectRun: (selectedRunName) => set({ selectedRunName, selectedPatternName: "" }),
@@ -222,6 +240,41 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     set({ selectedRunName: response.discoveryRun?.name || "" });
     await get().refreshWorkspaceDetails(selectedWorkspaceName);
     await get().refreshWorkspaces();
+  },
+
+  setImportDialogOpen: (importDialogOpen) => set({ importDialogOpen }),
+
+  startGcpImport: async (params) => {
+    const selectedWorkspaceName = get().selectedWorkspaceName;
+    if (!selectedWorkspaceName) return;
+
+    const startTime = timestampFromDate(new Date(Date.now() - params.sinceHours * 3_600_000));
+    const response = await workspaceClient.importLogs({
+      parent: selectedWorkspaceName,
+      source: {
+        case: "gcpLogging",
+        value: {
+          projectId: params.projectId,
+          filter: params.filter,
+          startTime,
+          limit: params.limit
+        }
+      }
+    });
+    set({ importDialogOpen: false, activeImportRun: response.importRun });
+  },
+
+  refreshActiveImportRun: async () => {
+    const active = get().activeImportRun;
+    if (!active) return;
+
+    const response = await workspaceClient.getImportRun({ name: active.name });
+    const run = response.importRun;
+    set({ activeImportRun: run });
+    if (run?.state === ImportRunState.SUCCEEDED) {
+      await get().refreshWorkspaceDetails();
+      await get().refreshWorkspaces();
+    }
   }
 }));
 
