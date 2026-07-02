@@ -433,6 +433,57 @@ th {
   color: #66768a;
 }
 
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 32, 0.45);
+  z-index: 10;
+}
+
+.dialog {
+  display: grid;
+  gap: 12px;
+  width: min(480px, calc(100vw - 32px));
+  border: 1px solid #d8e0e8;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.dialog p {
+  margin: 0;
+  color: #66768a;
+  font-size: 14px;
+}
+
+.dialog label {
+  display: grid;
+  gap: 5px;
+  color: #526174;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dialog-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;

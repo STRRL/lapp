@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
 	"github.com/strrl/lapp/gen/go/lapp/web/v1/webv1connect"
+	"github.com/strrl/lapp/pkg/gcplog"
 	"github.com/strrl/lapp/pkg/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -27,12 +28,13 @@ var workspaceIDPattern = regexp.MustCompile(`[^a-z0-9]+`)
 var errorLikePattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
 
 type WorkspaceService struct {
-	root    string
-	apiKey  string
-	model   string
-	mu      sync.Mutex
-	running map[string]bool
-	labeler workspace.PatternLabeler
+	root       string
+	apiKey     string
+	model      string
+	mu         sync.Mutex
+	running    map[string]bool
+	labeler    workspace.PatternLabeler
+	gcpFetcher gcplog.Fetcher
 }
 
 type ServiceConfig struct {
@@ -40,6 +42,9 @@ type ServiceConfig struct {
 	APIKey  string
 	Model   string
 	Labeler workspace.PatternLabeler
+	// GcpFetcher fetches logs from Google Cloud Logging for ImportLogs.
+	// Nil means the real Cloud Logging admin API client.
+	GcpFetcher gcplog.Fetcher
 }
 
 func NewWorkspaceService(config ServiceConfig) (*WorkspaceService, error) {
@@ -51,14 +56,22 @@ func NewWorkspaceService(config ServiceConfig) (*WorkspaceService, error) {
 		}
 		root = filepath.Join(home, ".lapp", "workspaces")
 	}
+	fetcher := config.GcpFetcher
+	if fetcher == nil {
+		fetcher = gcplog.NewFetcher()
+	}
 	service := &WorkspaceService{
-		root:    root,
-		apiKey:  config.APIKey,
-		model:   config.Model,
-		running: make(map[string]bool),
-		labeler: config.Labeler,
+		root:       root,
+		apiKey:     config.APIKey,
+		model:      config.Model,
+		running:    make(map[string]bool),
+		labeler:    config.Labeler,
+		gcpFetcher: fetcher,
 	}
 	if err := service.recoverInterruptedDiscoveryRuns(); err != nil {
+		return nil, err
+	}
+	if err := service.recoverInterruptedImportRuns(); err != nil {
 		return nil, err
 	}
 	return service, nil
@@ -230,7 +243,7 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 	}
 	runID, uuidErr := uuid.NewV7()
 	if uuidErr != nil {
-		s.setRunning(id, false)
+		s.clearRunning(id)
 		return nil, connect.NewError(connect.CodeInternal, uuidErr)
 	}
 	record := workspace.DiscoveryRunRecord{
@@ -243,11 +256,11 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 		StartedAt: time.Now().UTC(),
 	}
 	if err := workspace.WriteDiscoveryRunRecord(s.workspaceDir(id), record); err != nil {
-		s.setRunning(id, false)
+		s.clearRunning(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	go func() {
-		defer s.setRunning(id, false)
+		defer s.clearRunning(id)
 		slog.Info("DiscoveryRun started", "workspace", id, "run", runID.String())
 		result, err := workspace.Discover(context.Background(), workspace.DiscoveryConfig{
 			Dir:     s.workspaceDir(id),
@@ -568,13 +581,9 @@ func (s *WorkspaceService) reserveDiscovery(id string) bool {
 	return true
 }
 
-func (s *WorkspaceService) setRunning(id string, running bool) {
+func (s *WorkspaceService) clearRunning(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if running {
-		s.running[id] = true
-		return
-	}
 	delete(s.running, id)
 }
 

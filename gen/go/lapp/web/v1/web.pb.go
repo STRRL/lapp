@@ -190,6 +190,61 @@ func (DiscoveryStep) EnumDescriptor() ([]byte, []int) {
 	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{2}
 }
 
+type ImportRunState int32
+
+const (
+	ImportRunState_IMPORT_RUN_STATE_UNSPECIFIED ImportRunState = 0
+	ImportRunState_IMPORT_RUN_STATE_QUEUED      ImportRunState = 1
+	ImportRunState_IMPORT_RUN_STATE_RUNNING     ImportRunState = 2
+	ImportRunState_IMPORT_RUN_STATE_SUCCEEDED   ImportRunState = 3
+	ImportRunState_IMPORT_RUN_STATE_FAILED      ImportRunState = 4
+)
+
+// Enum value maps for ImportRunState.
+var (
+	ImportRunState_name = map[int32]string{
+		0: "IMPORT_RUN_STATE_UNSPECIFIED",
+		1: "IMPORT_RUN_STATE_QUEUED",
+		2: "IMPORT_RUN_STATE_RUNNING",
+		3: "IMPORT_RUN_STATE_SUCCEEDED",
+		4: "IMPORT_RUN_STATE_FAILED",
+	}
+	ImportRunState_value = map[string]int32{
+		"IMPORT_RUN_STATE_UNSPECIFIED": 0,
+		"IMPORT_RUN_STATE_QUEUED":      1,
+		"IMPORT_RUN_STATE_RUNNING":     2,
+		"IMPORT_RUN_STATE_SUCCEEDED":   3,
+		"IMPORT_RUN_STATE_FAILED":      4,
+	}
+)
+
+func (x ImportRunState) Enum() *ImportRunState {
+	p := new(ImportRunState)
+	*p = x
+	return p
+}
+
+func (x ImportRunState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImportRunState) Descriptor() protoreflect.EnumDescriptor {
+	return file_lapp_web_v1_web_proto_enumTypes[3].Descriptor()
+}
+
+func (ImportRunState) Type() protoreflect.EnumType {
+	return &file_lapp_web_v1_web_proto_enumTypes[3]
+}
+
+func (x ImportRunState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImportRunState.Descriptor instead.
+func (ImportRunState) EnumDescriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{3}
+}
+
 type Workspace struct {
 	state                        protoimpl.MessageState `protogen:"open.v1"`
 	Name                         string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -698,6 +753,294 @@ func (x *DiscoveryRunError) GetStep() DiscoveryStep {
 	return DiscoveryStep_DISCOVERY_STEP_UNSPECIFIED
 }
 
+type ImportRun struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	ImportRunId   string                 `protobuf:"bytes,2,opt,name=import_run_id,json=importRunId,proto3" json:"import_run_id,omitempty"`
+	State         ImportRunState         `protobuf:"varint,3,opt,name=state,proto3,enum=lapp.web.v1.ImportRunState" json:"state,omitempty"`
+	Source        string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	EntryCount    int32                  `protobuf:"varint,7,opt,name=entry_count,json=entryCount,proto3" json:"entry_count,omitempty"`
+	LogFileName   string                 `protobuf:"bytes,8,opt,name=log_file_name,json=logFileName,proto3" json:"log_file_name,omitempty"`
+	Progress      *ImportRunProgress     `protobuf:"bytes,9,opt,name=progress,proto3" json:"progress,omitempty"`
+	Error         *ImportRunError        `protobuf:"bytes,10,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportRun) Reset() {
+	*x = ImportRun{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportRun) ProtoMessage() {}
+
+func (x *ImportRun) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportRun.ProtoReflect.Descriptor instead.
+func (*ImportRun) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ImportRun) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ImportRun) GetImportRunId() string {
+	if x != nil {
+		return x.ImportRunId
+	}
+	return ""
+}
+
+func (x *ImportRun) GetState() ImportRunState {
+	if x != nil {
+		return x.State
+	}
+	return ImportRunState_IMPORT_RUN_STATE_UNSPECIFIED
+}
+
+func (x *ImportRun) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ImportRun) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *ImportRun) GetFinishedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return nil
+}
+
+func (x *ImportRun) GetEntryCount() int32 {
+	if x != nil {
+		return x.EntryCount
+	}
+	return 0
+}
+
+func (x *ImportRun) GetLogFileName() string {
+	if x != nil {
+		return x.LogFileName
+	}
+	return ""
+}
+
+func (x *ImportRun) GetProgress() *ImportRunProgress {
+	if x != nil {
+		return x.Progress
+	}
+	return nil
+}
+
+func (x *ImportRun) GetError() *ImportRunError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type ImportRunProgress struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FetchedCount  int32                  `protobuf:"varint,1,opt,name=fetched_count,json=fetchedCount,proto3" json:"fetched_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportRunProgress) Reset() {
+	*x = ImportRunProgress{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportRunProgress) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportRunProgress) ProtoMessage() {}
+
+func (x *ImportRunProgress) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportRunProgress.ProtoReflect.Descriptor instead.
+func (*ImportRunProgress) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ImportRunProgress) GetFetchedCount() int32 {
+	if x != nil {
+		return x.FetchedCount
+	}
+	return 0
+}
+
+type ImportRunError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportRunError) Reset() {
+	*x = ImportRunError{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportRunError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportRunError) ProtoMessage() {}
+
+func (x *ImportRunError) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportRunError.ProtoReflect.Descriptor instead.
+func (*ImportRunError) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ImportRunError) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *ImportRunError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type GcpLoggingSource struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ProjectId     string                 `protobuf:"bytes,1,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"`
+	Filter        string                 `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
+	StartTime     *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`
+	EndTime       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
+	Limit         int32                  `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GcpLoggingSource) Reset() {
+	*x = GcpLoggingSource{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GcpLoggingSource) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GcpLoggingSource) ProtoMessage() {}
+
+func (x *GcpLoggingSource) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GcpLoggingSource.ProtoReflect.Descriptor instead.
+func (*GcpLoggingSource) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GcpLoggingSource) GetProjectId() string {
+	if x != nil {
+		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *GcpLoggingSource) GetFilter() string {
+	if x != nil {
+		return x.Filter
+	}
+	return ""
+}
+
+func (x *GcpLoggingSource) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *GcpLoggingSource) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+func (x *GcpLoggingSource) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
 type Pattern struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -716,7 +1059,7 @@ type Pattern struct {
 
 func (x *Pattern) Reset() {
 	*x = Pattern{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[6]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -728,7 +1071,7 @@ func (x *Pattern) String() string {
 func (*Pattern) ProtoMessage() {}
 
 func (x *Pattern) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[6]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -741,7 +1084,7 @@ func (x *Pattern) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pattern.ProtoReflect.Descriptor instead.
 func (*Pattern) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{6}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Pattern) GetName() string {
@@ -824,7 +1167,7 @@ type LineRef struct {
 
 func (x *LineRef) Reset() {
 	*x = LineRef{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[7]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -836,7 +1179,7 @@ func (x *LineRef) String() string {
 func (*LineRef) ProtoMessage() {}
 
 func (x *LineRef) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[7]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -849,7 +1192,7 @@ func (x *LineRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LineRef.ProtoReflect.Descriptor instead.
 func (*LineRef) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{7}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *LineRef) GetFileName() string {
@@ -875,7 +1218,7 @@ type ErrorPattern struct {
 
 func (x *ErrorPattern) Reset() {
 	*x = ErrorPattern{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[8]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -887,7 +1230,7 @@ func (x *ErrorPattern) String() string {
 func (*ErrorPattern) ProtoMessage() {}
 
 func (x *ErrorPattern) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[8]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -900,7 +1243,7 @@ func (x *ErrorPattern) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorPattern.ProtoReflect.Descriptor instead.
 func (*ErrorPattern) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{8}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ErrorPattern) GetPattern() *Pattern {
@@ -921,7 +1264,7 @@ type UnmatchedErrorLine struct {
 
 func (x *UnmatchedErrorLine) Reset() {
 	*x = UnmatchedErrorLine{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[9]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -933,7 +1276,7 @@ func (x *UnmatchedErrorLine) String() string {
 func (*UnmatchedErrorLine) ProtoMessage() {}
 
 func (x *UnmatchedErrorLine) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[9]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,7 +1289,7 @@ func (x *UnmatchedErrorLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnmatchedErrorLine.ProtoReflect.Descriptor instead.
 func (*UnmatchedErrorLine) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{9}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *UnmatchedErrorLine) GetFileName() string {
@@ -978,7 +1321,7 @@ type ListWorkspacesRequest struct {
 
 func (x *ListWorkspacesRequest) Reset() {
 	*x = ListWorkspacesRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[10]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -990,7 +1333,7 @@ func (x *ListWorkspacesRequest) String() string {
 func (*ListWorkspacesRequest) ProtoMessage() {}
 
 func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[10]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1003,7 +1346,7 @@ func (x *ListWorkspacesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesRequest.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{10}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{14}
 }
 
 type ListWorkspacesResponse struct {
@@ -1015,7 +1358,7 @@ type ListWorkspacesResponse struct {
 
 func (x *ListWorkspacesResponse) Reset() {
 	*x = ListWorkspacesResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[11]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1027,7 +1370,7 @@ func (x *ListWorkspacesResponse) String() string {
 func (*ListWorkspacesResponse) ProtoMessage() {}
 
 func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[11]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1040,7 +1383,7 @@ func (x *ListWorkspacesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkspacesResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkspacesResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{11}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ListWorkspacesResponse) GetWorkspaces() []*Workspace {
@@ -1059,7 +1402,7 @@ type GetWorkspaceRequest struct {
 
 func (x *GetWorkspaceRequest) Reset() {
 	*x = GetWorkspaceRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[12]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1071,7 +1414,7 @@ func (x *GetWorkspaceRequest) String() string {
 func (*GetWorkspaceRequest) ProtoMessage() {}
 
 func (x *GetWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[12]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1084,7 +1427,7 @@ func (x *GetWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{12}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetWorkspaceRequest) GetName() string {
@@ -1103,7 +1446,7 @@ type GetWorkspaceResponse struct {
 
 func (x *GetWorkspaceResponse) Reset() {
 	*x = GetWorkspaceResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[13]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1115,7 +1458,7 @@ func (x *GetWorkspaceResponse) String() string {
 func (*GetWorkspaceResponse) ProtoMessage() {}
 
 func (x *GetWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[13]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1128,7 +1471,7 @@ func (x *GetWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{13}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *GetWorkspaceResponse) GetWorkspace() *Workspace {
@@ -1147,7 +1490,7 @@ type CreateWorkspaceRequest struct {
 
 func (x *CreateWorkspaceRequest) Reset() {
 	*x = CreateWorkspaceRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[14]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1159,7 +1502,7 @@ func (x *CreateWorkspaceRequest) String() string {
 func (*CreateWorkspaceRequest) ProtoMessage() {}
 
 func (x *CreateWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[14]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1172,7 +1515,7 @@ func (x *CreateWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*CreateWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{14}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CreateWorkspaceRequest) GetWorkspaceId() string {
@@ -1191,7 +1534,7 @@ type CreateWorkspaceResponse struct {
 
 func (x *CreateWorkspaceResponse) Reset() {
 	*x = CreateWorkspaceResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[15]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1203,7 +1546,7 @@ func (x *CreateWorkspaceResponse) String() string {
 func (*CreateWorkspaceResponse) ProtoMessage() {}
 
 func (x *CreateWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[15]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1216,7 +1559,7 @@ func (x *CreateWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*CreateWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{15}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateWorkspaceResponse) GetWorkspace() *Workspace {
@@ -1235,7 +1578,7 @@ type DeleteWorkspaceRequest struct {
 
 func (x *DeleteWorkspaceRequest) Reset() {
 	*x = DeleteWorkspaceRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[16]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1247,7 +1590,7 @@ func (x *DeleteWorkspaceRequest) String() string {
 func (*DeleteWorkspaceRequest) ProtoMessage() {}
 
 func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[16]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1260,7 +1603,7 @@ func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspaceRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspaceRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{16}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *DeleteWorkspaceRequest) GetName() string {
@@ -1278,7 +1621,7 @@ type DeleteWorkspaceResponse struct {
 
 func (x *DeleteWorkspaceResponse) Reset() {
 	*x = DeleteWorkspaceResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[17]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1290,7 +1633,7 @@ func (x *DeleteWorkspaceResponse) String() string {
 func (*DeleteWorkspaceResponse) ProtoMessage() {}
 
 func (x *DeleteWorkspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[17]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1303,7 +1646,7 @@ func (x *DeleteWorkspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkspaceResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWorkspaceResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{17}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{21}
 }
 
 type ListLogFilesRequest struct {
@@ -1315,7 +1658,7 @@ type ListLogFilesRequest struct {
 
 func (x *ListLogFilesRequest) Reset() {
 	*x = ListLogFilesRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[18]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1327,7 +1670,7 @@ func (x *ListLogFilesRequest) String() string {
 func (*ListLogFilesRequest) ProtoMessage() {}
 
 func (x *ListLogFilesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[18]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1340,7 +1683,7 @@ func (x *ListLogFilesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLogFilesRequest.ProtoReflect.Descriptor instead.
 func (*ListLogFilesRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{18}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListLogFilesRequest) GetParent() string {
@@ -1359,7 +1702,7 @@ type ListLogFilesResponse struct {
 
 func (x *ListLogFilesResponse) Reset() {
 	*x = ListLogFilesResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[19]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1371,7 +1714,7 @@ func (x *ListLogFilesResponse) String() string {
 func (*ListLogFilesResponse) ProtoMessage() {}
 
 func (x *ListLogFilesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[19]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,7 +1727,7 @@ func (x *ListLogFilesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLogFilesResponse.ProtoReflect.Descriptor instead.
 func (*ListLogFilesResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{19}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListLogFilesResponse) GetLogFiles() []*LogFile {
@@ -1405,7 +1748,7 @@ type UploadLogFileRequest struct {
 
 func (x *UploadLogFileRequest) Reset() {
 	*x = UploadLogFileRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[20]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1417,7 +1760,7 @@ func (x *UploadLogFileRequest) String() string {
 func (*UploadLogFileRequest) ProtoMessage() {}
 
 func (x *UploadLogFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[20]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1430,7 +1773,7 @@ func (x *UploadLogFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogFileRequest.ProtoReflect.Descriptor instead.
 func (*UploadLogFileRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{20}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *UploadLogFileRequest) GetParent() string {
@@ -1463,7 +1806,7 @@ type UploadLogFileResponse struct {
 
 func (x *UploadLogFileResponse) Reset() {
 	*x = UploadLogFileResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[21]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1475,7 +1818,7 @@ func (x *UploadLogFileResponse) String() string {
 func (*UploadLogFileResponse) ProtoMessage() {}
 
 func (x *UploadLogFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[21]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1488,7 +1831,7 @@ func (x *UploadLogFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadLogFileResponse.ProtoReflect.Descriptor instead.
 func (*UploadLogFileResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{21}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *UploadLogFileResponse) GetLogFile() *LogFile {
@@ -1507,7 +1850,7 @@ type DeleteLogFileRequest struct {
 
 func (x *DeleteLogFileRequest) Reset() {
 	*x = DeleteLogFileRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[22]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1519,7 +1862,7 @@ func (x *DeleteLogFileRequest) String() string {
 func (*DeleteLogFileRequest) ProtoMessage() {}
 
 func (x *DeleteLogFileRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[22]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1532,7 +1875,7 @@ func (x *DeleteLogFileRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLogFileRequest.ProtoReflect.Descriptor instead.
 func (*DeleteLogFileRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{22}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DeleteLogFileRequest) GetName() string {
@@ -1550,7 +1893,7 @@ type DeleteLogFileResponse struct {
 
 func (x *DeleteLogFileResponse) Reset() {
 	*x = DeleteLogFileResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[23]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1562,7 +1905,7 @@ func (x *DeleteLogFileResponse) String() string {
 func (*DeleteLogFileResponse) ProtoMessage() {}
 
 func (x *DeleteLogFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[23]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1575,7 +1918,7 @@ func (x *DeleteLogFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteLogFileResponse.ProtoReflect.Descriptor instead.
 func (*DeleteLogFileResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{23}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{27}
 }
 
 type CreateDiscoveryRunRequest struct {
@@ -1588,7 +1931,7 @@ type CreateDiscoveryRunRequest struct {
 
 func (x *CreateDiscoveryRunRequest) Reset() {
 	*x = CreateDiscoveryRunRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[24]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1600,7 +1943,7 @@ func (x *CreateDiscoveryRunRequest) String() string {
 func (*CreateDiscoveryRunRequest) ProtoMessage() {}
 
 func (x *CreateDiscoveryRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[24]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1613,7 +1956,7 @@ func (x *CreateDiscoveryRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDiscoveryRunRequest.ProtoReflect.Descriptor instead.
 func (*CreateDiscoveryRunRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{24}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CreateDiscoveryRunRequest) GetParent() string {
@@ -1639,7 +1982,7 @@ type CreateDiscoveryRunResponse struct {
 
 func (x *CreateDiscoveryRunResponse) Reset() {
 	*x = CreateDiscoveryRunResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[25]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1651,7 +1994,7 @@ func (x *CreateDiscoveryRunResponse) String() string {
 func (*CreateDiscoveryRunResponse) ProtoMessage() {}
 
 func (x *CreateDiscoveryRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[25]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1664,7 +2007,7 @@ func (x *CreateDiscoveryRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateDiscoveryRunResponse.ProtoReflect.Descriptor instead.
 func (*CreateDiscoveryRunResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{25}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CreateDiscoveryRunResponse) GetDiscoveryRun() *DiscoveryRun {
@@ -1683,7 +2026,7 @@ type GetDiscoveryRunRequest struct {
 
 func (x *GetDiscoveryRunRequest) Reset() {
 	*x = GetDiscoveryRunRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[26]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1695,7 +2038,7 @@ func (x *GetDiscoveryRunRequest) String() string {
 func (*GetDiscoveryRunRequest) ProtoMessage() {}
 
 func (x *GetDiscoveryRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[26]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1708,7 +2051,7 @@ func (x *GetDiscoveryRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiscoveryRunRequest.ProtoReflect.Descriptor instead.
 func (*GetDiscoveryRunRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{26}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetDiscoveryRunRequest) GetName() string {
@@ -1727,7 +2070,7 @@ type GetDiscoveryRunResponse struct {
 
 func (x *GetDiscoveryRunResponse) Reset() {
 	*x = GetDiscoveryRunResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[27]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1739,7 +2082,7 @@ func (x *GetDiscoveryRunResponse) String() string {
 func (*GetDiscoveryRunResponse) ProtoMessage() {}
 
 func (x *GetDiscoveryRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[27]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1752,7 +2095,7 @@ func (x *GetDiscoveryRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDiscoveryRunResponse.ProtoReflect.Descriptor instead.
 func (*GetDiscoveryRunResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{27}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetDiscoveryRunResponse) GetDiscoveryRun() *DiscoveryRun {
@@ -1771,7 +2114,7 @@ type ListDiscoveryRunsRequest struct {
 
 func (x *ListDiscoveryRunsRequest) Reset() {
 	*x = ListDiscoveryRunsRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[28]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1783,7 +2126,7 @@ func (x *ListDiscoveryRunsRequest) String() string {
 func (*ListDiscoveryRunsRequest) ProtoMessage() {}
 
 func (x *ListDiscoveryRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[28]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1796,7 +2139,7 @@ func (x *ListDiscoveryRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDiscoveryRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListDiscoveryRunsRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{28}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *ListDiscoveryRunsRequest) GetParent() string {
@@ -1815,7 +2158,7 @@ type ListDiscoveryRunsResponse struct {
 
 func (x *ListDiscoveryRunsResponse) Reset() {
 	*x = ListDiscoveryRunsResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[29]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1827,7 +2170,7 @@ func (x *ListDiscoveryRunsResponse) String() string {
 func (*ListDiscoveryRunsResponse) ProtoMessage() {}
 
 func (x *ListDiscoveryRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[29]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1840,12 +2183,306 @@ func (x *ListDiscoveryRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDiscoveryRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListDiscoveryRunsResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{29}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListDiscoveryRunsResponse) GetDiscoveryRuns() []*DiscoveryRun {
 	if x != nil {
 		return x.DiscoveryRuns
+	}
+	return nil
+}
+
+type ImportLogsRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Parent string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	// Types that are valid to be assigned to Source:
+	//
+	//	*ImportLogsRequest_GcpLogging
+	Source        isImportLogsRequest_Source `protobuf_oneof:"source"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportLogsRequest) Reset() {
+	*x = ImportLogsRequest{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportLogsRequest) ProtoMessage() {}
+
+func (x *ImportLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportLogsRequest.ProtoReflect.Descriptor instead.
+func (*ImportLogsRequest) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *ImportLogsRequest) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+func (x *ImportLogsRequest) GetSource() isImportLogsRequest_Source {
+	if x != nil {
+		return x.Source
+	}
+	return nil
+}
+
+func (x *ImportLogsRequest) GetGcpLogging() *GcpLoggingSource {
+	if x != nil {
+		if x, ok := x.Source.(*ImportLogsRequest_GcpLogging); ok {
+			return x.GcpLogging
+		}
+	}
+	return nil
+}
+
+type isImportLogsRequest_Source interface {
+	isImportLogsRequest_Source()
+}
+
+type ImportLogsRequest_GcpLogging struct {
+	GcpLogging *GcpLoggingSource `protobuf:"bytes,2,opt,name=gcp_logging,json=gcpLogging,proto3,oneof"`
+}
+
+func (*ImportLogsRequest_GcpLogging) isImportLogsRequest_Source() {}
+
+type ImportLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ImportRun     *ImportRun             `protobuf:"bytes,1,opt,name=import_run,json=importRun,proto3" json:"import_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportLogsResponse) Reset() {
+	*x = ImportLogsResponse{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportLogsResponse) ProtoMessage() {}
+
+func (x *ImportLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportLogsResponse.ProtoReflect.Descriptor instead.
+func (*ImportLogsResponse) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ImportLogsResponse) GetImportRun() *ImportRun {
+	if x != nil {
+		return x.ImportRun
+	}
+	return nil
+}
+
+type GetImportRunRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImportRunRequest) Reset() {
+	*x = GetImportRunRequest{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImportRunRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImportRunRequest) ProtoMessage() {}
+
+func (x *GetImportRunRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImportRunRequest.ProtoReflect.Descriptor instead.
+func (*GetImportRunRequest) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *GetImportRunRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type GetImportRunResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ImportRun     *ImportRun             `protobuf:"bytes,1,opt,name=import_run,json=importRun,proto3" json:"import_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImportRunResponse) Reset() {
+	*x = GetImportRunResponse{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImportRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImportRunResponse) ProtoMessage() {}
+
+func (x *GetImportRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImportRunResponse.ProtoReflect.Descriptor instead.
+func (*GetImportRunResponse) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *GetImportRunResponse) GetImportRun() *ImportRun {
+	if x != nil {
+		return x.ImportRun
+	}
+	return nil
+}
+
+type ListImportRunsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Parent        string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListImportRunsRequest) Reset() {
+	*x = ListImportRunsRequest{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListImportRunsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListImportRunsRequest) ProtoMessage() {}
+
+func (x *ListImportRunsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListImportRunsRequest.ProtoReflect.Descriptor instead.
+func (*ListImportRunsRequest) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *ListImportRunsRequest) GetParent() string {
+	if x != nil {
+		return x.Parent
+	}
+	return ""
+}
+
+type ListImportRunsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ImportRuns    []*ImportRun           `protobuf:"bytes,1,rep,name=import_runs,json=importRuns,proto3" json:"import_runs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListImportRunsResponse) Reset() {
+	*x = ListImportRunsResponse{}
+	mi := &file_lapp_web_v1_web_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListImportRunsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListImportRunsResponse) ProtoMessage() {}
+
+func (x *ListImportRunsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_lapp_web_v1_web_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListImportRunsResponse.ProtoReflect.Descriptor instead.
+func (*ListImportRunsResponse) Descriptor() ([]byte, []int) {
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ListImportRunsResponse) GetImportRuns() []*ImportRun {
+	if x != nil {
+		return x.ImportRuns
 	}
 	return nil
 }
@@ -1859,7 +2496,7 @@ type ListPatternsRequest struct {
 
 func (x *ListPatternsRequest) Reset() {
 	*x = ListPatternsRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[30]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1871,7 +2508,7 @@ func (x *ListPatternsRequest) String() string {
 func (*ListPatternsRequest) ProtoMessage() {}
 
 func (x *ListPatternsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[30]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1884,7 +2521,7 @@ func (x *ListPatternsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPatternsRequest.ProtoReflect.Descriptor instead.
 func (*ListPatternsRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{30}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *ListPatternsRequest) GetParent() string {
@@ -1903,7 +2540,7 @@ type ListPatternsResponse struct {
 
 func (x *ListPatternsResponse) Reset() {
 	*x = ListPatternsResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[31]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1915,7 +2552,7 @@ func (x *ListPatternsResponse) String() string {
 func (*ListPatternsResponse) ProtoMessage() {}
 
 func (x *ListPatternsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[31]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1928,7 +2565,7 @@ func (x *ListPatternsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPatternsResponse.ProtoReflect.Descriptor instead.
 func (*ListPatternsResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{31}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ListPatternsResponse) GetPatterns() []*Pattern {
@@ -1947,7 +2584,7 @@ type GetPatternRequest struct {
 
 func (x *GetPatternRequest) Reset() {
 	*x = GetPatternRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[32]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1959,7 +2596,7 @@ func (x *GetPatternRequest) String() string {
 func (*GetPatternRequest) ProtoMessage() {}
 
 func (x *GetPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[32]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2609,7 @@ func (x *GetPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPatternRequest.ProtoReflect.Descriptor instead.
 func (*GetPatternRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{32}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetPatternRequest) GetName() string {
@@ -1991,7 +2628,7 @@ type GetPatternResponse struct {
 
 func (x *GetPatternResponse) Reset() {
 	*x = GetPatternResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[33]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2003,7 +2640,7 @@ func (x *GetPatternResponse) String() string {
 func (*GetPatternResponse) ProtoMessage() {}
 
 func (x *GetPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[33]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2016,7 +2653,7 @@ func (x *GetPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPatternResponse.ProtoReflect.Descriptor instead.
 func (*GetPatternResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{33}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GetPatternResponse) GetPattern() *Pattern {
@@ -2035,7 +2672,7 @@ type GetErrorsViewRequest struct {
 
 func (x *GetErrorsViewRequest) Reset() {
 	*x = GetErrorsViewRequest{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[34]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2047,7 +2684,7 @@ func (x *GetErrorsViewRequest) String() string {
 func (*GetErrorsViewRequest) ProtoMessage() {}
 
 func (x *GetErrorsViewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[34]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2060,7 +2697,7 @@ func (x *GetErrorsViewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetErrorsViewRequest.ProtoReflect.Descriptor instead.
 func (*GetErrorsViewRequest) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{34}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetErrorsViewRequest) GetParent() string {
@@ -2080,7 +2717,7 @@ type GetErrorsViewResponse struct {
 
 func (x *GetErrorsViewResponse) Reset() {
 	*x = GetErrorsViewResponse{}
-	mi := &file_lapp_web_v1_web_proto_msgTypes[35]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2092,7 +2729,7 @@ func (x *GetErrorsViewResponse) String() string {
 func (*GetErrorsViewResponse) ProtoMessage() {}
 
 func (x *GetErrorsViewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_lapp_web_v1_web_proto_msgTypes[35]
+	mi := &file_lapp_web_v1_web_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2105,7 +2742,7 @@ func (x *GetErrorsViewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetErrorsViewResponse.ProtoReflect.Descriptor instead.
 func (*GetErrorsViewResponse) Descriptor() ([]byte, []int) {
-	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{35}
+	return file_lapp_web_v1_web_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetErrorsViewResponse) GetErrorPatterns() []*ErrorPattern {
@@ -2176,7 +2813,35 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\x11DiscoveryRunError\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
-	"\x04step\x18\x03 \x01(\x0e2\x1a.lapp.web.v1.DiscoveryStepR\x04step\"\xe6\x02\n" +
+	"\x04step\x18\x03 \x01(\x0e2\x1a.lapp.web.v1.DiscoveryStepR\x04step\"\xba\x03\n" +
+	"\tImportRun\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
+	"\rimport_run_id\x18\x02 \x01(\tR\vimportRunId\x121\n" +
+	"\x05state\x18\x03 \x01(\x0e2\x1b.lapp.web.v1.ImportRunStateR\x05state\x12\x16\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\x129\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
+	"\vfinished_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
+	"finishedAt\x12\x1f\n" +
+	"\ventry_count\x18\a \x01(\x05R\n" +
+	"entryCount\x12\"\n" +
+	"\rlog_file_name\x18\b \x01(\tR\vlogFileName\x12:\n" +
+	"\bprogress\x18\t \x01(\v2\x1e.lapp.web.v1.ImportRunProgressR\bprogress\x121\n" +
+	"\x05error\x18\n" +
+	" \x01(\v2\x1b.lapp.web.v1.ImportRunErrorR\x05error\"8\n" +
+	"\x11ImportRunProgress\x12#\n" +
+	"\rfetched_count\x18\x01 \x01(\x05R\ffetchedCount\">\n" +
+	"\x0eImportRunError\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xd1\x01\n" +
+	"\x10GcpLoggingSource\x12\x1d\n" +
+	"\n" +
+	"project_id\x18\x01 \x01(\tR\tprojectId\x12\x16\n" +
+	"\x06filter\x18\x02 \x01(\tR\x06filter\x129\n" +
+	"\n" +
+	"start_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
+	"\bend_time\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\x12\x14\n" +
+	"\x05limit\x18\x05 \x01(\x05R\x05limit\"\xe6\x02\n" +
 	"\aPattern\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
@@ -2244,7 +2909,25 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\x18ListDiscoveryRunsRequest\x12\x16\n" +
 	"\x06parent\x18\x01 \x01(\tR\x06parent\"]\n" +
 	"\x19ListDiscoveryRunsResponse\x12@\n" +
-	"\x0ediscovery_runs\x18\x01 \x03(\v2\x19.lapp.web.v1.DiscoveryRunR\rdiscoveryRuns\"-\n" +
+	"\x0ediscovery_runs\x18\x01 \x03(\v2\x19.lapp.web.v1.DiscoveryRunR\rdiscoveryRuns\"w\n" +
+	"\x11ImportLogsRequest\x12\x16\n" +
+	"\x06parent\x18\x01 \x01(\tR\x06parent\x12@\n" +
+	"\vgcp_logging\x18\x02 \x01(\v2\x1d.lapp.web.v1.GcpLoggingSourceH\x00R\n" +
+	"gcpLoggingB\b\n" +
+	"\x06source\"K\n" +
+	"\x12ImportLogsResponse\x125\n" +
+	"\n" +
+	"import_run\x18\x01 \x01(\v2\x16.lapp.web.v1.ImportRunR\timportRun\")\n" +
+	"\x13GetImportRunRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"M\n" +
+	"\x14GetImportRunResponse\x125\n" +
+	"\n" +
+	"import_run\x18\x01 \x01(\v2\x16.lapp.web.v1.ImportRunR\timportRun\"/\n" +
+	"\x15ListImportRunsRequest\x12\x16\n" +
+	"\x06parent\x18\x01 \x01(\tR\x06parent\"Q\n" +
+	"\x16ListImportRunsResponse\x127\n" +
+	"\vimport_runs\x18\x01 \x03(\v2\x16.lapp.web.v1.ImportRunR\n" +
+	"importRuns\"-\n" +
 	"\x13ListPatternsRequest\x12\x16\n" +
 	"\x06parent\x18\x01 \x01(\tR\x06parent\"H\n" +
 	"\x14ListPatternsResponse\x120\n" +
@@ -2276,7 +2959,13 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\x1eDISCOVERY_STEP_MERGING_ENTRIES\x10\x02\x12'\n" +
 	"#DISCOVERY_STEP_DISCOVERING_PATTERNS\x10\x03\x12$\n" +
 	" DISCOVERY_STEP_LABELING_PATTERNS\x10\x04\x12\"\n" +
-	"\x1eDISCOVERY_STEP_WRITING_RESULTS\x10\x052\xa8\t\n" +
+	"\x1eDISCOVERY_STEP_WRITING_RESULTS\x10\x05*\xaa\x01\n" +
+	"\x0eImportRunState\x12 \n" +
+	"\x1cIMPORT_RUN_STATE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17IMPORT_RUN_STATE_QUEUED\x10\x01\x12\x1c\n" +
+	"\x18IMPORT_RUN_STATE_RUNNING\x10\x02\x12\x1e\n" +
+	"\x1aIMPORT_RUN_STATE_SUCCEEDED\x10\x03\x12\x1b\n" +
+	"\x17IMPORT_RUN_STATE_FAILED\x10\x042\xa7\v\n" +
 	"\x10WorkspaceService\x12Y\n" +
 	"\x0eListWorkspaces\x12\".lapp.web.v1.ListWorkspacesRequest\x1a#.lapp.web.v1.ListWorkspacesResponse\x12S\n" +
 	"\fGetWorkspace\x12 .lapp.web.v1.GetWorkspaceRequest\x1a!.lapp.web.v1.GetWorkspaceResponse\x12\\\n" +
@@ -2287,7 +2976,11 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\rDeleteLogFile\x12!.lapp.web.v1.DeleteLogFileRequest\x1a\".lapp.web.v1.DeleteLogFileResponse\x12e\n" +
 	"\x12CreateDiscoveryRun\x12&.lapp.web.v1.CreateDiscoveryRunRequest\x1a'.lapp.web.v1.CreateDiscoveryRunResponse\x12\\\n" +
 	"\x0fGetDiscoveryRun\x12#.lapp.web.v1.GetDiscoveryRunRequest\x1a$.lapp.web.v1.GetDiscoveryRunResponse\x12b\n" +
-	"\x11ListDiscoveryRuns\x12%.lapp.web.v1.ListDiscoveryRunsRequest\x1a&.lapp.web.v1.ListDiscoveryRunsResponse\x12S\n" +
+	"\x11ListDiscoveryRuns\x12%.lapp.web.v1.ListDiscoveryRunsRequest\x1a&.lapp.web.v1.ListDiscoveryRunsResponse\x12M\n" +
+	"\n" +
+	"ImportLogs\x12\x1e.lapp.web.v1.ImportLogsRequest\x1a\x1f.lapp.web.v1.ImportLogsResponse\x12S\n" +
+	"\fGetImportRun\x12 .lapp.web.v1.GetImportRunRequest\x1a!.lapp.web.v1.GetImportRunResponse\x12Y\n" +
+	"\x0eListImportRuns\x12\".lapp.web.v1.ListImportRunsRequest\x1a#.lapp.web.v1.ListImportRunsResponse\x12S\n" +
 	"\fListPatterns\x12 .lapp.web.v1.ListPatternsRequest\x1a!.lapp.web.v1.ListPatternsResponse\x12M\n" +
 	"\n" +
 	"GetPattern\x12\x1e.lapp.web.v1.GetPatternRequest\x1a\x1f.lapp.web.v1.GetPatternResponse\x12V\n" +
@@ -2305,111 +2998,139 @@ func file_lapp_web_v1_web_proto_rawDescGZIP() []byte {
 	return file_lapp_web_v1_web_proto_rawDescData
 }
 
-var file_lapp_web_v1_web_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_lapp_web_v1_web_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_lapp_web_v1_web_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_lapp_web_v1_web_proto_msgTypes = make([]protoimpl.MessageInfo, 46)
 var file_lapp_web_v1_web_proto_goTypes = []any{
 	(WorkspaceStatus)(0),                // 0: lapp.web.v1.WorkspaceStatus
 	(DiscoveryRunState)(0),              // 1: lapp.web.v1.DiscoveryRunState
 	(DiscoveryStep)(0),                  // 2: lapp.web.v1.DiscoveryStep
-	(*Workspace)(nil),                   // 3: lapp.web.v1.Workspace
-	(*LogFile)(nil),                     // 4: lapp.web.v1.LogFile
-	(*DiscoveryRun)(nil),                // 5: lapp.web.v1.DiscoveryRun
-	(*DiscoveryRunProgress)(nil),        // 6: lapp.web.v1.DiscoveryRunProgress
-	(*DiscoveryLabelBatchProgress)(nil), // 7: lapp.web.v1.DiscoveryLabelBatchProgress
-	(*DiscoveryRunError)(nil),           // 8: lapp.web.v1.DiscoveryRunError
-	(*Pattern)(nil),                     // 9: lapp.web.v1.Pattern
-	(*LineRef)(nil),                     // 10: lapp.web.v1.LineRef
-	(*ErrorPattern)(nil),                // 11: lapp.web.v1.ErrorPattern
-	(*UnmatchedErrorLine)(nil),          // 12: lapp.web.v1.UnmatchedErrorLine
-	(*ListWorkspacesRequest)(nil),       // 13: lapp.web.v1.ListWorkspacesRequest
-	(*ListWorkspacesResponse)(nil),      // 14: lapp.web.v1.ListWorkspacesResponse
-	(*GetWorkspaceRequest)(nil),         // 15: lapp.web.v1.GetWorkspaceRequest
-	(*GetWorkspaceResponse)(nil),        // 16: lapp.web.v1.GetWorkspaceResponse
-	(*CreateWorkspaceRequest)(nil),      // 17: lapp.web.v1.CreateWorkspaceRequest
-	(*CreateWorkspaceResponse)(nil),     // 18: lapp.web.v1.CreateWorkspaceResponse
-	(*DeleteWorkspaceRequest)(nil),      // 19: lapp.web.v1.DeleteWorkspaceRequest
-	(*DeleteWorkspaceResponse)(nil),     // 20: lapp.web.v1.DeleteWorkspaceResponse
-	(*ListLogFilesRequest)(nil),         // 21: lapp.web.v1.ListLogFilesRequest
-	(*ListLogFilesResponse)(nil),        // 22: lapp.web.v1.ListLogFilesResponse
-	(*UploadLogFileRequest)(nil),        // 23: lapp.web.v1.UploadLogFileRequest
-	(*UploadLogFileResponse)(nil),       // 24: lapp.web.v1.UploadLogFileResponse
-	(*DeleteLogFileRequest)(nil),        // 25: lapp.web.v1.DeleteLogFileRequest
-	(*DeleteLogFileResponse)(nil),       // 26: lapp.web.v1.DeleteLogFileResponse
-	(*CreateDiscoveryRunRequest)(nil),   // 27: lapp.web.v1.CreateDiscoveryRunRequest
-	(*CreateDiscoveryRunResponse)(nil),  // 28: lapp.web.v1.CreateDiscoveryRunResponse
-	(*GetDiscoveryRunRequest)(nil),      // 29: lapp.web.v1.GetDiscoveryRunRequest
-	(*GetDiscoveryRunResponse)(nil),     // 30: lapp.web.v1.GetDiscoveryRunResponse
-	(*ListDiscoveryRunsRequest)(nil),    // 31: lapp.web.v1.ListDiscoveryRunsRequest
-	(*ListDiscoveryRunsResponse)(nil),   // 32: lapp.web.v1.ListDiscoveryRunsResponse
-	(*ListPatternsRequest)(nil),         // 33: lapp.web.v1.ListPatternsRequest
-	(*ListPatternsResponse)(nil),        // 34: lapp.web.v1.ListPatternsResponse
-	(*GetPatternRequest)(nil),           // 35: lapp.web.v1.GetPatternRequest
-	(*GetPatternResponse)(nil),          // 36: lapp.web.v1.GetPatternResponse
-	(*GetErrorsViewRequest)(nil),        // 37: lapp.web.v1.GetErrorsViewRequest
-	(*GetErrorsViewResponse)(nil),       // 38: lapp.web.v1.GetErrorsViewResponse
-	(*timestamppb.Timestamp)(nil),       // 39: google.protobuf.Timestamp
+	(ImportRunState)(0),                 // 3: lapp.web.v1.ImportRunState
+	(*Workspace)(nil),                   // 4: lapp.web.v1.Workspace
+	(*LogFile)(nil),                     // 5: lapp.web.v1.LogFile
+	(*DiscoveryRun)(nil),                // 6: lapp.web.v1.DiscoveryRun
+	(*DiscoveryRunProgress)(nil),        // 7: lapp.web.v1.DiscoveryRunProgress
+	(*DiscoveryLabelBatchProgress)(nil), // 8: lapp.web.v1.DiscoveryLabelBatchProgress
+	(*DiscoveryRunError)(nil),           // 9: lapp.web.v1.DiscoveryRunError
+	(*ImportRun)(nil),                   // 10: lapp.web.v1.ImportRun
+	(*ImportRunProgress)(nil),           // 11: lapp.web.v1.ImportRunProgress
+	(*ImportRunError)(nil),              // 12: lapp.web.v1.ImportRunError
+	(*GcpLoggingSource)(nil),            // 13: lapp.web.v1.GcpLoggingSource
+	(*Pattern)(nil),                     // 14: lapp.web.v1.Pattern
+	(*LineRef)(nil),                     // 15: lapp.web.v1.LineRef
+	(*ErrorPattern)(nil),                // 16: lapp.web.v1.ErrorPattern
+	(*UnmatchedErrorLine)(nil),          // 17: lapp.web.v1.UnmatchedErrorLine
+	(*ListWorkspacesRequest)(nil),       // 18: lapp.web.v1.ListWorkspacesRequest
+	(*ListWorkspacesResponse)(nil),      // 19: lapp.web.v1.ListWorkspacesResponse
+	(*GetWorkspaceRequest)(nil),         // 20: lapp.web.v1.GetWorkspaceRequest
+	(*GetWorkspaceResponse)(nil),        // 21: lapp.web.v1.GetWorkspaceResponse
+	(*CreateWorkspaceRequest)(nil),      // 22: lapp.web.v1.CreateWorkspaceRequest
+	(*CreateWorkspaceResponse)(nil),     // 23: lapp.web.v1.CreateWorkspaceResponse
+	(*DeleteWorkspaceRequest)(nil),      // 24: lapp.web.v1.DeleteWorkspaceRequest
+	(*DeleteWorkspaceResponse)(nil),     // 25: lapp.web.v1.DeleteWorkspaceResponse
+	(*ListLogFilesRequest)(nil),         // 26: lapp.web.v1.ListLogFilesRequest
+	(*ListLogFilesResponse)(nil),        // 27: lapp.web.v1.ListLogFilesResponse
+	(*UploadLogFileRequest)(nil),        // 28: lapp.web.v1.UploadLogFileRequest
+	(*UploadLogFileResponse)(nil),       // 29: lapp.web.v1.UploadLogFileResponse
+	(*DeleteLogFileRequest)(nil),        // 30: lapp.web.v1.DeleteLogFileRequest
+	(*DeleteLogFileResponse)(nil),       // 31: lapp.web.v1.DeleteLogFileResponse
+	(*CreateDiscoveryRunRequest)(nil),   // 32: lapp.web.v1.CreateDiscoveryRunRequest
+	(*CreateDiscoveryRunResponse)(nil),  // 33: lapp.web.v1.CreateDiscoveryRunResponse
+	(*GetDiscoveryRunRequest)(nil),      // 34: lapp.web.v1.GetDiscoveryRunRequest
+	(*GetDiscoveryRunResponse)(nil),     // 35: lapp.web.v1.GetDiscoveryRunResponse
+	(*ListDiscoveryRunsRequest)(nil),    // 36: lapp.web.v1.ListDiscoveryRunsRequest
+	(*ListDiscoveryRunsResponse)(nil),   // 37: lapp.web.v1.ListDiscoveryRunsResponse
+	(*ImportLogsRequest)(nil),           // 38: lapp.web.v1.ImportLogsRequest
+	(*ImportLogsResponse)(nil),          // 39: lapp.web.v1.ImportLogsResponse
+	(*GetImportRunRequest)(nil),         // 40: lapp.web.v1.GetImportRunRequest
+	(*GetImportRunResponse)(nil),        // 41: lapp.web.v1.GetImportRunResponse
+	(*ListImportRunsRequest)(nil),       // 42: lapp.web.v1.ListImportRunsRequest
+	(*ListImportRunsResponse)(nil),      // 43: lapp.web.v1.ListImportRunsResponse
+	(*ListPatternsRequest)(nil),         // 44: lapp.web.v1.ListPatternsRequest
+	(*ListPatternsResponse)(nil),        // 45: lapp.web.v1.ListPatternsResponse
+	(*GetPatternRequest)(nil),           // 46: lapp.web.v1.GetPatternRequest
+	(*GetPatternResponse)(nil),          // 47: lapp.web.v1.GetPatternResponse
+	(*GetErrorsViewRequest)(nil),        // 48: lapp.web.v1.GetErrorsViewRequest
+	(*GetErrorsViewResponse)(nil),       // 49: lapp.web.v1.GetErrorsViewResponse
+	(*timestamppb.Timestamp)(nil),       // 50: google.protobuf.Timestamp
 }
 var file_lapp_web_v1_web_proto_depIdxs = []int32{
 	0,  // 0: lapp.web.v1.Workspace.status:type_name -> lapp.web.v1.WorkspaceStatus
-	5,  // 1: lapp.web.v1.Workspace.latest_discovery_run:type_name -> lapp.web.v1.DiscoveryRun
-	5,  // 2: lapp.web.v1.Workspace.latest_successful_discovery_run:type_name -> lapp.web.v1.DiscoveryRun
-	39, // 3: lapp.web.v1.LogFile.updated_at:type_name -> google.protobuf.Timestamp
+	6,  // 1: lapp.web.v1.Workspace.latest_discovery_run:type_name -> lapp.web.v1.DiscoveryRun
+	6,  // 2: lapp.web.v1.Workspace.latest_successful_discovery_run:type_name -> lapp.web.v1.DiscoveryRun
+	50, // 3: lapp.web.v1.LogFile.updated_at:type_name -> google.protobuf.Timestamp
 	1,  // 4: lapp.web.v1.DiscoveryRun.state:type_name -> lapp.web.v1.DiscoveryRunState
 	2,  // 5: lapp.web.v1.DiscoveryRun.current_step:type_name -> lapp.web.v1.DiscoveryStep
-	39, // 6: lapp.web.v1.DiscoveryRun.started_at:type_name -> google.protobuf.Timestamp
-	39, // 7: lapp.web.v1.DiscoveryRun.finished_at:type_name -> google.protobuf.Timestamp
-	6,  // 8: lapp.web.v1.DiscoveryRun.progress:type_name -> lapp.web.v1.DiscoveryRunProgress
-	8,  // 9: lapp.web.v1.DiscoveryRun.error:type_name -> lapp.web.v1.DiscoveryRunError
+	50, // 6: lapp.web.v1.DiscoveryRun.started_at:type_name -> google.protobuf.Timestamp
+	50, // 7: lapp.web.v1.DiscoveryRun.finished_at:type_name -> google.protobuf.Timestamp
+	7,  // 8: lapp.web.v1.DiscoveryRun.progress:type_name -> lapp.web.v1.DiscoveryRunProgress
+	9,  // 9: lapp.web.v1.DiscoveryRun.error:type_name -> lapp.web.v1.DiscoveryRunError
 	2,  // 10: lapp.web.v1.DiscoveryRunProgress.step:type_name -> lapp.web.v1.DiscoveryStep
-	7,  // 11: lapp.web.v1.DiscoveryRunProgress.label_batch:type_name -> lapp.web.v1.DiscoveryLabelBatchProgress
+	8,  // 11: lapp.web.v1.DiscoveryRunProgress.label_batch:type_name -> lapp.web.v1.DiscoveryLabelBatchProgress
 	2,  // 12: lapp.web.v1.DiscoveryRunError.step:type_name -> lapp.web.v1.DiscoveryStep
-	10, // 13: lapp.web.v1.Pattern.first_seen:type_name -> lapp.web.v1.LineRef
-	10, // 14: lapp.web.v1.Pattern.last_seen:type_name -> lapp.web.v1.LineRef
-	10, // 15: lapp.web.v1.Pattern.line_refs:type_name -> lapp.web.v1.LineRef
-	9,  // 16: lapp.web.v1.ErrorPattern.pattern:type_name -> lapp.web.v1.Pattern
-	3,  // 17: lapp.web.v1.ListWorkspacesResponse.workspaces:type_name -> lapp.web.v1.Workspace
-	3,  // 18: lapp.web.v1.GetWorkspaceResponse.workspace:type_name -> lapp.web.v1.Workspace
-	3,  // 19: lapp.web.v1.CreateWorkspaceResponse.workspace:type_name -> lapp.web.v1.Workspace
-	4,  // 20: lapp.web.v1.ListLogFilesResponse.log_files:type_name -> lapp.web.v1.LogFile
-	4,  // 21: lapp.web.v1.UploadLogFileResponse.log_file:type_name -> lapp.web.v1.LogFile
-	5,  // 22: lapp.web.v1.CreateDiscoveryRunResponse.discovery_run:type_name -> lapp.web.v1.DiscoveryRun
-	5,  // 23: lapp.web.v1.GetDiscoveryRunResponse.discovery_run:type_name -> lapp.web.v1.DiscoveryRun
-	5,  // 24: lapp.web.v1.ListDiscoveryRunsResponse.discovery_runs:type_name -> lapp.web.v1.DiscoveryRun
-	9,  // 25: lapp.web.v1.ListPatternsResponse.patterns:type_name -> lapp.web.v1.Pattern
-	9,  // 26: lapp.web.v1.GetPatternResponse.pattern:type_name -> lapp.web.v1.Pattern
-	11, // 27: lapp.web.v1.GetErrorsViewResponse.error_patterns:type_name -> lapp.web.v1.ErrorPattern
-	12, // 28: lapp.web.v1.GetErrorsViewResponse.unmatched_error_lines:type_name -> lapp.web.v1.UnmatchedErrorLine
-	13, // 29: lapp.web.v1.WorkspaceService.ListWorkspaces:input_type -> lapp.web.v1.ListWorkspacesRequest
-	15, // 30: lapp.web.v1.WorkspaceService.GetWorkspace:input_type -> lapp.web.v1.GetWorkspaceRequest
-	17, // 31: lapp.web.v1.WorkspaceService.CreateWorkspace:input_type -> lapp.web.v1.CreateWorkspaceRequest
-	19, // 32: lapp.web.v1.WorkspaceService.DeleteWorkspace:input_type -> lapp.web.v1.DeleteWorkspaceRequest
-	21, // 33: lapp.web.v1.WorkspaceService.ListLogFiles:input_type -> lapp.web.v1.ListLogFilesRequest
-	23, // 34: lapp.web.v1.WorkspaceService.UploadLogFile:input_type -> lapp.web.v1.UploadLogFileRequest
-	25, // 35: lapp.web.v1.WorkspaceService.DeleteLogFile:input_type -> lapp.web.v1.DeleteLogFileRequest
-	27, // 36: lapp.web.v1.WorkspaceService.CreateDiscoveryRun:input_type -> lapp.web.v1.CreateDiscoveryRunRequest
-	29, // 37: lapp.web.v1.WorkspaceService.GetDiscoveryRun:input_type -> lapp.web.v1.GetDiscoveryRunRequest
-	31, // 38: lapp.web.v1.WorkspaceService.ListDiscoveryRuns:input_type -> lapp.web.v1.ListDiscoveryRunsRequest
-	33, // 39: lapp.web.v1.WorkspaceService.ListPatterns:input_type -> lapp.web.v1.ListPatternsRequest
-	35, // 40: lapp.web.v1.WorkspaceService.GetPattern:input_type -> lapp.web.v1.GetPatternRequest
-	37, // 41: lapp.web.v1.WorkspaceService.GetErrorsView:input_type -> lapp.web.v1.GetErrorsViewRequest
-	14, // 42: lapp.web.v1.WorkspaceService.ListWorkspaces:output_type -> lapp.web.v1.ListWorkspacesResponse
-	16, // 43: lapp.web.v1.WorkspaceService.GetWorkspace:output_type -> lapp.web.v1.GetWorkspaceResponse
-	18, // 44: lapp.web.v1.WorkspaceService.CreateWorkspace:output_type -> lapp.web.v1.CreateWorkspaceResponse
-	20, // 45: lapp.web.v1.WorkspaceService.DeleteWorkspace:output_type -> lapp.web.v1.DeleteWorkspaceResponse
-	22, // 46: lapp.web.v1.WorkspaceService.ListLogFiles:output_type -> lapp.web.v1.ListLogFilesResponse
-	24, // 47: lapp.web.v1.WorkspaceService.UploadLogFile:output_type -> lapp.web.v1.UploadLogFileResponse
-	26, // 48: lapp.web.v1.WorkspaceService.DeleteLogFile:output_type -> lapp.web.v1.DeleteLogFileResponse
-	28, // 49: lapp.web.v1.WorkspaceService.CreateDiscoveryRun:output_type -> lapp.web.v1.CreateDiscoveryRunResponse
-	30, // 50: lapp.web.v1.WorkspaceService.GetDiscoveryRun:output_type -> lapp.web.v1.GetDiscoveryRunResponse
-	32, // 51: lapp.web.v1.WorkspaceService.ListDiscoveryRuns:output_type -> lapp.web.v1.ListDiscoveryRunsResponse
-	34, // 52: lapp.web.v1.WorkspaceService.ListPatterns:output_type -> lapp.web.v1.ListPatternsResponse
-	36, // 53: lapp.web.v1.WorkspaceService.GetPattern:output_type -> lapp.web.v1.GetPatternResponse
-	38, // 54: lapp.web.v1.WorkspaceService.GetErrorsView:output_type -> lapp.web.v1.GetErrorsViewResponse
-	42, // [42:55] is the sub-list for method output_type
-	29, // [29:42] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	3,  // 13: lapp.web.v1.ImportRun.state:type_name -> lapp.web.v1.ImportRunState
+	50, // 14: lapp.web.v1.ImportRun.started_at:type_name -> google.protobuf.Timestamp
+	50, // 15: lapp.web.v1.ImportRun.finished_at:type_name -> google.protobuf.Timestamp
+	11, // 16: lapp.web.v1.ImportRun.progress:type_name -> lapp.web.v1.ImportRunProgress
+	12, // 17: lapp.web.v1.ImportRun.error:type_name -> lapp.web.v1.ImportRunError
+	50, // 18: lapp.web.v1.GcpLoggingSource.start_time:type_name -> google.protobuf.Timestamp
+	50, // 19: lapp.web.v1.GcpLoggingSource.end_time:type_name -> google.protobuf.Timestamp
+	15, // 20: lapp.web.v1.Pattern.first_seen:type_name -> lapp.web.v1.LineRef
+	15, // 21: lapp.web.v1.Pattern.last_seen:type_name -> lapp.web.v1.LineRef
+	15, // 22: lapp.web.v1.Pattern.line_refs:type_name -> lapp.web.v1.LineRef
+	14, // 23: lapp.web.v1.ErrorPattern.pattern:type_name -> lapp.web.v1.Pattern
+	4,  // 24: lapp.web.v1.ListWorkspacesResponse.workspaces:type_name -> lapp.web.v1.Workspace
+	4,  // 25: lapp.web.v1.GetWorkspaceResponse.workspace:type_name -> lapp.web.v1.Workspace
+	4,  // 26: lapp.web.v1.CreateWorkspaceResponse.workspace:type_name -> lapp.web.v1.Workspace
+	5,  // 27: lapp.web.v1.ListLogFilesResponse.log_files:type_name -> lapp.web.v1.LogFile
+	5,  // 28: lapp.web.v1.UploadLogFileResponse.log_file:type_name -> lapp.web.v1.LogFile
+	6,  // 29: lapp.web.v1.CreateDiscoveryRunResponse.discovery_run:type_name -> lapp.web.v1.DiscoveryRun
+	6,  // 30: lapp.web.v1.GetDiscoveryRunResponse.discovery_run:type_name -> lapp.web.v1.DiscoveryRun
+	6,  // 31: lapp.web.v1.ListDiscoveryRunsResponse.discovery_runs:type_name -> lapp.web.v1.DiscoveryRun
+	13, // 32: lapp.web.v1.ImportLogsRequest.gcp_logging:type_name -> lapp.web.v1.GcpLoggingSource
+	10, // 33: lapp.web.v1.ImportLogsResponse.import_run:type_name -> lapp.web.v1.ImportRun
+	10, // 34: lapp.web.v1.GetImportRunResponse.import_run:type_name -> lapp.web.v1.ImportRun
+	10, // 35: lapp.web.v1.ListImportRunsResponse.import_runs:type_name -> lapp.web.v1.ImportRun
+	14, // 36: lapp.web.v1.ListPatternsResponse.patterns:type_name -> lapp.web.v1.Pattern
+	14, // 37: lapp.web.v1.GetPatternResponse.pattern:type_name -> lapp.web.v1.Pattern
+	16, // 38: lapp.web.v1.GetErrorsViewResponse.error_patterns:type_name -> lapp.web.v1.ErrorPattern
+	17, // 39: lapp.web.v1.GetErrorsViewResponse.unmatched_error_lines:type_name -> lapp.web.v1.UnmatchedErrorLine
+	18, // 40: lapp.web.v1.WorkspaceService.ListWorkspaces:input_type -> lapp.web.v1.ListWorkspacesRequest
+	20, // 41: lapp.web.v1.WorkspaceService.GetWorkspace:input_type -> lapp.web.v1.GetWorkspaceRequest
+	22, // 42: lapp.web.v1.WorkspaceService.CreateWorkspace:input_type -> lapp.web.v1.CreateWorkspaceRequest
+	24, // 43: lapp.web.v1.WorkspaceService.DeleteWorkspace:input_type -> lapp.web.v1.DeleteWorkspaceRequest
+	26, // 44: lapp.web.v1.WorkspaceService.ListLogFiles:input_type -> lapp.web.v1.ListLogFilesRequest
+	28, // 45: lapp.web.v1.WorkspaceService.UploadLogFile:input_type -> lapp.web.v1.UploadLogFileRequest
+	30, // 46: lapp.web.v1.WorkspaceService.DeleteLogFile:input_type -> lapp.web.v1.DeleteLogFileRequest
+	32, // 47: lapp.web.v1.WorkspaceService.CreateDiscoveryRun:input_type -> lapp.web.v1.CreateDiscoveryRunRequest
+	34, // 48: lapp.web.v1.WorkspaceService.GetDiscoveryRun:input_type -> lapp.web.v1.GetDiscoveryRunRequest
+	36, // 49: lapp.web.v1.WorkspaceService.ListDiscoveryRuns:input_type -> lapp.web.v1.ListDiscoveryRunsRequest
+	38, // 50: lapp.web.v1.WorkspaceService.ImportLogs:input_type -> lapp.web.v1.ImportLogsRequest
+	40, // 51: lapp.web.v1.WorkspaceService.GetImportRun:input_type -> lapp.web.v1.GetImportRunRequest
+	42, // 52: lapp.web.v1.WorkspaceService.ListImportRuns:input_type -> lapp.web.v1.ListImportRunsRequest
+	44, // 53: lapp.web.v1.WorkspaceService.ListPatterns:input_type -> lapp.web.v1.ListPatternsRequest
+	46, // 54: lapp.web.v1.WorkspaceService.GetPattern:input_type -> lapp.web.v1.GetPatternRequest
+	48, // 55: lapp.web.v1.WorkspaceService.GetErrorsView:input_type -> lapp.web.v1.GetErrorsViewRequest
+	19, // 56: lapp.web.v1.WorkspaceService.ListWorkspaces:output_type -> lapp.web.v1.ListWorkspacesResponse
+	21, // 57: lapp.web.v1.WorkspaceService.GetWorkspace:output_type -> lapp.web.v1.GetWorkspaceResponse
+	23, // 58: lapp.web.v1.WorkspaceService.CreateWorkspace:output_type -> lapp.web.v1.CreateWorkspaceResponse
+	25, // 59: lapp.web.v1.WorkspaceService.DeleteWorkspace:output_type -> lapp.web.v1.DeleteWorkspaceResponse
+	27, // 60: lapp.web.v1.WorkspaceService.ListLogFiles:output_type -> lapp.web.v1.ListLogFilesResponse
+	29, // 61: lapp.web.v1.WorkspaceService.UploadLogFile:output_type -> lapp.web.v1.UploadLogFileResponse
+	31, // 62: lapp.web.v1.WorkspaceService.DeleteLogFile:output_type -> lapp.web.v1.DeleteLogFileResponse
+	33, // 63: lapp.web.v1.WorkspaceService.CreateDiscoveryRun:output_type -> lapp.web.v1.CreateDiscoveryRunResponse
+	35, // 64: lapp.web.v1.WorkspaceService.GetDiscoveryRun:output_type -> lapp.web.v1.GetDiscoveryRunResponse
+	37, // 65: lapp.web.v1.WorkspaceService.ListDiscoveryRuns:output_type -> lapp.web.v1.ListDiscoveryRunsResponse
+	39, // 66: lapp.web.v1.WorkspaceService.ImportLogs:output_type -> lapp.web.v1.ImportLogsResponse
+	41, // 67: lapp.web.v1.WorkspaceService.GetImportRun:output_type -> lapp.web.v1.GetImportRunResponse
+	43, // 68: lapp.web.v1.WorkspaceService.ListImportRuns:output_type -> lapp.web.v1.ListImportRunsResponse
+	45, // 69: lapp.web.v1.WorkspaceService.ListPatterns:output_type -> lapp.web.v1.ListPatternsResponse
+	47, // 70: lapp.web.v1.WorkspaceService.GetPattern:output_type -> lapp.web.v1.GetPatternResponse
+	49, // 71: lapp.web.v1.WorkspaceService.GetErrorsView:output_type -> lapp.web.v1.GetErrorsViewResponse
+	56, // [56:72] is the sub-list for method output_type
+	40, // [40:56] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_lapp_web_v1_web_proto_init() }
@@ -2417,13 +3138,16 @@ func file_lapp_web_v1_web_proto_init() {
 	if File_lapp_web_v1_web_proto != nil {
 		return
 	}
+	file_lapp_web_v1_web_proto_msgTypes[34].OneofWrappers = []any{
+		(*ImportLogsRequest_GcpLogging)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_lapp_web_v1_web_proto_rawDesc), len(file_lapp_web_v1_web_proto_rawDesc)),
-			NumEnums:      3,
-			NumMessages:   36,
+			NumEnums:      4,
+			NumMessages:   46,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
