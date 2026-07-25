@@ -19,8 +19,11 @@ go run ./cmd/lapp/ workspace create app-incident
 # Start the local web app
 go run ./cmd/lapp/ web
 
-# Add logs to the workspace and run discovery
+# Add logs to the workspace (pure copy, no discovery)
 go run ./cmd/lapp/ workspace add-log --topic app-incident /var/log/syslog
+
+# Run discovery over all log files in the workspace
+go run ./cmd/lapp/ workspace discover --topic app-incident
 
 # AI-powered analysis (agent backend via ACP provider)
 go run ./cmd/lapp/ workspace analyze --topic app-incident "why are there connection timeouts?" --acp claude
@@ -33,7 +36,9 @@ The current CLI product is a structured file workspace under `~/.lapp/workspaces
 
 ```
 workspace add-log
-  -> copy input into logs/
+  -> copy input into logs/ (nothing else)
+
+workspace discover
   -> read all files in logs/
   -> merge multiline entries
   -> discover repeated Drain patterns
@@ -64,7 +69,7 @@ DiscoveryRuns are one-time local tasks. If `lapp web` starts and finds a previou
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace add-log`
+- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace discover`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - Provider-specific auth for ACP agent CLI (for example Claude/Codex/Gemini CLI login credentials)
 - `.env` file is auto-loaded
@@ -75,14 +80,15 @@ DiscoveryRuns are one-time local tasks. If `lapp web` starts and finds a previou
 |---|---|
 | `workspace create <topic>` | Create a workspace under `~/.lapp/workspaces/` |
 | `workspace list` | List all workspace topics |
-| `workspace add-log --topic <topic> <file>` | Add log file and run discovery |
+| `workspace add-log --topic <topic> <file>` | Copy a log file into the workspace |
+| `workspace discover --topic <topic>` | Run pattern discovery over all log files |
 | `workspace analyze --topic <topic> [question]` | Run AI analysis (`--acp claude|codex|gemini`) |
 
 ## Event Schema
 
 The initial normalized event contract is defined in [proto/lapp/event/v1/event.proto](proto/lapp/event/v1/event.proto) and documented in [docs/event-schema-v1.md](docs/event-schema-v1.md). Representative fixtures live under `fixtures/events/v1/` for JSON, logfmt, `key=value`, and plain text logs.
 
-The event parser and DuckDB store packages are library-level building blocks. They are covered by tests and integration tests, but `workspace add-log` currently writes DiscoveryRun results directly into the local workspace instead of persisting through DuckDB first.
+The event parser and DuckDB store packages are library-level building blocks. They are covered by tests and integration tests, but `workspace discover` currently writes DiscoveryRun results directly into the local workspace instead of persisting through DuckDB first.
 
 ## Development
 

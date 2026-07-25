@@ -24,8 +24,9 @@ go test -v -run TestFunctionName ./pkg/pattern/
 
 ```bash
 go run ./cmd/lapp/ workspace create <topic>
-go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile> [--model <model>]
-go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin [--model <model>]
+go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile>
+go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin
+go run ./cmd/lapp/ workspace discover --topic <topic> [--model <model>]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
 ```
@@ -35,21 +36,21 @@ Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/wo
 ## Architecture
 
 ```
-cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/analyze)
+cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/discover/analyze)
 pkg/logsource/           Read log files → channel of LogLine
 pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
 pkg/semantic/            LLM-based semantic labeling of Drain patterns
 pkg/workspace/           DiscoveryRun execution and run-scoped file writer
-pkg/store/               DuckDB storage primitives (not yet on the CLI add-log path)
+pkg/store/               DuckDB storage primitives (not yet on the CLI discovery path)
 pkg/config/              Model resolution (flag → $MODEL_NAME → default)
 pkg/analyzer/            Agentic log analysis via eino ADK + ACP providers
 integration_test/        Integration tests against Loghub-2.0 datasets
 ```
 
-### DiscoveryRun (add-log)
+### DiscoveryRun (discover)
 
-Each `add-log` copies a log file, then starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
+`add-log` is a pure copy into `logs/` and never triggers discovery. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
 When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns as failed because those local workers no longer exist.
 DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
 
@@ -75,7 +76,7 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 
 ## Environment Variables
 
-- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace add-log`
+- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace discover`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - ACP provider credentials/login: Required for `workspace analyze` through the selected provider
 - `.env` file is auto-loaded via godotenv

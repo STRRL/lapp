@@ -46,6 +46,7 @@ func workspaceCmd() *cobra.Command {
 	cmd.AddCommand(workspaceCreateCmd())
 	cmd.AddCommand(workspaceListCmd())
 	cmd.AddCommand(workspaceAddLogCmd())
+	cmd.AddCommand(workspaceDiscoverCmd())
 	cmd.AddCommand(workspaceAnalyzeCmd())
 	return cmd
 }
@@ -146,23 +147,21 @@ Use ` + "`lapp workspace add-log --topic " + topic + " <logfile>`" + ` to add lo
 	return nil
 }
 
-var addLogModel string
 var addLogStdin bool
 var addLogTopic string
 
 func workspaceAddLogCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add-log [logfile]",
-		Short: "Add a log file to the workspace and start discovery",
-		Long: `Copy a log file into the workspace's logs/ directory, then run the full
-DiscoveryRun flow (Drain clustering + semantic labeling) to generate run-scoped results.
+		Short: "Copy a log file into the workspace",
+		Long: `Copy a log file into the workspace's logs/ directory.
 
-Requires OPENROUTER_API_KEY environment variable.`,
+This does not run discovery. Run 'lapp workspace discover --topic <topic>' afterwards
+to discover patterns over all log files in the workspace.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runWorkspaceAddLog,
 	}
 	cmd.Flags().StringVar(&addLogTopic, "topic", "", "workspace topic (required)")
-	cmd.Flags().StringVar(&addLogModel, "model", "", "override LLM model")
 	cmd.Flags().BoolVar(&addLogStdin, "stdin", false, "read log from stdin")
 	_ = cmd.MarkFlagRequired("topic")
 	return cmd
@@ -180,24 +179,77 @@ func runWorkspaceAddLog(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("not a workspace: %s (no logs/ directory)%s", dir, hint)
 	}
 
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		return errors.New("OPENROUTER_API_KEY environment variable is required")
-	}
-
-	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceAddLog")
+	_, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceAddLog")
 	defer span.End()
 
 	if err := copyLogToWorkspace(dir, args, span.SetAttributes); err != nil {
 		return err
 	}
 
+	topic := filepath.Base(dir)
+	fmt.Printf("Log added. Discovery has not run yet.\nRun it with:\n\n  lapp workspace discover --topic %s\n", topic)
+	span.SetStatus(codes.Ok, "")
+	return nil
+}
+
+var discoverModel string
+var discoverTopic string
+
+func workspaceDiscoverCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "discover",
+		Short: "Run pattern discovery over all log files in the workspace",
+		Long: `Start a DiscoveryRun over ALL current log files in the workspace:
+Drain clustering + LLM semantic labeling, writing run-scoped results under
+discovery-runs/<run-id>/.
+
+Requires OPENROUTER_API_KEY environment variable.`,
+		Args: cobra.NoArgs,
+		RunE: runWorkspaceDiscover,
+	}
+	cmd.Flags().StringVar(&discoverTopic, "topic", "", "workspace topic (required)")
+	cmd.Flags().StringVar(&discoverModel, "model", "", "override LLM model")
+	_ = cmd.MarkFlagRequired("topic")
+	return cmd
+}
+
+func runWorkspaceDiscover(cmd *cobra.Command, _ []string) error {
+	dir, err := topicToDir(discoverTopic)
+	if err != nil {
+		return err
+	}
+
+	// Validate workspace exists
+	if _, err := os.Stat(filepath.Join(dir, "logs")); os.IsNotExist(err) {
+		hint := availableWorkspacesHint()
+		return errors.Errorf("not a workspace: %s (no logs/ directory)%s", dir, hint)
+	}
+
+	topic := filepath.Base(dir)
+	logFiles, err := workspace.ListLogFiles(dir)
+	if err != nil {
+		return errors.Errorf("list log files: %w", err)
+	}
+	if len(logFiles) == 0 {
+		return errors.Errorf("workspace %q has no log files; add one with `lapp workspace add-log --topic %s <logfile>`", topic, topic)
+	}
+
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	if apiKey == "" {
+		return errors.New("OPENROUTER_API_KEY environment variable is required")
+	}
+
+	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceDiscover")
+	defer span.End()
+
 	result, err := workspace.Discover(ctx, workspace.DiscoveryConfig{
 		Dir:    dir,
 		APIKey: apiKey,
-		Model:  addLogModel,
+		Model:  discoverModel,
 	})
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -289,7 +341,7 @@ func runWorkspaceAnalyze(cmd *cobra.Command, args []string) error {
 	}
 	latestSuccess := workspace.LatestSuccessfulDiscoveryRun(records)
 	if latestSuccess == nil {
-		return errors.Errorf("no successful discovery run found for workspace %q; run `lapp workspace add-log --topic %s <logfile>` first", filepath.Base(absDir), filepath.Base(absDir))
+		return errors.Errorf("no successful discovery run found for workspace %q; run `lapp workspace discover --topic %s` first", filepath.Base(absDir), filepath.Base(absDir))
 	}
 
 	tapePath := filepath.Join(absDir, ".tape.jsonl")
