@@ -107,7 +107,7 @@ func (b *Builder) computePatterns() {
 	}
 	matches := make([]lineWithTemplate, 0, len(b.tagged))
 	for _, tl := range b.tagged {
-		t, ok := pattern.MatchTemplate(tl.Content, b.templates)
+		t, ok := pattern.MatchTemplate(tl.DrainLine(), b.templates)
 		id := ""
 		if ok {
 			id = t.ID.String()

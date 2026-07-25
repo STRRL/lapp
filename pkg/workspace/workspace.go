@@ -12,6 +12,18 @@ type TaggedLine struct {
 	Content  string
 	FileName string
 	LineNum  int
+	// Projection is the text fed to pattern mining for NDJSON entries.
+	// Empty for plain text entries, whose Content is mined directly.
+	Projection string `json:",omitempty"`
+}
+
+// DrainLine returns the text used for pattern mining and template matching:
+// the projection for NDJSON entries, otherwise the raw content.
+func (t TaggedLine) DrainLine() string {
+	if t.Projection != "" {
+		return t.Projection
+	}
+	return t.Content
 }
 
 // LineRef identifies a line's location in a source file.

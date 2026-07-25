@@ -1,0 +1,4 @@
+{"severity":"WARN","message":"disk usage high volume=/var"}
+{"log":"connection reset peer=10.0.0.5"}
+{"error":"context deadline exceeded","op":"fetch"}
+{"message":"primary text","msg":"secondary text"}
