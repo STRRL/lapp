@@ -1,0 +1,1 @@
+{"ts":"2026-07-25T02:30:00Z","severity":"INFO","payload":{"message":"user login","user_id":"u-42"}}
