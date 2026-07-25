@@ -1,0 +1,5 @@
+{
+  "timestamp": "2026-07-01T12:00:01Z",
+  "severity": "WARNING",
+  "textPayload": "disk usage at 91 percent on node a7"
+}

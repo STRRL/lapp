@@ -1,0 +1,8 @@
+{
+  "timestamp": "2026-07-25T10:30:00+08:00",
+  "severity": "INFO",
+  "jsonPayload": {
+    "message": "user login",
+    "user_id": "u-42"
+  }
+}

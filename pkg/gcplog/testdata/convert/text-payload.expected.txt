@@ -1,0 +1,1 @@
+{"ts":"2026-07-01T12:00:01Z","severity":"WARNING","payload":{"message":"disk usage at 91 percent on node a7"}}

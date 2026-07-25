@@ -1,0 +1,1 @@
+{"ts":"2026-07-24T21:20:26.497706Z","severity":"DEFAULT","payload":{"message":"2026-07-24 21:20:26,496 [INFO] httpx: HTTP Request: PATCH https://api.example.internal/rest/v1/creators?uid=eq.1234567890 \"HTTP/2 200 OK\""}}

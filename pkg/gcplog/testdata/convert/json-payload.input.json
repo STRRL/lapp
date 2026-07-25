@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-07-01T12:00:00Z",
+  "severity": "ERROR",
+  "jsonPayload": {
+    "message": "payment declined",
+    "order_id": 1001,
+    "retriable": false
+  }
+}

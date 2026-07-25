@@ -46,6 +46,7 @@ func workspaceCmd() *cobra.Command {
 	cmd.AddCommand(workspaceCreateCmd())
 	cmd.AddCommand(workspaceListCmd())
 	cmd.AddCommand(workspaceAddLogCmd())
+	cmd.AddCommand(workspaceImportCmd())
 	cmd.AddCommand(workspaceDiscoverCmd())
 	cmd.AddCommand(workspaceAnalyzeCmd())
 	return cmd
@@ -126,7 +127,7 @@ func runWorkspaceCreate(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	for _, sub := range []string{"logs", workspace.DiscoveryRunsDirName} {
+	for _, sub := range []string{"logs", workspace.DiscoveryRunsDirName, workspace.ImportRunsDirName} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			return errors.Errorf("create %s: %w", sub, err)
 		}
