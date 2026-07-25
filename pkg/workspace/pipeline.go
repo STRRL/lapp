@@ -313,7 +313,7 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 }
 
 // tagFileLines converts one log file into tagged entries. NDJSON files keep
-// the raw JSON line as Content and carry a text projection for pattern
+// the raw JSON line as Content and carry an extracted text line for pattern
 // mining; plain text files go through multiline merging unchanged.
 func tagFileLines(ctx context.Context, fileName string, lines []string) ([]TaggedLine, error) {
 	if ndjson.DetectFormat(lines) == ndjson.FormatNDJSON {
@@ -342,10 +342,10 @@ func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
 			continue
 		}
 		tagged = append(tagged, TaggedLine{
-			Content:    line,
-			FileName:   fileName,
-			LineNum:    i + 1,
-			Projection: ndjson.Project(line),
+			Content:       line,
+			FileName:      fileName,
+			LineNum:       i + 1,
+			ExtractedLine: ndjson.Extract(line),
 		})
 	}
 	return tagged

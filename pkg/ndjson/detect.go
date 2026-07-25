@@ -1,5 +1,5 @@
-// Package ndjson classifies log files as NDJSON and projects structured
-// entries to text lines for pattern mining, per ADR 0006.
+// Package ndjson classifies log files as NDJSON and extracts the text lines
+// fed to pattern mining from structured entries, per ADR 0006.
 package ndjson
 
 import (
@@ -20,7 +20,7 @@ const (
 // DetectFormat classifies a file's lines. A file is NDJSON only when it has
 // at least one non-empty line and every non-empty line parses as a JSON
 // object. Files mixing text with JSON lines stay on the text path, so the
-// projection never has to guess on a half-structured file.
+// extraction never has to guess on a half-structured file.
 func DetectFormat(lines []string) Format {
 	sampled := 0
 	for _, line := range lines {

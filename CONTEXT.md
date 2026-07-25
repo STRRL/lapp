@@ -27,6 +27,6 @@ _Avoid_: Sync, connection, integration, LogImport
 An external logging service LAPP can import from, such as GCP Cloud Logging or Vercel. LAPP uses credentials already present on the machine and never manages provider authentication itself.
 _Avoid_: Source, backend
 
-**Projection**:
-The text line derived from a structured log entry for pattern discovery. Discovery reads the projection; investigation material keeps the full structured entry.
-_Avoid_: Flattening, rendering
+**Extraction**:
+The text line pulled out of a structured log entry for pattern discovery. Discovery reads the extraction; investigation material keeps the full structured entry.
+_Avoid_: Projection, flattening, rendering

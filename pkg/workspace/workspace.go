@@ -12,16 +12,16 @@ type TaggedLine struct {
 	Content  string
 	FileName string
 	LineNum  int
-	// Projection is the text fed to pattern mining for NDJSON entries.
+	// ExtractedLine is the text fed to pattern mining for NDJSON entries.
 	// Empty for plain text entries, whose Content is mined directly.
-	Projection string `json:",omitempty"`
+	ExtractedLine string `json:",omitempty"`
 }
 
 // DrainLine returns the text used for pattern mining and template matching:
-// the projection for NDJSON entries, otherwise the raw content.
+// the extracted line for NDJSON entries, otherwise the raw content.
 func (t TaggedLine) DrainLine() string {
-	if t.Projection != "" {
-		return t.Projection
+	if t.ExtractedLine != "" {
+		return t.ExtractedLine
 	}
 	return t.Content
 }

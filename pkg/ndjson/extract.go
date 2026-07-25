@@ -13,13 +13,13 @@ var messageFields = []string{"message", "msg", "log", "error"}
 // Numeric levels are ignored in v1.
 var severityFields = []string{"severity", "level"}
 
-// Project converts one NDJSON line into the text line fed to pattern mining.
-// Envelope entries {"ts": ..., "severity": ..., "payload": {...}} project
-// from the payload; any other object is the payload itself. The projection is
+// Extract converts one NDJSON line into the text line fed to pattern mining.
+// Envelope entries {"ts": ..., "severity": ..., "payload": {...}} extract
+// from the payload; any other object is the payload itself. The extracted line is
 // "<severity> <message>", just "<message>" when no severity-like string field
 // exists, or the compact payload JSON when no message-like string field
 // exists. A line that does not parse as a JSON object is returned unchanged.
-func Project(line string) string {
+func Extract(line string) string {
 	var entry map[string]any
 	if err := json.Unmarshal([]byte(line), &entry); err != nil || entry == nil {
 		return line
@@ -44,7 +44,7 @@ func Project(line string) string {
 // entry matches the fixed envelope shape, otherwise the entry itself. The
 // envelope is the importer's fixed contract (ADR 0006): ts, a string severity,
 // and a payload object must all be present; anything less is an arbitrary
-// user shape and is projected as a whole.
+// user shape and is extracted as a whole.
 func splitEnvelope(entry map[string]any) (payload map[string]any, severity string) {
 	nested, ok := entry["payload"].(map[string]any)
 	if !ok {
