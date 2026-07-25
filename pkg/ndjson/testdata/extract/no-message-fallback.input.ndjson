@@ -1,0 +1,2 @@
+{"event":"gc","duration_ms":12}
+{"ts":"2026-06-06T10:00:05Z","severity":"DEBUG","payload":{"event":"cache_evict","keys":120}}

@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	"github.com/strrl/lapp/pkg/multiline"
+	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"go.opentelemetry.io/otel"
@@ -298,22 +300,55 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 	var allTagged []TaggedLine
 	var allContent []string
 	for _, fileName := range fileNames {
-		lines := allLogs[fileName]
-		detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+		fileTagged, err := tagFileLines(ctx, fileName, allLogs[fileName])
 		if err != nil {
-			return nil, nil, 0, errors.Errorf("multiline detector: %w", err)
+			return nil, nil, 0, err
 		}
-		merged := multiline.MergeSlice(ctx, lines, detector)
-		for _, m := range merged {
-			allTagged = append(allTagged, TaggedLine{
-				Content:  m.Content,
-				FileName: fileName,
-				LineNum:  m.StartLine,
-			})
-			allContent = append(allContent, m.Content)
+		for _, tl := range fileTagged {
+			allTagged = append(allTagged, tl)
+			allContent = append(allContent, tl.DrainLine())
 		}
 	}
 	return allTagged, allContent, len(allLogs), nil
+}
+
+// tagFileLines converts one log file into tagged entries. NDJSON files keep
+// the raw JSON line as Content and carry an extracted text line for pattern
+// mining; plain text files go through multiline merging unchanged.
+func tagFileLines(ctx context.Context, fileName string, lines []string) ([]TaggedLine, error) {
+	if ndjson.DetectFormat(lines) == ndjson.FormatNDJSON {
+		return tagNDJSONLines(fileName, lines), nil
+	}
+	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+	if err != nil {
+		return nil, errors.Errorf("multiline detector: %w", err)
+	}
+	merged := multiline.MergeSlice(ctx, lines, detector)
+	tagged := make([]TaggedLine, 0, len(merged))
+	for _, m := range merged {
+		tagged = append(tagged, TaggedLine{
+			Content:  m.Content,
+			FileName: fileName,
+			LineNum:  m.StartLine,
+		})
+	}
+	return tagged, nil
+}
+
+func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
+	var tagged []TaggedLine
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		tagged = append(tagged, TaggedLine{
+			Content:       line,
+			FileName:      fileName,
+			LineNum:       i + 1,
+			ExtractedLine: ndjson.Extract(line),
+		})
+	}
+	return tagged
 }
 
 func discoverRepeatedPatterns(ctx context.Context, content []string) ([]pattern.DrainCluster, error) {

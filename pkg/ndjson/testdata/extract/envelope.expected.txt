@@ -1,0 +1,3 @@
+ERROR db timeout user=42
+INFO server started port=8080
+{"payload":{"message":"heartbeat ok"},"ts":"2026-06-06T10:00:02Z"}

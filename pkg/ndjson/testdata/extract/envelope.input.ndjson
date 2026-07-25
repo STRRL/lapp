@@ -1,0 +1,3 @@
+{"ts":"2026-06-06T10:00:00Z","severity":"ERROR","payload":{"message":"db timeout user=42"}}
+{"ts":"2026-06-06T10:00:01Z","severity":"INFO","payload":{"msg":"server started port=8080"}}
+{"ts":"2026-06-06T10:00:02Z","payload":{"message":"heartbeat ok"}}
