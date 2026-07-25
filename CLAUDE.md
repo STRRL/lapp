@@ -26,6 +26,7 @@ go test -v -run TestFunctionName ./pkg/pattern/
 go run ./cmd/lapp/ workspace create <topic>
 go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile>
 go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin
+go run ./cmd/lapp/ workspace import gcp --topic <topic> --project <project> [--filter <filter>] (--since <duration> | --from <ts> --to <ts>) [--limit <n>]
 go run ./cmd/lapp/ workspace discover --topic <topic> [--model <model>]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
@@ -36,7 +37,7 @@ Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/wo
 ## Architecture
 
 ```
-cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/discover/analyze)
+cmd/lapp/                CLI entrypoint (cobra commands: workspace create/add-log/import/discover/analyze)
 pkg/logsource/           Read log files → channel of LogLine
 pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
@@ -50,7 +51,7 @@ integration_test/        Integration tests against Loghub-2.0 datasets
 
 ### DiscoveryRun (discover)
 
-`add-log` is a pure copy into `logs/` and never triggers discovery. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
+`add-log` is a pure copy into `logs/` and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
 When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns as failed because those local workers no longer exist.
 DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
 
@@ -77,6 +78,7 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 ## Environment Variables
 
 - `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace discover`
+- GCP ADC (`gcloud auth application-default login`): Required for `workspace import gcp`
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - ACP provider credentials/login: Required for `workspace analyze` through the selected provider
 - `.env` file is auto-loaded via godotenv

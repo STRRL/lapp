@@ -81,6 +81,7 @@ DiscoveryRuns are one-time local tasks. If `lapp web` starts and finds a previou
 | `workspace create <topic>` | Create a workspace under `~/.lapp/workspaces/` |
 | `workspace list` | List all workspace topics |
 | `workspace add-log --topic <topic> <file>` | Copy a log file into the workspace |
+| `workspace import gcp --topic <topic> --project <p> --since 1h` | Import a snapshot from GCP Cloud Logging |
 | `workspace discover --topic <topic>` | Run pattern discovery over all log files |
 | `workspace analyze --topic <topic> [question]` | Run AI analysis (`--acp claude|codex|gemini`) |
 
