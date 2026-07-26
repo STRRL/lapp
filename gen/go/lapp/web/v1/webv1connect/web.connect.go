@@ -5,6 +5,7 @@
 package webv1connect
 
 import (
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	connect "connectrpc.com/connect"
 	context "context"
 	errors "errors"
@@ -95,11 +96,11 @@ type WorkspaceServiceClient interface {
 	ListLogFiles(context.Context, *connect.Request[v1.ListLogFilesRequest]) (*connect.Response[v1.ListLogFilesResponse], error)
 	UploadLogFile(context.Context, *connect.Request[v1.UploadLogFileRequest]) (*connect.Response[v1.UploadLogFileResponse], error)
 	DeleteLogFile(context.Context, *connect.Request[v1.DeleteLogFileRequest]) (*connect.Response[v1.DeleteLogFileResponse], error)
-	CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[v1.CreateImportRunResponse], error)
+	CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[longrunningpb.Operation], error)
 	GetImportRun(context.Context, *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error)
 	ListImportRuns(context.Context, *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error)
 	ListRecentImportQueries(context.Context, *connect.Request[v1.ListRecentImportQueriesRequest]) (*connect.Response[v1.ListRecentImportQueriesResponse], error)
-	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error)
+	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[longrunningpb.Operation], error)
 	GetDiscoveryRun(context.Context, *connect.Request[v1.GetDiscoveryRunRequest]) (*connect.Response[v1.GetDiscoveryRunResponse], error)
 	ListDiscoveryRuns(context.Context, *connect.Request[v1.ListDiscoveryRunsRequest]) (*connect.Response[v1.ListDiscoveryRunsResponse], error)
 	ListPatterns(context.Context, *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error)
@@ -160,7 +161,7 @@ func NewWorkspaceServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(workspaceServiceMethods.ByName("DeleteLogFile")),
 			connect.WithClientOptions(opts...),
 		),
-		createImportRun: connect.NewClient[v1.CreateImportRunRequest, v1.CreateImportRunResponse](
+		createImportRun: connect.NewClient[v1.CreateImportRunRequest, longrunningpb.Operation](
 			httpClient,
 			baseURL+WorkspaceServiceCreateImportRunProcedure,
 			connect.WithSchema(workspaceServiceMethods.ByName("CreateImportRun")),
@@ -184,7 +185,7 @@ func NewWorkspaceServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(workspaceServiceMethods.ByName("ListRecentImportQueries")),
 			connect.WithClientOptions(opts...),
 		),
-		createDiscoveryRun: connect.NewClient[v1.CreateDiscoveryRunRequest, v1.CreateDiscoveryRunResponse](
+		createDiscoveryRun: connect.NewClient[v1.CreateDiscoveryRunRequest, longrunningpb.Operation](
 			httpClient,
 			baseURL+WorkspaceServiceCreateDiscoveryRunProcedure,
 			connect.WithSchema(workspaceServiceMethods.ByName("CreateDiscoveryRun")),
@@ -232,11 +233,11 @@ type workspaceServiceClient struct {
 	listLogFiles            *connect.Client[v1.ListLogFilesRequest, v1.ListLogFilesResponse]
 	uploadLogFile           *connect.Client[v1.UploadLogFileRequest, v1.UploadLogFileResponse]
 	deleteLogFile           *connect.Client[v1.DeleteLogFileRequest, v1.DeleteLogFileResponse]
-	createImportRun         *connect.Client[v1.CreateImportRunRequest, v1.CreateImportRunResponse]
+	createImportRun         *connect.Client[v1.CreateImportRunRequest, longrunningpb.Operation]
 	getImportRun            *connect.Client[v1.GetImportRunRequest, v1.GetImportRunResponse]
 	listImportRuns          *connect.Client[v1.ListImportRunsRequest, v1.ListImportRunsResponse]
 	listRecentImportQueries *connect.Client[v1.ListRecentImportQueriesRequest, v1.ListRecentImportQueriesResponse]
-	createDiscoveryRun      *connect.Client[v1.CreateDiscoveryRunRequest, v1.CreateDiscoveryRunResponse]
+	createDiscoveryRun      *connect.Client[v1.CreateDiscoveryRunRequest, longrunningpb.Operation]
 	getDiscoveryRun         *connect.Client[v1.GetDiscoveryRunRequest, v1.GetDiscoveryRunResponse]
 	listDiscoveryRuns       *connect.Client[v1.ListDiscoveryRunsRequest, v1.ListDiscoveryRunsResponse]
 	listPatterns            *connect.Client[v1.ListPatternsRequest, v1.ListPatternsResponse]
@@ -280,7 +281,7 @@ func (c *workspaceServiceClient) DeleteLogFile(ctx context.Context, req *connect
 }
 
 // CreateImportRun calls lapp.web.v1.WorkspaceService.CreateImportRun.
-func (c *workspaceServiceClient) CreateImportRun(ctx context.Context, req *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[v1.CreateImportRunResponse], error) {
+func (c *workspaceServiceClient) CreateImportRun(ctx context.Context, req *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	return c.createImportRun.CallUnary(ctx, req)
 }
 
@@ -300,7 +301,7 @@ func (c *workspaceServiceClient) ListRecentImportQueries(ctx context.Context, re
 }
 
 // CreateDiscoveryRun calls lapp.web.v1.WorkspaceService.CreateDiscoveryRun.
-func (c *workspaceServiceClient) CreateDiscoveryRun(ctx context.Context, req *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error) {
+func (c *workspaceServiceClient) CreateDiscoveryRun(ctx context.Context, req *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	return c.createDiscoveryRun.CallUnary(ctx, req)
 }
 
@@ -338,11 +339,11 @@ type WorkspaceServiceHandler interface {
 	ListLogFiles(context.Context, *connect.Request[v1.ListLogFilesRequest]) (*connect.Response[v1.ListLogFilesResponse], error)
 	UploadLogFile(context.Context, *connect.Request[v1.UploadLogFileRequest]) (*connect.Response[v1.UploadLogFileResponse], error)
 	DeleteLogFile(context.Context, *connect.Request[v1.DeleteLogFileRequest]) (*connect.Response[v1.DeleteLogFileResponse], error)
-	CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[v1.CreateImportRunResponse], error)
+	CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[longrunningpb.Operation], error)
 	GetImportRun(context.Context, *connect.Request[v1.GetImportRunRequest]) (*connect.Response[v1.GetImportRunResponse], error)
 	ListImportRuns(context.Context, *connect.Request[v1.ListImportRunsRequest]) (*connect.Response[v1.ListImportRunsResponse], error)
 	ListRecentImportQueries(context.Context, *connect.Request[v1.ListRecentImportQueriesRequest]) (*connect.Response[v1.ListRecentImportQueriesResponse], error)
-	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error)
+	CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[longrunningpb.Operation], error)
 	GetDiscoveryRun(context.Context, *connect.Request[v1.GetDiscoveryRunRequest]) (*connect.Response[v1.GetDiscoveryRunResponse], error)
 	ListDiscoveryRuns(context.Context, *connect.Request[v1.ListDiscoveryRunsRequest]) (*connect.Response[v1.ListDiscoveryRunsResponse], error)
 	ListPatterns(context.Context, *connect.Request[v1.ListPatternsRequest]) (*connect.Response[v1.ListPatternsResponse], error)
@@ -532,7 +533,7 @@ func (UnimplementedWorkspaceServiceHandler) DeleteLogFile(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.DeleteLogFile is not implemented"))
 }
 
-func (UnimplementedWorkspaceServiceHandler) CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[v1.CreateImportRunResponse], error) {
+func (UnimplementedWorkspaceServiceHandler) CreateImportRun(context.Context, *connect.Request[v1.CreateImportRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.CreateImportRun is not implemented"))
 }
 
@@ -548,7 +549,7 @@ func (UnimplementedWorkspaceServiceHandler) ListRecentImportQueries(context.Cont
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.ListRecentImportQueries is not implemented"))
 }
 
-func (UnimplementedWorkspaceServiceHandler) CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[v1.CreateDiscoveryRunResponse], error) {
+func (UnimplementedWorkspaceServiceHandler) CreateDiscoveryRun(context.Context, *connect.Request[v1.CreateDiscoveryRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("lapp.web.v1.WorkspaceService.CreateDiscoveryRun is not implemented"))
 }
 

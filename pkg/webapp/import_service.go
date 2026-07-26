@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"connectrpc.com/connect"
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
@@ -21,7 +22,7 @@ import (
 const defaultImportLimit = 100000
 const recentImportQueryLimit = 20
 
-func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Request[webv1.CreateImportRunRequest]) (*connect.Response[webv1.CreateImportRunResponse], error) {
+func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Request[webv1.CreateImportRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	id, connectErr := workspaceIDFromName(req.Msg.Parent)
 	if connectErr != nil {
 		return nil, connectErr
@@ -38,7 +39,7 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 	}
 
 	if !s.reserveRun(id) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
+		return nil, connect.NewError(connect.CodeAborted, errors.New("another run is active"))
 	}
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		s.releaseRun(id)
@@ -64,7 +65,7 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	message, err := s.importRunMessage(id, record)
+	operation, err := s.importRunOperation(id, record)
 	if err != nil {
 		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -89,9 +90,7 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 		}
 	}()
 
-	return connect.NewResponse(&webv1.CreateImportRunResponse{
-		ImportRun: message,
-	}), nil
+	return connect.NewResponse(operation), nil
 }
 
 func validateImportRunRequest(req *webv1.CreateImportRunRequest) (from, to time.Time, limit int, connectErr *connect.Error) {

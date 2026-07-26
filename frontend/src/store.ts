@@ -1,8 +1,10 @@
 import { ConnectError } from "@connectrpc/connect";
+import { anyUnpack } from "@bufbuild/protobuf/wkt";
 import { create } from "zustand";
 import { workspaceClient } from "./api";
 import {
   DiscoveryRun,
+  DiscoveryRunMetadataSchema,
   DiscoveryRunState,
   LogFile,
   Pattern,
@@ -219,7 +221,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     if (!selectedWorkspaceName) return;
 
     const response = await workspaceClient.createDiscoveryRun({ parent: selectedWorkspaceName });
-    set({ selectedRunName: response.discoveryRun?.name || "" });
+    const metadata = response.metadata ? anyUnpack(response.metadata, DiscoveryRunMetadataSchema) : undefined;
+    set({ selectedRunName: metadata?.discoveryRun?.name || "" });
     await get().refreshWorkspaceDetails(selectedWorkspaceName);
     await get().refreshWorkspaces();
   }

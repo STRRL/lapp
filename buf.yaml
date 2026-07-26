@@ -1,9 +1,16 @@
 version: v2
 modules:
   - path: proto
+deps:
+  - buf.build/googleapis/googleapis
 lint:
   use:
     - STANDARD
+  ignore_only:
+    RPC_REQUEST_RESPONSE_UNIQUE:
+      - proto/lapp/web/v1/web.proto
+    RPC_RESPONSE_STANDARD_NAME:
+      - proto/lapp/web/v1/web.proto
 breaking:
   use:
     - FILE

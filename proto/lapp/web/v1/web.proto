@@ -4,6 +4,7 @@ package lapp.web.v1;
 
 option go_package = "github.com/strrl/lapp/gen/go/lapp/web/v1;webv1";
 
+import "google/longrunning/operations.proto";
 import "google/protobuf/timestamp.proto";
 
 service WorkspaceService {
@@ -16,12 +17,22 @@ service WorkspaceService {
   rpc UploadLogFile(UploadLogFileRequest) returns (UploadLogFileResponse);
   rpc DeleteLogFile(DeleteLogFileRequest) returns (DeleteLogFileResponse);
 
-  rpc CreateImportRun(CreateImportRunRequest) returns (CreateImportRunResponse);
+  rpc CreateImportRun(CreateImportRunRequest) returns (google.longrunning.Operation) {
+    option (google.longrunning.operation_info) = {
+      response_type: "ImportRun"
+      metadata_type: "ImportRunMetadata"
+    };
+  }
   rpc GetImportRun(GetImportRunRequest) returns (GetImportRunResponse);
   rpc ListImportRuns(ListImportRunsRequest) returns (ListImportRunsResponse);
   rpc ListRecentImportQueries(ListRecentImportQueriesRequest) returns (ListRecentImportQueriesResponse);
 
-  rpc CreateDiscoveryRun(CreateDiscoveryRunRequest) returns (CreateDiscoveryRunResponse);
+  rpc CreateDiscoveryRun(CreateDiscoveryRunRequest) returns (google.longrunning.Operation) {
+    option (google.longrunning.operation_info) = {
+      response_type: "DiscoveryRun"
+      metadata_type: "DiscoveryRunMetadata"
+    };
+  }
   rpc GetDiscoveryRun(GetDiscoveryRunRequest) returns (GetDiscoveryRunResponse);
   rpc ListDiscoveryRuns(ListDiscoveryRunsRequest) returns (ListDiscoveryRunsResponse);
 
@@ -73,6 +84,10 @@ message ImportRun {
   ImportRunError error = 15;
 }
 
+message ImportRunMetadata {
+  ImportRun import_run = 1;
+}
+
 message ImportRunError {
   string code = 1;
   string message = 2;
@@ -100,6 +115,10 @@ message DiscoveryRun {
   int32 unmatched_count = 11;
   DiscoveryRunProgress progress = 12;
   DiscoveryRunError error = 13;
+}
+
+message DiscoveryRunMetadata {
+  DiscoveryRun discovery_run = 1;
 }
 
 message DiscoveryRunProgress {
@@ -229,10 +248,6 @@ message CreateImportRunRequest {
   int32 limit = 6;
 }
 
-message CreateImportRunResponse {
-  ImportRun import_run = 1;
-}
-
 message GetImportRunRequest {
   string name = 1;
 }
@@ -264,10 +279,6 @@ message ListRecentImportQueriesResponse {
 message CreateDiscoveryRunRequest {
   string parent = 1;
   string model = 2;
-}
-
-message CreateDiscoveryRunResponse {
-  DiscoveryRun discovery_run = 1;
 }
 
 message GetDiscoveryRunRequest {

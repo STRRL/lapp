@@ -1,19 +1,20 @@
 version: v2
-clean: true
 plugins:
-  - remote: buf.build/protocolbuffers/go
-    out: gen/go
-    opt:
-      - paths=source_relative
   - remote: buf.build/connectrpc/go
     out: gen/go
     opt:
       - paths=source_relative
     types:
-      - lapp.web.v1.WorkspaceService
+      - google.longrunning.Operations
   - remote: buf.build/bufbuild/es:v2.12.1
     out: frontend/src/gen
     opt:
       - target=ts
+    types:
+      - google.longrunning
+      - google.rpc.Status
 inputs:
-  - directory: proto
+  - module: buf.build/googleapis/googleapis
+    types:
+      - google.longrunning
+      - google.rpc.Status
