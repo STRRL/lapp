@@ -16,6 +16,11 @@ service WorkspaceService {
   rpc UploadLogFile(UploadLogFileRequest) returns (UploadLogFileResponse);
   rpc DeleteLogFile(DeleteLogFileRequest) returns (DeleteLogFileResponse);
 
+  rpc CreateImportRun(CreateImportRunRequest) returns (CreateImportRunResponse);
+  rpc GetImportRun(GetImportRunRequest) returns (GetImportRunResponse);
+  rpc ListImportRuns(ListImportRunsRequest) returns (ListImportRunsResponse);
+  rpc ListRecentImportQueries(ListRecentImportQueriesRequest) returns (ListRecentImportQueriesResponse);
+
   rpc CreateDiscoveryRun(CreateDiscoveryRunRequest) returns (CreateDiscoveryRunResponse);
   rpc GetDiscoveryRun(GetDiscoveryRunRequest) returns (GetDiscoveryRunResponse);
   rpc ListDiscoveryRuns(ListDiscoveryRunsRequest) returns (ListDiscoveryRunsResponse);
@@ -48,6 +53,37 @@ message LogFile {
   string file_name = 2;
   int64 size_bytes = 3;
   google.protobuf.Timestamp updated_at = 4;
+}
+
+message ImportRun {
+  string name = 1;
+  string import_run_id = 2;
+  string provider = 3;
+  string project = 4;
+  string filter = 5;
+  google.protobuf.Timestamp from = 6;
+  google.protobuf.Timestamp to = 7;
+  int32 limit = 8;
+  ImportRunState state = 9;
+  int32 entry_count = 10;
+  bool truncated = 11;
+  string log_file_name = 12;
+  google.protobuf.Timestamp started_at = 13;
+  google.protobuf.Timestamp finished_at = 14;
+  ImportRunError error = 15;
+}
+
+message ImportRunError {
+  string code = 1;
+  string message = 2;
+}
+
+enum ImportRunState {
+  IMPORT_RUN_STATE_UNSPECIFIED = 0;
+  IMPORT_RUN_STATE_QUEUED = 1;
+  IMPORT_RUN_STATE_RUNNING = 2;
+  IMPORT_RUN_STATE_SUCCEEDED = 3;
+  IMPORT_RUN_STATE_FAILED = 4;
 }
 
 message DiscoveryRun {
@@ -183,6 +219,47 @@ message DeleteLogFileRequest {
 }
 
 message DeleteLogFileResponse {}
+
+message CreateImportRunRequest {
+  string parent = 1;
+  string project = 2;
+  string filter = 3;
+  google.protobuf.Timestamp from = 4;
+  google.protobuf.Timestamp to = 5;
+  int32 limit = 6;
+}
+
+message CreateImportRunResponse {
+  ImportRun import_run = 1;
+}
+
+message GetImportRunRequest {
+  string name = 1;
+}
+
+message GetImportRunResponse {
+  ImportRun import_run = 1;
+}
+
+message ListImportRunsRequest {
+  string parent = 1;
+}
+
+message ListImportRunsResponse {
+  repeated ImportRun import_runs = 1;
+}
+
+message ListRecentImportQueriesRequest {}
+
+message RecentImportQuery {
+  string project = 1;
+  string filter = 2;
+  google.protobuf.Timestamp last_used_at = 3;
+}
+
+message ListRecentImportQueriesResponse {
+  repeated RecentImportQuery recent_queries = 1;
+}
 
 message CreateDiscoveryRunRequest {
   string parent = 1;

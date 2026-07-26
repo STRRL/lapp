@@ -27,19 +27,21 @@ var workspaceIDPattern = regexp.MustCompile(`[^a-z0-9]+`)
 var errorLikePattern = regexp.MustCompile(`(?i)(error|warn|fatal|panic|exception|failed|timeout)`)
 
 type WorkspaceService struct {
-	root    string
-	apiKey  string
-	model   string
-	mu      sync.Mutex
-	running map[string]bool
-	labeler workspace.PatternLabeler
+	root          string
+	apiKey        string
+	model         string
+	mu            sync.Mutex
+	activeRuns    map[string]bool
+	labeler       workspace.PatternLabeler
+	importFetcher workspace.ImportFetcher
 }
 
 type ServiceConfig struct {
-	Root    string
-	APIKey  string
-	Model   string
-	Labeler workspace.PatternLabeler
+	Root          string
+	APIKey        string
+	Model         string
+	Labeler       workspace.PatternLabeler
+	ImportFetcher workspace.ImportFetcher
 }
 
 func NewWorkspaceService(config ServiceConfig) (*WorkspaceService, error) {
@@ -52,13 +54,17 @@ func NewWorkspaceService(config ServiceConfig) (*WorkspaceService, error) {
 		root = filepath.Join(home, ".lapp", "workspaces")
 	}
 	service := &WorkspaceService{
-		root:    root,
-		apiKey:  config.APIKey,
-		model:   config.Model,
-		running: make(map[string]bool),
-		labeler: config.Labeler,
+		root:          root,
+		apiKey:        config.APIKey,
+		model:         config.Model,
+		activeRuns:    make(map[string]bool),
+		labeler:       config.Labeler,
+		importFetcher: config.ImportFetcher,
 	}
 	if err := service.recoverInterruptedDiscoveryRuns(); err != nil {
+		return nil, err
+	}
+	if err := service.recoverInterruptedImportRuns(); err != nil {
 		return nil, err
 	}
 	return service, nil
@@ -132,12 +138,10 @@ func (s *WorkspaceService) DeleteWorkspace(_ context.Context, req *connect.Reque
 	if connectErr != nil {
 		return nil, connectErr
 	}
-	s.mu.Lock()
-	running := s.running[id]
-	s.mu.Unlock()
-	if running {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("discovery is running"))
+	if !s.reserveRun(id) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
 	}
+	defer s.releaseRun(id)
 	if err := os.RemoveAll(s.workspaceDir(id)); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -164,11 +168,12 @@ func (s *WorkspaceService) UploadLogFile(_ context.Context, req *connect.Request
 	if connectErr != nil {
 		return nil, connectErr
 	}
+	if !s.reserveRun(id) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
+	}
+	defer s.releaseRun(id)
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		return nil, connectErr
-	}
-	if s.isRunning(id) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("discovery is running"))
 	}
 	fileName := filepath.Base(req.Msg.FileName)
 	if fileName == "." || fileName == string(filepath.Separator) || fileName == "" {
@@ -195,11 +200,12 @@ func (s *WorkspaceService) DeleteLogFile(_ context.Context, req *connect.Request
 	if connectErr != nil {
 		return nil, connectErr
 	}
+	if !s.reserveRun(id) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
+	}
+	defer s.releaseRun(id)
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		return nil, connectErr
-	}
-	if s.isRunning(id) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("discovery is running"))
 	}
 	if err := os.Remove(filepath.Join(s.workspaceDir(id), "logs", fileName)); err != nil {
 		if os.IsNotExist(err) {
@@ -218,19 +224,25 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		return nil, connectErr
 	}
+	if !s.reserveRun(id) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
+	}
+	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
+		s.releaseRun(id)
+		return nil, connectErr
+	}
 	files, err := s.listLogFileMessages(id)
 	if err != nil {
+		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if len(files) == 0 {
+		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("discovery requires at least one log file"))
-	}
-	if !s.reserveDiscovery(id) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("discovery is already running"))
 	}
 	runID, uuidErr := uuid.NewV7()
 	if uuidErr != nil {
-		s.setRunning(id, false)
+		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, uuidErr)
 	}
 	record := workspace.DiscoveryRunRecord{
@@ -243,11 +255,11 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 		StartedAt: time.Now().UTC(),
 	}
 	if err := workspace.WriteDiscoveryRunRecord(s.workspaceDir(id), record); err != nil {
-		s.setRunning(id, false)
+		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	go func() {
-		defer s.setRunning(id, false)
+		defer s.releaseRun(id)
 		slog.Info("DiscoveryRun started", "workspace", id, "run", runID.String())
 		result, err := workspace.Discover(context.Background(), workspace.DiscoveryConfig{
 			Dir:     s.workspaceDir(id),
@@ -552,30 +564,20 @@ func (s *WorkspaceService) ensureWorkspaceExists(id string) *connect.Error {
 	return nil
 }
 
-func (s *WorkspaceService) isRunning(id string) bool {
+func (s *WorkspaceService) reserveRun(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.running[id]
-}
-
-func (s *WorkspaceService) reserveDiscovery(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running[id] {
+	if s.activeRuns[id] {
 		return false
 	}
-	s.running[id] = true
+	s.activeRuns[id] = true
 	return true
 }
 
-func (s *WorkspaceService) setRunning(id string, running bool) {
+func (s *WorkspaceService) releaseRun(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if running {
-		s.running[id] = true
-		return
-	}
-	delete(s.running, id)
+	delete(s.activeRuns, id)
 }
 
 func patternMessage(workspaceID, runID string, p workspace.PatternInfo) *webv1.Pattern {
@@ -610,10 +612,10 @@ func workspaceName(id string) string {
 
 func workspaceIDFromName(name string) (string, *connect.Error) {
 	parts := strings.Split(strings.Trim(name, "/"), "/")
-	if len(parts) == 2 && parts[0] == "workspaces" && parts[1] != "" {
+	if len(parts) == 2 && parts[0] == "workspaces" && validResourcePart(parts[1]) {
 		return parts[1], nil
 	}
-	if len(parts) == 1 && parts[0] != "" {
+	if len(parts) == 1 && validResourcePart(parts[0]) {
 		return parts[0], nil
 	}
 	return "", connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid workspace name %q", name))
@@ -621,7 +623,7 @@ func workspaceIDFromName(name string) (string, *connect.Error) {
 
 func logFileNameFromResource(name string) (workspaceID, fileName string, err *connect.Error) {
 	parts := strings.Split(strings.Trim(name, "/"), "/")
-	if len(parts) == 4 && parts[0] == "workspaces" && parts[2] == "logFiles" && parts[1] != "" && parts[3] != "" {
+	if len(parts) == 4 && parts[0] == "workspaces" && parts[2] == "logFiles" && validResourcePart(parts[1]) && validResourcePart(parts[3]) {
 		return parts[1], parts[3], nil
 	}
 	return "", "", connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid log file name %q", name))
@@ -629,7 +631,7 @@ func logFileNameFromResource(name string) (workspaceID, fileName string, err *co
 
 func discoveryRunNameFromResource(name string) (workspaceID, runID string, err *connect.Error) {
 	parts := strings.Split(strings.Trim(name, "/"), "/")
-	if len(parts) == 4 && parts[0] == "workspaces" && parts[2] == "discoveryRuns" && parts[1] != "" && parts[3] != "" {
+	if len(parts) == 4 && parts[0] == "workspaces" && parts[2] == "discoveryRuns" && validResourcePart(parts[1]) && validResourcePart(parts[3]) {
 		return parts[1], parts[3], nil
 	}
 	return "", "", connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid discovery run name %q", name))
@@ -637,10 +639,15 @@ func discoveryRunNameFromResource(name string) (workspaceID, runID string, err *
 
 func patternNameFromResource(name string) (workspaceID, runID, patternID string, err *connect.Error) {
 	parts := strings.Split(strings.Trim(name, "/"), "/")
-	if len(parts) == 6 && parts[0] == "workspaces" && parts[2] == "discoveryRuns" && parts[4] == "patterns" && parts[1] != "" && parts[3] != "" && parts[5] != "" {
+	if len(parts) == 6 && parts[0] == "workspaces" && parts[2] == "discoveryRuns" && parts[4] == "patterns" &&
+		validResourcePart(parts[1]) && validResourcePart(parts[3]) && validResourcePart(parts[5]) {
 		return parts[1], parts[3], parts[5], nil
 	}
 	return "", "", "", connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid pattern name %q", name))
+}
+
+func validResourcePart(value string) bool {
+	return value != "" && value != "." && value != ".." && filepath.Base(value) == value
 }
 
 func sanitizeWorkspaceID(value string) string {
