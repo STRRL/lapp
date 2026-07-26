@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"connectrpc.com/connect"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
 	"github.com/strrl/lapp/pkg/semantic"
@@ -65,9 +66,16 @@ func TestWorkspaceServiceDiscoveryFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDiscoveryRun: %v", err)
 	}
-	runName := runResponse.Msg.DiscoveryRun.Name
-	if runResponse.Msg.DiscoveryRun.State != webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_RUNNING {
-		t.Fatalf("expected running run, got %s", runResponse.Msg.DiscoveryRun.State)
+	startedRun := discoveryRunFromOperation(t, runResponse.Msg)
+	runName := startedRun.Name
+	if runResponse.Msg.Name != workspaceName+"/operations/"+startedRun.DiscoveryRunId {
+		t.Fatalf("operation name = %q", runResponse.Msg.Name)
+	}
+	if runResponse.Msg.Done {
+		t.Fatal("new discovery operation is already done")
+	}
+	if startedRun.State != webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_RUNNING {
+		t.Fatalf("expected running run, got %s", startedRun.State)
 	}
 	if _, err := service.DeleteLogFile(context.Background(), connect.NewRequest(&webv1.DeleteLogFileRequest{
 		Name: workspaceName + "/logFiles/app.log",
@@ -76,12 +84,26 @@ func TestWorkspaceServiceDiscoveryFlow(t *testing.T) {
 	}
 	if _, err := service.CreateDiscoveryRun(context.Background(), connect.NewRequest(&webv1.CreateDiscoveryRunRequest{
 		Parent: workspaceName,
-	})); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	})); connect.CodeOf(err) != connect.CodeAborted {
 		t.Fatalf("expected concurrent discovery to be rejected, got %v", err)
 	}
 
 	close(done)
 	waitForRunState(t, service, runName, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_SUCCEEDED)
+	completed, err := service.GetOperation(context.Background(), connect.NewRequest(&longrunningpb.GetOperationRequest{Name: runResponse.Msg.Name}))
+	if err != nil {
+		t.Fatalf("GetOperation: %v", err)
+	}
+	if !completed.Msg.Done || completed.Msg.GetResponse() == nil {
+		t.Fatalf("completed discovery operation = %+v", completed.Msg)
+	}
+	var discovered webv1.DiscoveryRun
+	if err := completed.Msg.GetResponse().UnmarshalTo(&discovered); err != nil {
+		t.Fatalf("unmarshal discovery response: %v", err)
+	}
+	if discovered.Name != runName {
+		t.Fatalf("operation response run = %q, want %q", discovered.Name, runName)
+	}
 
 	patterns, err := service.ListPatterns(context.Background(), connect.NewRequest(&webv1.ListPatternsRequest{
 		Parent: runName,
@@ -188,7 +210,7 @@ func TestWorkspaceServiceDiscoveryFailureRecordsErrorMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDiscoveryRun: %v", err)
 	}
-	run := waitForRunState(t, service, runResponse.Msg.DiscoveryRun.Name, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_FAILED)
+	run := waitForRunState(t, service, discoveryRunFromOperation(t, runResponse.Msg).Name, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_FAILED)
 	if run.Error == nil || !strings.Contains(run.Error.Message, "semantic labeling unavailable") {
 		t.Fatalf("expected failed run to expose semantic error, got %+v", run)
 	}
@@ -282,4 +304,34 @@ func waitForRunState(t *testing.T, service *WorkspaceService, runName string, st
 	}
 	t.Fatalf("discovery run did not reach %s", state)
 	return nil
+}
+
+func discoveryRunFromOperation(t *testing.T, operation *longrunningpb.Operation) *webv1.DiscoveryRun {
+	t.Helper()
+	var metadata webv1.DiscoveryRunMetadata
+	if operation.Metadata == nil {
+		t.Fatal("operation has no discovery metadata")
+	}
+	if err := operation.Metadata.UnmarshalTo(&metadata); err != nil {
+		t.Fatalf("unmarshal discovery metadata: %v", err)
+	}
+	if metadata.DiscoveryRun == nil {
+		t.Fatal("operation metadata has no discovery run")
+	}
+	return metadata.DiscoveryRun
+}
+
+func importRunFromOperation(t *testing.T, operation *longrunningpb.Operation) *webv1.ImportRun {
+	t.Helper()
+	var metadata webv1.ImportRunMetadata
+	if operation.Metadata == nil {
+		t.Fatal("operation has no import metadata")
+	}
+	if err := operation.Metadata.UnmarshalTo(&metadata); err != nil {
+		t.Fatalf("unmarshal import metadata: %v", err)
+	}
+	if metadata.ImportRun == nil {
+		t.Fatal("operation metadata has no import run")
+	}
+	return metadata.ImportRun
 }

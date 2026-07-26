@@ -1,14 +1,14 @@
 # Protobuf schema-first API with Connect and AIP resources
 
-LAPP Web uses protobuf service definitions as the API contract, served through Connect RPC and consumed by generated Go and TypeScript code. API shapes should follow AIP resource-oriented design where it fits, while using custom methods for actions such as starting a discovery run that do not fit standard CRUD semantics.
+LAPP Web uses protobuf service definitions as the API contract, served through Connect RPC and consumed by generated Go and TypeScript code. API shapes follow AIP resource design where it fits. Work that may take significant time follows AIP 151 and returns `google.longrunning.Operation`.
 
-The first API resources use simple names: `Workspace`, `LogFile`, `DiscoveryRun`, and `Pattern`. Pattern resources belong to the discovery run that produced them. Pattern resource IDs use the generated `semantic_id`, which must be unique within a discovery run; duplicate semantic IDs are resolved with a numeric suffix.
+The first API resources use simple names: `Workspace`, `LogFile`, `ImportRun`, `DiscoveryRun`, and `Pattern`. Pattern resources belong to the discovery run that produced them. Pattern resource IDs use the generated `semantic_id`, which must be unique within a discovery run; duplicate semantic IDs are resolved with a numeric suffix.
 
-Discovery runs are started with `CreateDiscoveryRun`. Progress steps use user-facing stage names: reading logs, merging entries, discovering patterns, labeling patterns, and writing results.
+Import and discovery runs are started with Create methods that return standard Operations. The operation metadata contains the run resource while work is active. A successful operation response contains the completed run resource. An execution failure is returned through `Operation.error`.
 
 Uploading or deleting log files does not automatically start discovery. Discovery is an explicit action and can be started whenever the user chooses.
 
-Each workspace may have at most one running discovery run at a time because discovery writes generated workspace results.
+Each workspace may have at most one running import or discovery operation at a time. A parallel Create request returns `ABORTED`.
 
 Log files cannot be uploaded or deleted while a discovery run is running for the same workspace.
 
@@ -18,7 +18,7 @@ Discovery run history is retained so failures and prior runs can be inspected. T
 
 DiscoveryRun IDs use UUIDv7. Unlike Pattern IDs, DiscoveryRun IDs are operational record identifiers, not user-facing semantic handles.
 
-The first version reports discovery progress through polling `GetDiscoveryRun`, not streaming.
+Clients poll `google.longrunning.Operations.GetOperation` for standard operation state. `GetImportRun`, `ListImportRuns`, `GetDiscoveryRun`, and `ListDiscoveryRuns` remain available because runs are retained domain resources and history.
 
 Discovery results belong to the discovery run that produced them. Workspace views may present a selected discovery run's results instead of treating generated results as anonymous global workspace state.
 

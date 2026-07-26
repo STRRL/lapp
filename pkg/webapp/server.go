@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/go-errors/errors"
+	longrunningpbconnect "github.com/strrl/lapp/gen/go/google/longrunning/longrunningpbconnect"
 	"github.com/strrl/lapp/gen/go/lapp/web/v1/webv1connect"
 	"github.com/strrl/lapp/pkg/gcplog"
 	"github.com/strrl/lapp/pkg/workspace"
@@ -58,6 +59,8 @@ func NewHandler(config ServerConfig) (http.Handler, error) {
 	mux := http.NewServeMux()
 	path, handler := webv1connect.NewWorkspaceServiceHandler(service)
 	mux.Handle(path, otelhttp.NewHandler(handler, "connect.WorkspaceService"))
+	path, handler = longrunningpbconnect.NewOperationsHandler(service)
+	mux.Handle(path, otelhttp.NewHandler(handler, "connect.Operations"))
 	staticHandler, err := staticFileHandler(config.StaticDir)
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"connectrpc.com/connect"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
 	"github.com/strrl/lapp/pkg/semantic"
@@ -147,12 +148,20 @@ func TestWorkspaceServiceImportRunAsyncSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateImportRun: %v", err)
 	}
-	runName := response.Msg.ImportRun.Name
+	startedRun := importRunFromOperation(t, response.Msg)
+	runName := startedRun.Name
+	operationName := response.Msg.Name
 	if runName == "" {
 		t.Fatal("CreateImportRun returned an empty run name")
 	}
-	if response.Msg.ImportRun.Limit != defaultImportLimit {
-		t.Fatalf("run limit = %d, want %d", response.Msg.ImportRun.Limit, defaultImportLimit)
+	if operationName != workspaceName+"/operations/"+startedRun.ImportRunId {
+		t.Fatalf("operation name = %q", operationName)
+	}
+	if response.Msg.Done {
+		t.Fatal("new import operation is already done")
+	}
+	if startedRun.Limit != defaultImportLimit {
+		t.Fatalf("run limit = %d, want %d", startedRun.Limit, defaultImportLimit)
 	}
 
 	immediate, err := service.GetImportRun(context.Background(), connect.NewRequest(&webv1.GetImportRunRequest{Name: runName}))
@@ -187,6 +196,20 @@ func TestWorkspaceServiceImportRunAsyncSuccess(t *testing.T) {
 	if string(content) != line+"\n" {
 		t.Fatalf("imported log content = %q", content)
 	}
+	completed, err := service.GetOperation(context.Background(), connect.NewRequest(&longrunningpb.GetOperationRequest{Name: operationName}))
+	if err != nil {
+		t.Fatalf("GetOperation: %v", err)
+	}
+	if !completed.Msg.Done || completed.Msg.GetResponse() == nil {
+		t.Fatalf("completed import operation = %+v", completed.Msg)
+	}
+	var result webv1.ImportRun
+	if err := completed.Msg.GetResponse().UnmarshalTo(&result); err != nil {
+		t.Fatalf("unmarshal import response: %v", err)
+	}
+	if result.Name != runName {
+		t.Fatalf("operation response run = %q, want %q", result.Name, runName)
+	}
 }
 
 func TestWorkspaceServiceImportRunFailure(t *testing.T) {
@@ -198,12 +221,19 @@ func TestWorkspaceServiceImportRunFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateImportRun: %v", err)
 	}
-	run := waitForImportRunState(t, service, response.Msg.ImportRun.Name, webv1.ImportRunState_IMPORT_RUN_STATE_FAILED)
+	run := waitForImportRunState(t, service, importRunFromOperation(t, response.Msg).Name, webv1.ImportRunState_IMPORT_RUN_STATE_FAILED)
 	if run.Error == nil || run.Error.Code != "FETCH_FAILED" {
 		t.Fatalf("unexpected import error: %+v", run.Error)
 	}
 	if run.FinishedAt == nil {
 		t.Fatal("failed run has no finished_at")
+	}
+	failed, err := service.GetOperation(context.Background(), connect.NewRequest(&longrunningpb.GetOperationRequest{Name: response.Msg.Name}))
+	if err != nil {
+		t.Fatalf("GetOperation: %v", err)
+	}
+	if !failed.Msg.Done || failed.Msg.GetError().Code != int32(connect.CodeInternal) {
+		t.Fatalf("failed import operation = %+v", failed.Msg)
 	}
 }
 
@@ -219,7 +249,7 @@ func TestWorkspaceServiceImportRunTruncation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateImportRun: %v", err)
 	}
-	run := waitForImportRunState(t, service, response.Msg.ImportRun.Name, webv1.ImportRunState_IMPORT_RUN_STATE_SUCCEEDED)
+	run := waitForImportRunState(t, service, importRunFromOperation(t, response.Msg).Name, webv1.ImportRunState_IMPORT_RUN_STATE_SUCCEEDED)
 	if !run.Truncated {
 		t.Fatalf("expected truncated run: %+v", run)
 	}
@@ -299,10 +329,12 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 
 	failedPreconditions := []struct {
 		name string
+		code connect.Code
 		call func() error
 	}{
 		{
 			name: "second import",
+			code: connect.CodeAborted,
 			call: func() error {
 				_, err := service.CreateImportRun(context.Background(), connect.NewRequest(validImportRequest(importWorkspace)))
 				return err
@@ -310,6 +342,7 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 		},
 		{
 			name: "discovery",
+			code: connect.CodeAborted,
 			call: func() error {
 				_, err := service.CreateDiscoveryRun(context.Background(), connect.NewRequest(&webv1.CreateDiscoveryRunRequest{Parent: importWorkspace}))
 				return err
@@ -317,6 +350,7 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 		},
 		{
 			name: "upload",
+			code: connect.CodeFailedPrecondition,
 			call: func() error {
 				_, err := service.UploadLogFile(context.Background(), connect.NewRequest(&webv1.UploadLogFileRequest{
 					Parent:   importWorkspace,
@@ -328,6 +362,7 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 		},
 		{
 			name: "delete log",
+			code: connect.CodeFailedPrecondition,
 			call: func() error {
 				_, err := service.DeleteLogFile(context.Background(), connect.NewRequest(&webv1.DeleteLogFileRequest{
 					Name: importWorkspace + "/logFiles/app.log",
@@ -337,6 +372,7 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 		},
 		{
 			name: "delete workspace",
+			code: connect.CodeFailedPrecondition,
 			call: func() error {
 				_, err := service.DeleteWorkspace(context.Background(), connect.NewRequest(&webv1.DeleteWorkspaceRequest{Name: importWorkspace}))
 				return err
@@ -345,14 +381,14 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 	}
 	for _, test := range failedPreconditions {
 		t.Run("import blocks "+test.name, func(t *testing.T) {
-			if err := test.call(); connect.CodeOf(err) != connect.CodeFailedPrecondition {
-				t.Fatalf("code = %s, want failed_precondition: %v", connect.CodeOf(err), err)
+			if err := test.call(); connect.CodeOf(err) != test.code {
+				t.Fatalf("code = %s, want %s: %v", connect.CodeOf(err), test.code, err)
 			}
 		})
 	}
 
 	close(releaseImport)
-	waitForImportRunState(t, service, importResponse.Msg.ImportRun.Name, webv1.ImportRunState_IMPORT_RUN_STATE_SUCCEEDED)
+	waitForImportRunState(t, service, importRunFromOperation(t, importResponse.Msg).Name, webv1.ImportRunState_IMPORT_RUN_STATE_SUCCEEDED)
 
 	discoveryResponse, err := service.CreateDiscoveryRun(context.Background(), connect.NewRequest(&webv1.CreateDiscoveryRunRequest{
 		Parent: discoveryWorkspace,
@@ -365,11 +401,11 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("discovery labeler did not start")
 	}
-	if _, err := service.CreateImportRun(context.Background(), connect.NewRequest(validImportRequest(discoveryWorkspace))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
-		t.Fatalf("CreateImportRun during discovery code = %s, want failed_precondition: %v", connect.CodeOf(err), err)
+	if _, err := service.CreateImportRun(context.Background(), connect.NewRequest(validImportRequest(discoveryWorkspace))); connect.CodeOf(err) != connect.CodeAborted {
+		t.Fatalf("CreateImportRun during discovery code = %s, want aborted: %v", connect.CodeOf(err), err)
 	}
 	close(releaseDiscovery)
-	waitForRunState(t, service, discoveryResponse.Msg.DiscoveryRun.Name, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_SUCCEEDED)
+	waitForRunState(t, service, discoveryRunFromOperation(t, discoveryResponse.Msg).Name, webv1.DiscoveryRunState_DISCOVERY_RUN_STATE_SUCCEEDED)
 }
 
 func TestNewWorkspaceServiceMarksInterruptedImportRunsFailed(t *testing.T) {
@@ -381,7 +417,8 @@ func TestNewWorkspaceServiceMarksInterruptedImportRunsFailed(t *testing.T) {
 	writeImportRecord(t, workspaceDir, "running", "acme-prod", "severity>=ERROR", startedAt, workspace.ImportRunStateRunning)
 	writeImportRecord(t, workspaceDir, "succeeded", "acme-prod", "severity>=ERROR", startedAt, workspace.ImportRunStateSucceeded)
 
-	if _, err := NewWorkspaceService(ServiceConfig{Root: root}); err != nil {
+	service, err := NewWorkspaceService(ServiceConfig{Root: root})
+	if err != nil {
 		t.Fatalf("NewWorkspaceService: %v", err)
 	}
 	for _, id := range []string{"queued", "running"} {
@@ -394,6 +431,15 @@ func TestNewWorkspaceServiceMarksInterruptedImportRunsFailed(t *testing.T) {
 		}
 		if record.Error == nil || record.Error.Code != "IMPORT_INTERRUPTED" {
 			t.Fatalf("unexpected interrupted error for %s: %+v", id, record.Error)
+		}
+		operation, err := service.GetOperation(context.Background(), connect.NewRequest(&longrunningpb.GetOperationRequest{
+			Name: "workspaces/imports/operations/" + id,
+		}))
+		if err != nil {
+			t.Fatalf("GetOperation %s: %v", id, err)
+		}
+		if !operation.Msg.Done || operation.Msg.GetError().Code != int32(connect.CodeAborted) {
+			t.Fatalf("interrupted operation %s = %+v", id, operation.Msg)
 		}
 	}
 	record, err := workspace.ReadImportRunRecord(workspaceDir, "succeeded")

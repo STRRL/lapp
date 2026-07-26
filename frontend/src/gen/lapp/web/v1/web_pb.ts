@@ -4,6 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { OperationSchema } from "../../../google/longrunning/operations_pb";
+import { file_google_longrunning_operations } from "../../../google/longrunning/operations_pb";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file lapp/web/v1/web.proto.
  */
 export const file_lapp_web_v1_web: GenFile = /*@__PURE__*/
-  fileDesc("ChVsYXBwL3dlYi92MS93ZWIucHJvdG8SC2xhcHAud2ViLnYxIokCCglXb3Jrc3BhY2USDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSLAoGc3RhdHVzGAMgASgOMhwubGFwcC53ZWIudjEuV29ya3NwYWNlU3RhdHVzEhYKDmxvZ19maWxlX2NvdW50GAQgASgFEhUKDXBhdHRlcm5fY291bnQYBSABKAUSNwoUbGF0ZXN0X2Rpc2NvdmVyeV9ydW4YBiABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4SQgofbGF0ZXN0X3N1Y2Nlc3NmdWxfZGlzY292ZXJ5X3J1bhgHIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biJuCgdMb2dGaWxlEgwKBG5hbWUYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEhIKCnNpemVfYnl0ZXMYAyABKAMSLgoKdXBkYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAivAMKCUltcG9ydFJ1bhIMCgRuYW1lGAEgASgJEhUKDWltcG9ydF9ydW5faWQYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSDwoHcHJvamVjdBgEIAEoCRIOCgZmaWx0ZXIYBSABKAkSKAoEZnJvbRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJgoCdG8YByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWxpbWl0GAggASgFEioKBXN0YXRlGAkgASgOMhsubGFwcC53ZWIudjEuSW1wb3J0UnVuU3RhdGUSEwoLZW50cnlfY291bnQYCiABKAUSEQoJdHJ1bmNhdGVkGAsgASgIEhUKDWxvZ19maWxlX25hbWUYDCABKAkSLgoKc3RhcnRlZF9hdBgNIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZmluaXNoZWRfYXQYDiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBWVycm9yGA8gASgLMhsubGFwcC53ZWIudjEuSW1wb3J0UnVuRXJyb3IiLwoOSW1wb3J0UnVuRXJyb3ISDAoEY29kZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJIt0DCgxEaXNjb3ZlcnlSdW4SDAoEbmFtZRgBIAEoCRIYChBkaXNjb3ZlcnlfcnVuX2lkGAIgASgJEi0KBXN0YXRlGAMgASgOMh4ubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuU3RhdGUSMAoMY3VycmVudF9zdGVwGAQgASgOMhoubGFwcC53ZWIudjEuRGlzY292ZXJ5U3RlcBIcChBwcm9ncmVzc19tZXNzYWdlGAUgASgJQgIYARIZCg1lcnJvcl9tZXNzYWdlGAYgASgJQgIYARIuCgpzdGFydGVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIvCgtmaW5pc2hlZF9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASFgoObG9nX2ZpbGVfY291bnQYCSABKAUSFQoNcGF0dGVybl9jb3VudBgKIAEoBRIXCg91bm1hdGNoZWRfY291bnQYCyABKAUSMwoIcHJvZ3Jlc3MYDCABKAsyIS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW5Qcm9ncmVzcxItCgVlcnJvchgNIAEoCzIeLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1bkVycm9yIn8KFERpc2NvdmVyeVJ1blByb2dyZXNzEigKBHN0ZXAYASABKA4yGi5sYXBwLndlYi52MS5EaXNjb3ZlcnlTdGVwEj0KC2xhYmVsX2JhdGNoGAIgASgLMigubGFwcC53ZWIudjEuRGlzY292ZXJ5TGFiZWxCYXRjaFByb2dyZXNzIqsBChtEaXNjb3ZlcnlMYWJlbEJhdGNoUHJvZ3Jlc3MSDQoFZXZlbnQYASABKAkSFAoMYmF0Y2hfbnVtYmVyGAIgASgFEhMKC2JhdGNoX2NvdW50GAMgASgFEhIKCmJhdGNoX3NpemUYBCABKAUSDwoHYXR0ZW1wdBgFIAEoBRIUCgxtYXhfYXR0ZW1wdHMYBiABKAUSFwoPY29tcGxldGVkX2NvdW50GAcgASgFIlwKEURpc2NvdmVyeVJ1bkVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCRIoCgRzdGVwGAMgASgOMhoubGFwcC53ZWIudjEuRGlzY292ZXJ5U3RlcCKDAgoHUGF0dGVybhIMCgRuYW1lGAEgASgJEhIKCnBhdHRlcm5faWQYAiABKAkSEwoLc2VtYW50aWNfaWQYAyABKAkSEwoLZGVzY3JpcHRpb24YBCABKAkSEAoIdGVtcGxhdGUYBSABKAkSDQoFY291bnQYBiABKAUSKAoKZmlyc3Rfc2VlbhgHIAEoCzIULmxhcHAud2ViLnYxLkxpbmVSZWYSJwoJbGFzdF9zZWVuGAggASgLMhQubGFwcC53ZWIudjEuTGluZVJlZhInCglsaW5lX3JlZnMYCSADKAsyFC5sYXBwLndlYi52MS5MaW5lUmVmEg8KB3NhbXBsZXMYCiADKAkiMQoHTGluZVJlZhIRCglmaWxlX25hbWUYASABKAkSEwoLbGluZV9udW1iZXIYAiABKAUiNQoMRXJyb3JQYXR0ZXJuEiUKB3BhdHRlcm4YASABKAsyFC5sYXBwLndlYi52MS5QYXR0ZXJuIk0KElVubWF0Y2hlZEVycm9yTGluZRIRCglmaWxlX25hbWUYASABKAkSEwoLbGluZV9udW1iZXIYAiABKAUSDwoHY29udGVudBgDIAEoCSIXChVMaXN0V29ya3NwYWNlc1JlcXVlc3QiRAoWTGlzdFdvcmtzcGFjZXNSZXNwb25zZRIqCgp3b3Jrc3BhY2VzGAEgAygLMhYubGFwcC53ZWIudjEuV29ya3NwYWNlIiMKE0dldFdvcmtzcGFjZVJlcXVlc3QSDAoEbmFtZRgBIAEoCSJBChRHZXRXb3Jrc3BhY2VSZXNwb25zZRIpCgl3b3Jrc3BhY2UYASABKAsyFi5sYXBwLndlYi52MS5Xb3Jrc3BhY2UiLgoWQ3JlYXRlV29ya3NwYWNlUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkiRAoXQ3JlYXRlV29ya3NwYWNlUmVzcG9uc2USKQoJd29ya3NwYWNlGAEgASgLMhYubGFwcC53ZWIudjEuV29ya3NwYWNlIiYKFkRlbGV0ZVdvcmtzcGFjZVJlcXVlc3QSDAoEbmFtZRgBIAEoCSIZChdEZWxldGVXb3Jrc3BhY2VSZXNwb25zZSIlChNMaXN0TG9nRmlsZXNSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCSI/ChRMaXN0TG9nRmlsZXNSZXNwb25zZRInCglsb2dfZmlsZXMYASADKAsyFC5sYXBwLndlYi52MS5Mb2dGaWxlIkoKFFVwbG9hZExvZ0ZpbGVSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCRIRCglmaWxlX25hbWUYAiABKAkSDwoHY29udGVudBgDIAEoDCI/ChVVcGxvYWRMb2dGaWxlUmVzcG9uc2USJgoIbG9nX2ZpbGUYASABKAsyFC5sYXBwLndlYi52MS5Mb2dGaWxlIiQKFERlbGV0ZUxvZ0ZpbGVSZXF1ZXN0EgwKBG5hbWUYASABKAkiFwoVRGVsZXRlTG9nRmlsZVJlc3BvbnNlIqoBChZDcmVhdGVJbXBvcnRSdW5SZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCRIPCgdwcm9qZWN0GAIgASgJEg4KBmZpbHRlchgDIAEoCRIoCgRmcm9tGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBImCgJ0bxgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFbGltaXQYBiABKAUiRQoXQ3JlYXRlSW1wb3J0UnVuUmVzcG9uc2USKgoKaW1wb3J0X3J1bhgBIAEoCzIWLmxhcHAud2ViLnYxLkltcG9ydFJ1biIjChNHZXRJbXBvcnRSdW5SZXF1ZXN0EgwKBG5hbWUYASABKAkiQgoUR2V0SW1wb3J0UnVuUmVzcG9uc2USKgoKaW1wb3J0X3J1bhgBIAEoCzIWLmxhcHAud2ViLnYxLkltcG9ydFJ1biInChVMaXN0SW1wb3J0UnVuc1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIkUKFkxpc3RJbXBvcnRSdW5zUmVzcG9uc2USKwoLaW1wb3J0X3J1bnMYASADKAsyFi5sYXBwLndlYi52MS5JbXBvcnRSdW4iIAoeTGlzdFJlY2VudEltcG9ydFF1ZXJpZXNSZXF1ZXN0ImYKEVJlY2VudEltcG9ydFF1ZXJ5Eg8KB3Byb2plY3QYASABKAkSDgoGZmlsdGVyGAIgASgJEjAKDGxhc3RfdXNlZF9hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWQofTGlzdFJlY2VudEltcG9ydFF1ZXJpZXNSZXNwb25zZRI2Cg5yZWNlbnRfcXVlcmllcxgBIAMoCzIeLmxhcHAud2ViLnYxLlJlY2VudEltcG9ydFF1ZXJ5IjoKGUNyZWF0ZURpc2NvdmVyeVJ1blJlcXVlc3QSDgoGcGFyZW50GAEgASgJEg0KBW1vZGVsGAIgASgJIk4KGkNyZWF0ZURpc2NvdmVyeVJ1blJlc3BvbnNlEjAKDWRpc2NvdmVyeV9ydW4YASABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4iJgoWR2V0RGlzY292ZXJ5UnVuUmVxdWVzdBIMCgRuYW1lGAEgASgJIksKF0dldERpc2NvdmVyeVJ1blJlc3BvbnNlEjAKDWRpc2NvdmVyeV9ydW4YASABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4iKgoYTGlzdERpc2NvdmVyeVJ1bnNSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCSJOChlMaXN0RGlzY292ZXJ5UnVuc1Jlc3BvbnNlEjEKDmRpc2NvdmVyeV9ydW5zGAEgAygLMhkubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuIiUKE0xpc3RQYXR0ZXJuc1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIj4KFExpc3RQYXR0ZXJuc1Jlc3BvbnNlEiYKCHBhdHRlcm5zGAEgAygLMhQubGFwcC53ZWIudjEuUGF0dGVybiIhChFHZXRQYXR0ZXJuUmVxdWVzdBIMCgRuYW1lGAEgASgJIjsKEkdldFBhdHRlcm5SZXNwb25zZRIlCgdwYXR0ZXJuGAEgASgLMhQubGFwcC53ZWIudjEuUGF0dGVybiImChRHZXRFcnJvcnNWaWV3UmVxdWVzdBIOCgZwYXJlbnQYASABKAkiigEKFUdldEVycm9yc1ZpZXdSZXNwb25zZRIxCg5lcnJvcl9wYXR0ZXJucxgBIAMoCzIZLmxhcHAud2ViLnYxLkVycm9yUGF0dGVybhI+ChV1bm1hdGNoZWRfZXJyb3JfbGluZXMYAiADKAsyHy5sYXBwLndlYi52MS5Vbm1hdGNoZWRFcnJvckxpbmUqqgEKD1dvcmtzcGFjZVN0YXR1cxIgChxXT1JLU1BBQ0VfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGgoWV09SS1NQQUNFX1NUQVRVU19FTVBUWRABEiAKHFdPUktTUEFDRV9TVEFUVVNfRElTQ09WRVJJTkcQAhIaChZXT1JLU1BBQ0VfU1RBVFVTX1JFQURZEAMSGwoXV09SS1NQQUNFX1NUQVRVU19GQUlMRUQQBCqqAQoOSW1wb3J0UnVuU3RhdGUSIAocSU1QT1JUX1JVTl9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0lNUE9SVF9SVU5fU1RBVEVfUVVFVUVEEAESHAoYSU1QT1JUX1JVTl9TVEFURV9SVU5OSU5HEAISHgoaSU1QT1JUX1JVTl9TVEFURV9TVUNDRUVERUQQAxIbChdJTVBPUlRfUlVOX1NUQVRFX0ZBSUxFRBAEKrwBChFEaXNjb3ZlcnlSdW5TdGF0ZRIjCh9ESVNDT1ZFUllfUlVOX1NUQVRFX1VOU1BFQ0lGSUVEEAASHgoaRElTQ09WRVJZX1JVTl9TVEFURV9RVUVVRUQQARIfChtESVNDT1ZFUllfUlVOX1NUQVRFX1JVTk5JTkcQAhIhCh1ESVNDT1ZFUllfUlVOX1NUQVRFX1NVQ0NFRURFRBADEh4KGkRJU0NPVkVSWV9SVU5fU1RBVEVfRkFJTEVEEAQq5wEKDURpc2NvdmVyeVN0ZXASHgoaRElTQ09WRVJZX1NURVBfVU5TUEVDSUZJRUQQABIfChtESVNDT1ZFUllfU1RFUF9SRUFESU5HX0xPR1MQARIiCh5ESVNDT1ZFUllfU1RFUF9NRVJHSU5HX0VOVFJJRVMQAhInCiNESVNDT1ZFUllfU1RFUF9ESVNDT1ZFUklOR19QQVRURVJOUxADEiQKIERJU0NPVkVSWV9TVEVQX0xBQkVMSU5HX1BBVFRFUk5TEAQSIgoeRElTQ09WRVJZX1NURVBfV1JJVElOR19SRVNVTFRTEAUyrAwKEFdvcmtzcGFjZVNlcnZpY2USWQoOTGlzdFdvcmtzcGFjZXMSIi5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIy5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1Jlc3BvbnNlElMKDEdldFdvcmtzcGFjZRIgLmxhcHAud2ViLnYxLkdldFdvcmtzcGFjZVJlcXVlc3QaIS5sYXBwLndlYi52MS5HZXRXb3Jrc3BhY2VSZXNwb25zZRJcCg9DcmVhdGVXb3Jrc3BhY2USIy5sYXBwLndlYi52MS5DcmVhdGVXb3Jrc3BhY2VSZXF1ZXN0GiQubGFwcC53ZWIudjEuQ3JlYXRlV29ya3NwYWNlUmVzcG9uc2USXAoPRGVsZXRlV29ya3NwYWNlEiMubGFwcC53ZWIudjEuRGVsZXRlV29ya3NwYWNlUmVxdWVzdBokLmxhcHAud2ViLnYxLkRlbGV0ZVdvcmtzcGFjZVJlc3BvbnNlElMKDExpc3RMb2dGaWxlcxIgLmxhcHAud2ViLnYxLkxpc3RMb2dGaWxlc1JlcXVlc3QaIS5sYXBwLndlYi52MS5MaXN0TG9nRmlsZXNSZXNwb25zZRJWCg1VcGxvYWRMb2dGaWxlEiEubGFwcC53ZWIudjEuVXBsb2FkTG9nRmlsZVJlcXVlc3QaIi5sYXBwLndlYi52MS5VcGxvYWRMb2dGaWxlUmVzcG9uc2USVgoNRGVsZXRlTG9nRmlsZRIhLmxhcHAud2ViLnYxLkRlbGV0ZUxvZ0ZpbGVSZXF1ZXN0GiIubGFwcC53ZWIudjEuRGVsZXRlTG9nRmlsZVJlc3BvbnNlElwKD0NyZWF0ZUltcG9ydFJ1bhIjLmxhcHAud2ViLnYxLkNyZWF0ZUltcG9ydFJ1blJlcXVlc3QaJC5sYXBwLndlYi52MS5DcmVhdGVJbXBvcnRSdW5SZXNwb25zZRJTCgxHZXRJbXBvcnRSdW4SIC5sYXBwLndlYi52MS5HZXRJbXBvcnRSdW5SZXF1ZXN0GiEubGFwcC53ZWIudjEuR2V0SW1wb3J0UnVuUmVzcG9uc2USWQoOTGlzdEltcG9ydFJ1bnMSIi5sYXBwLndlYi52MS5MaXN0SW1wb3J0UnVuc1JlcXVlc3QaIy5sYXBwLndlYi52MS5MaXN0SW1wb3J0UnVuc1Jlc3BvbnNlEnQKF0xpc3RSZWNlbnRJbXBvcnRRdWVyaWVzEisubGFwcC53ZWIudjEuTGlzdFJlY2VudEltcG9ydFF1ZXJpZXNSZXF1ZXN0GiwubGFwcC53ZWIudjEuTGlzdFJlY2VudEltcG9ydFF1ZXJpZXNSZXNwb25zZRJlChJDcmVhdGVEaXNjb3ZlcnlSdW4SJi5sYXBwLndlYi52MS5DcmVhdGVEaXNjb3ZlcnlSdW5SZXF1ZXN0GicubGFwcC53ZWIudjEuQ3JlYXRlRGlzY292ZXJ5UnVuUmVzcG9uc2USXAoPR2V0RGlzY292ZXJ5UnVuEiMubGFwcC53ZWIudjEuR2V0RGlzY292ZXJ5UnVuUmVxdWVzdBokLmxhcHAud2ViLnYxLkdldERpc2NvdmVyeVJ1blJlc3BvbnNlEmIKEUxpc3REaXNjb3ZlcnlSdW5zEiUubGFwcC53ZWIudjEuTGlzdERpc2NvdmVyeVJ1bnNSZXF1ZXN0GiYubGFwcC53ZWIudjEuTGlzdERpc2NvdmVyeVJ1bnNSZXNwb25zZRJTCgxMaXN0UGF0dGVybnMSIC5sYXBwLndlYi52MS5MaXN0UGF0dGVybnNSZXF1ZXN0GiEubGFwcC53ZWIudjEuTGlzdFBhdHRlcm5zUmVzcG9uc2USTQoKR2V0UGF0dGVybhIeLmxhcHAud2ViLnYxLkdldFBhdHRlcm5SZXF1ZXN0Gh8ubGFwcC53ZWIudjEuR2V0UGF0dGVyblJlc3BvbnNlElYKDUdldEVycm9yc1ZpZXcSIS5sYXBwLndlYi52MS5HZXRFcnJvcnNWaWV3UmVxdWVzdBoiLmxhcHAud2ViLnYxLkdldEVycm9yc1ZpZXdSZXNwb25zZUIwWi5naXRodWIuY29tL3N0cnJsL2xhcHAvZ2VuL2dvL2xhcHAvd2ViL3YxO3dlYnYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChVsYXBwL3dlYi92MS93ZWIucHJvdG8SC2xhcHAud2ViLnYxIokCCglXb3Jrc3BhY2USDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSLAoGc3RhdHVzGAMgASgOMhwubGFwcC53ZWIudjEuV29ya3NwYWNlU3RhdHVzEhYKDmxvZ19maWxlX2NvdW50GAQgASgFEhUKDXBhdHRlcm5fY291bnQYBSABKAUSNwoUbGF0ZXN0X2Rpc2NvdmVyeV9ydW4YBiABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4SQgofbGF0ZXN0X3N1Y2Nlc3NmdWxfZGlzY292ZXJ5X3J1bhgHIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biJuCgdMb2dGaWxlEgwKBG5hbWUYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEhIKCnNpemVfYnl0ZXMYAyABKAMSLgoKdXBkYXRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAivAMKCUltcG9ydFJ1bhIMCgRuYW1lGAEgASgJEhUKDWltcG9ydF9ydW5faWQYAiABKAkSEAoIcHJvdmlkZXIYAyABKAkSDwoHcHJvamVjdBgEIAEoCRIOCgZmaWx0ZXIYBSABKAkSKAoEZnJvbRgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJgoCdG8YByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWxpbWl0GAggASgFEioKBXN0YXRlGAkgASgOMhsubGFwcC53ZWIudjEuSW1wb3J0UnVuU3RhdGUSEwoLZW50cnlfY291bnQYCiABKAUSEQoJdHJ1bmNhdGVkGAsgASgIEhUKDWxvZ19maWxlX25hbWUYDCABKAkSLgoKc3RhcnRlZF9hdBgNIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASLwoLZmluaXNoZWRfYXQYDiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBWVycm9yGA8gASgLMhsubGFwcC53ZWIudjEuSW1wb3J0UnVuRXJyb3IiPwoRSW1wb3J0UnVuTWV0YWRhdGESKgoKaW1wb3J0X3J1bhgBIAEoCzIWLmxhcHAud2ViLnYxLkltcG9ydFJ1biIvCg5JbXBvcnRSdW5FcnJvchIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAki3QMKDERpc2NvdmVyeVJ1bhIMCgRuYW1lGAEgASgJEhgKEGRpc2NvdmVyeV9ydW5faWQYAiABKAkSLQoFc3RhdGUYAyABKA4yHi5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW5TdGF0ZRIwCgxjdXJyZW50X3N0ZXAYBCABKA4yGi5sYXBwLndlYi52MS5EaXNjb3ZlcnlTdGVwEhwKEHByb2dyZXNzX21lc3NhZ2UYBSABKAlCAhgBEhkKDWVycm9yX21lc3NhZ2UYBiABKAlCAhgBEi4KCnN0YXJ0ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEi8KC2ZpbmlzaGVkX2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIWCg5sb2dfZmlsZV9jb3VudBgJIAEoBRIVCg1wYXR0ZXJuX2NvdW50GAogASgFEhcKD3VubWF0Y2hlZF9jb3VudBgLIAEoBRIzCghwcm9ncmVzcxgMIAEoCzIhLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1blByb2dyZXNzEi0KBWVycm9yGA0gASgLMh4ubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuRXJyb3IiSAoURGlzY292ZXJ5UnVuTWV0YWRhdGESMAoNZGlzY292ZXJ5X3J1bhgBIAEoCzIZLmxhcHAud2ViLnYxLkRpc2NvdmVyeVJ1biJ/ChREaXNjb3ZlcnlSdW5Qcm9ncmVzcxIoCgRzdGVwGAEgASgOMhoubGFwcC53ZWIudjEuRGlzY292ZXJ5U3RlcBI9CgtsYWJlbF9iYXRjaBgCIAEoCzIoLmxhcHAud2ViLnYxLkRpc2NvdmVyeUxhYmVsQmF0Y2hQcm9ncmVzcyKrAQobRGlzY292ZXJ5TGFiZWxCYXRjaFByb2dyZXNzEg0KBWV2ZW50GAEgASgJEhQKDGJhdGNoX251bWJlchgCIAEoBRITCgtiYXRjaF9jb3VudBgDIAEoBRISCgpiYXRjaF9zaXplGAQgASgFEg8KB2F0dGVtcHQYBSABKAUSFAoMbWF4X2F0dGVtcHRzGAYgASgFEhcKD2NvbXBsZXRlZF9jb3VudBgHIAEoBSJcChFEaXNjb3ZlcnlSdW5FcnJvchIMCgRjb2RlGAEgASgJEg8KB21lc3NhZ2UYAiABKAkSKAoEc3RlcBgDIAEoDjIaLmxhcHAud2ViLnYxLkRpc2NvdmVyeVN0ZXAigwIKB1BhdHRlcm4SDAoEbmFtZRgBIAEoCRISCgpwYXR0ZXJuX2lkGAIgASgJEhMKC3NlbWFudGljX2lkGAMgASgJEhMKC2Rlc2NyaXB0aW9uGAQgASgJEhAKCHRlbXBsYXRlGAUgASgJEg0KBWNvdW50GAYgASgFEigKCmZpcnN0X3NlZW4YByABKAsyFC5sYXBwLndlYi52MS5MaW5lUmVmEicKCWxhc3Rfc2VlbhgIIAEoCzIULmxhcHAud2ViLnYxLkxpbmVSZWYSJwoJbGluZV9yZWZzGAkgAygLMhQubGFwcC53ZWIudjEuTGluZVJlZhIPCgdzYW1wbGVzGAogAygJIjEKB0xpbmVSZWYSEQoJZmlsZV9uYW1lGAEgASgJEhMKC2xpbmVfbnVtYmVyGAIgASgFIjUKDEVycm9yUGF0dGVybhIlCgdwYXR0ZXJuGAEgASgLMhQubGFwcC53ZWIudjEuUGF0dGVybiJNChJVbm1hdGNoZWRFcnJvckxpbmUSEQoJZmlsZV9uYW1lGAEgASgJEhMKC2xpbmVfbnVtYmVyGAIgASgFEg8KB2NvbnRlbnQYAyABKAkiFwoVTGlzdFdvcmtzcGFjZXNSZXF1ZXN0IkQKFkxpc3RXb3Jrc3BhY2VzUmVzcG9uc2USKgoKd29ya3NwYWNlcxgBIAMoCzIWLmxhcHAud2ViLnYxLldvcmtzcGFjZSIjChNHZXRXb3Jrc3BhY2VSZXF1ZXN0EgwKBG5hbWUYASABKAkiQQoUR2V0V29ya3NwYWNlUmVzcG9uc2USKQoJd29ya3NwYWNlGAEgASgLMhYubGFwcC53ZWIudjEuV29ya3NwYWNlIi4KFkNyZWF0ZVdvcmtzcGFjZVJlcXVlc3QSFAoMd29ya3NwYWNlX2lkGAEgASgJIkQKF0NyZWF0ZVdvcmtzcGFjZVJlc3BvbnNlEikKCXdvcmtzcGFjZRgBIAEoCzIWLmxhcHAud2ViLnYxLldvcmtzcGFjZSImChZEZWxldGVXb3Jrc3BhY2VSZXF1ZXN0EgwKBG5hbWUYASABKAkiGQoXRGVsZXRlV29ya3NwYWNlUmVzcG9uc2UiJQoTTGlzdExvZ0ZpbGVzUmVxdWVzdBIOCgZwYXJlbnQYASABKAkiPwoUTGlzdExvZ0ZpbGVzUmVzcG9uc2USJwoJbG9nX2ZpbGVzGAEgAygLMhQubGFwcC53ZWIudjEuTG9nRmlsZSJKChRVcGxvYWRMb2dGaWxlUmVxdWVzdBIOCgZwYXJlbnQYASABKAkSEQoJZmlsZV9uYW1lGAIgASgJEg8KB2NvbnRlbnQYAyABKAwiPwoVVXBsb2FkTG9nRmlsZVJlc3BvbnNlEiYKCGxvZ19maWxlGAEgASgLMhQubGFwcC53ZWIudjEuTG9nRmlsZSIkChREZWxldGVMb2dGaWxlUmVxdWVzdBIMCgRuYW1lGAEgASgJIhcKFURlbGV0ZUxvZ0ZpbGVSZXNwb25zZSKqAQoWQ3JlYXRlSW1wb3J0UnVuUmVxdWVzdBIOCgZwYXJlbnQYASABKAkSDwoHcHJvamVjdBgCIAEoCRIOCgZmaWx0ZXIYAyABKAkSKAoEZnJvbRgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASJgoCdG8YBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg0KBWxpbWl0GAYgASgFIiMKE0dldEltcG9ydFJ1blJlcXVlc3QSDAoEbmFtZRgBIAEoCSJCChRHZXRJbXBvcnRSdW5SZXNwb25zZRIqCgppbXBvcnRfcnVuGAEgASgLMhYubGFwcC53ZWIudjEuSW1wb3J0UnVuIicKFUxpc3RJbXBvcnRSdW5zUmVxdWVzdBIOCgZwYXJlbnQYASABKAkiRQoWTGlzdEltcG9ydFJ1bnNSZXNwb25zZRIrCgtpbXBvcnRfcnVucxgBIAMoCzIWLmxhcHAud2ViLnYxLkltcG9ydFJ1biIgCh5MaXN0UmVjZW50SW1wb3J0UXVlcmllc1JlcXVlc3QiZgoRUmVjZW50SW1wb3J0UXVlcnkSDwoHcHJvamVjdBgBIAEoCRIOCgZmaWx0ZXIYAiABKAkSMAoMbGFzdF91c2VkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJZCh9MaXN0UmVjZW50SW1wb3J0UXVlcmllc1Jlc3BvbnNlEjYKDnJlY2VudF9xdWVyaWVzGAEgAygLMh4ubGFwcC53ZWIudjEuUmVjZW50SW1wb3J0UXVlcnkiOgoZQ3JlYXRlRGlzY292ZXJ5UnVuUmVxdWVzdBIOCgZwYXJlbnQYASABKAkSDQoFbW9kZWwYAiABKAkiJgoWR2V0RGlzY292ZXJ5UnVuUmVxdWVzdBIMCgRuYW1lGAEgASgJIksKF0dldERpc2NvdmVyeVJ1blJlc3BvbnNlEjAKDWRpc2NvdmVyeV9ydW4YASABKAsyGS5sYXBwLndlYi52MS5EaXNjb3ZlcnlSdW4iKgoYTGlzdERpc2NvdmVyeVJ1bnNSZXF1ZXN0Eg4KBnBhcmVudBgBIAEoCSJOChlMaXN0RGlzY292ZXJ5UnVuc1Jlc3BvbnNlEjEKDmRpc2NvdmVyeV9ydW5zGAEgAygLMhkubGFwcC53ZWIudjEuRGlzY292ZXJ5UnVuIiUKE0xpc3RQYXR0ZXJuc1JlcXVlc3QSDgoGcGFyZW50GAEgASgJIj4KFExpc3RQYXR0ZXJuc1Jlc3BvbnNlEiYKCHBhdHRlcm5zGAEgAygLMhQubGFwcC53ZWIudjEuUGF0dGVybiIhChFHZXRQYXR0ZXJuUmVxdWVzdBIMCgRuYW1lGAEgASgJIjsKEkdldFBhdHRlcm5SZXNwb25zZRIlCgdwYXR0ZXJuGAEgASgLMhQubGFwcC53ZWIudjEuUGF0dGVybiImChRHZXRFcnJvcnNWaWV3UmVxdWVzdBIOCgZwYXJlbnQYASABKAkiigEKFUdldEVycm9yc1ZpZXdSZXNwb25zZRIxCg5lcnJvcl9wYXR0ZXJucxgBIAMoCzIZLmxhcHAud2ViLnYxLkVycm9yUGF0dGVybhI+ChV1bm1hdGNoZWRfZXJyb3JfbGluZXMYAiADKAsyHy5sYXBwLndlYi52MS5Vbm1hdGNoZWRFcnJvckxpbmUqqgEKD1dvcmtzcGFjZVN0YXR1cxIgChxXT1JLU1BBQ0VfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGgoWV09SS1NQQUNFX1NUQVRVU19FTVBUWRABEiAKHFdPUktTUEFDRV9TVEFUVVNfRElTQ09WRVJJTkcQAhIaChZXT1JLU1BBQ0VfU1RBVFVTX1JFQURZEAMSGwoXV09SS1NQQUNFX1NUQVRVU19GQUlMRUQQBCqqAQoOSW1wb3J0UnVuU3RhdGUSIAocSU1QT1JUX1JVTl9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0lNUE9SVF9SVU5fU1RBVEVfUVVFVUVEEAESHAoYSU1QT1JUX1JVTl9TVEFURV9SVU5OSU5HEAISHgoaSU1QT1JUX1JVTl9TVEFURV9TVUNDRUVERUQQAxIbChdJTVBPUlRfUlVOX1NUQVRFX0ZBSUxFRBAEKrwBChFEaXNjb3ZlcnlSdW5TdGF0ZRIjCh9ESVNDT1ZFUllfUlVOX1NUQVRFX1VOU1BFQ0lGSUVEEAASHgoaRElTQ09WRVJZX1JVTl9TVEFURV9RVUVVRUQQARIfChtESVNDT1ZFUllfUlVOX1NUQVRFX1JVTk5JTkcQAhIhCh1ESVNDT1ZFUllfUlVOX1NUQVRFX1NVQ0NFRURFRBADEh4KGkRJU0NPVkVSWV9SVU5fU1RBVEVfRkFJTEVEEAQq5wEKDURpc2NvdmVyeVN0ZXASHgoaRElTQ09WRVJZX1NURVBfVU5TUEVDSUZJRUQQABIfChtESVNDT1ZFUllfU1RFUF9SRUFESU5HX0xPR1MQARIiCh5ESVNDT1ZFUllfU1RFUF9NRVJHSU5HX0VOVFJJRVMQAhInCiNESVNDT1ZFUllfU1RFUF9ESVNDT1ZFUklOR19QQVRURVJOUxADEiQKIERJU0NPVkVSWV9TVEVQX0xBQkVMSU5HX1BBVFRFUk5TEAQSIgoeRElTQ09WRVJZX1NURVBfV1JJVElOR19SRVNVTFRTEAUy6AwKEFdvcmtzcGFjZVNlcnZpY2USWQoOTGlzdFdvcmtzcGFjZXMSIi5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIy5sYXBwLndlYi52MS5MaXN0V29ya3NwYWNlc1Jlc3BvbnNlElMKDEdldFdvcmtzcGFjZRIgLmxhcHAud2ViLnYxLkdldFdvcmtzcGFjZVJlcXVlc3QaIS5sYXBwLndlYi52MS5HZXRXb3Jrc3BhY2VSZXNwb25zZRJcCg9DcmVhdGVXb3Jrc3BhY2USIy5sYXBwLndlYi52MS5DcmVhdGVXb3Jrc3BhY2VSZXF1ZXN0GiQubGFwcC53ZWIudjEuQ3JlYXRlV29ya3NwYWNlUmVzcG9uc2USXAoPRGVsZXRlV29ya3NwYWNlEiMubGFwcC53ZWIudjEuRGVsZXRlV29ya3NwYWNlUmVxdWVzdBokLmxhcHAud2ViLnYxLkRlbGV0ZVdvcmtzcGFjZVJlc3BvbnNlElMKDExpc3RMb2dGaWxlcxIgLmxhcHAud2ViLnYxLkxpc3RMb2dGaWxlc1JlcXVlc3QaIS5sYXBwLndlYi52MS5MaXN0TG9nRmlsZXNSZXNwb25zZRJWCg1VcGxvYWRMb2dGaWxlEiEubGFwcC53ZWIudjEuVXBsb2FkTG9nRmlsZVJlcXVlc3QaIi5sYXBwLndlYi52MS5VcGxvYWRMb2dGaWxlUmVzcG9uc2USVgoNRGVsZXRlTG9nRmlsZRIhLmxhcHAud2ViLnYxLkRlbGV0ZUxvZ0ZpbGVSZXF1ZXN0GiIubGFwcC53ZWIudjEuRGVsZXRlTG9nRmlsZVJlc3BvbnNlEngKD0NyZWF0ZUltcG9ydFJ1bhIjLmxhcHAud2ViLnYxLkNyZWF0ZUltcG9ydFJ1blJlcXVlc3QaHS5nb29nbGUubG9uZ3J1bm5pbmcuT3BlcmF0aW9uIiHKQR4KCUltcG9ydFJ1bhIRSW1wb3J0UnVuTWV0YWRhdGESUwoMR2V0SW1wb3J0UnVuEiAubGFwcC53ZWIudjEuR2V0SW1wb3J0UnVuUmVxdWVzdBohLmxhcHAud2ViLnYxLkdldEltcG9ydFJ1blJlc3BvbnNlElkKDkxpc3RJbXBvcnRSdW5zEiIubGFwcC53ZWIudjEuTGlzdEltcG9ydFJ1bnNSZXF1ZXN0GiMubGFwcC53ZWIudjEuTGlzdEltcG9ydFJ1bnNSZXNwb25zZRJ0ChdMaXN0UmVjZW50SW1wb3J0UXVlcmllcxIrLmxhcHAud2ViLnYxLkxpc3RSZWNlbnRJbXBvcnRRdWVyaWVzUmVxdWVzdBosLmxhcHAud2ViLnYxLkxpc3RSZWNlbnRJbXBvcnRRdWVyaWVzUmVzcG9uc2UShAEKEkNyZWF0ZURpc2NvdmVyeVJ1bhImLmxhcHAud2ViLnYxLkNyZWF0ZURpc2NvdmVyeVJ1blJlcXVlc3QaHS5nb29nbGUubG9uZ3J1bm5pbmcuT3BlcmF0aW9uIifKQSQKDERpc2NvdmVyeVJ1bhIURGlzY292ZXJ5UnVuTWV0YWRhdGESXAoPR2V0RGlzY292ZXJ5UnVuEiMubGFwcC53ZWIudjEuR2V0RGlzY292ZXJ5UnVuUmVxdWVzdBokLmxhcHAud2ViLnYxLkdldERpc2NvdmVyeVJ1blJlc3BvbnNlEmIKEUxpc3REaXNjb3ZlcnlSdW5zEiUubGFwcC53ZWIudjEuTGlzdERpc2NvdmVyeVJ1bnNSZXF1ZXN0GiYubGFwcC53ZWIudjEuTGlzdERpc2NvdmVyeVJ1bnNSZXNwb25zZRJTCgxMaXN0UGF0dGVybnMSIC5sYXBwLndlYi52MS5MaXN0UGF0dGVybnNSZXF1ZXN0GiEubGFwcC53ZWIudjEuTGlzdFBhdHRlcm5zUmVzcG9uc2USTQoKR2V0UGF0dGVybhIeLmxhcHAud2ViLnYxLkdldFBhdHRlcm5SZXF1ZXN0Gh8ubGFwcC53ZWIudjEuR2V0UGF0dGVyblJlc3BvbnNlElYKDUdldEVycm9yc1ZpZXcSIS5sYXBwLndlYi52MS5HZXRFcnJvcnNWaWV3UmVxdWVzdBoiLmxhcHAud2ViLnYxLkdldEVycm9yc1ZpZXdSZXNwb25zZUIwWi5naXRodWIuY29tL3N0cnJsL2xhcHAvZ2VuL2dvL2xhcHAvd2ViL3YxO3dlYnYxYgZwcm90bzM", [file_google_longrunning_operations, file_google_protobuf_timestamp]);
 
 /**
  * @generated from message lapp.web.v1.Workspace
@@ -181,6 +183,23 @@ export const ImportRunSchema: GenMessage<ImportRun> = /*@__PURE__*/
   messageDesc(file_lapp_web_v1_web, 2);
 
 /**
+ * @generated from message lapp.web.v1.ImportRunMetadata
+ */
+export type ImportRunMetadata = Message<"lapp.web.v1.ImportRunMetadata"> & {
+  /**
+   * @generated from field: lapp.web.v1.ImportRun import_run = 1;
+   */
+  importRun?: ImportRun | undefined;
+};
+
+/**
+ * Describes the message lapp.web.v1.ImportRunMetadata.
+ * Use `create(ImportRunMetadataSchema)` to create a new message.
+ */
+export const ImportRunMetadataSchema: GenMessage<ImportRunMetadata> = /*@__PURE__*/
+  messageDesc(file_lapp_web_v1_web, 3);
+
+/**
  * @generated from message lapp.web.v1.ImportRunError
  */
 export type ImportRunError = Message<"lapp.web.v1.ImportRunError"> & {
@@ -200,7 +219,7 @@ export type ImportRunError = Message<"lapp.web.v1.ImportRunError"> & {
  * Use `create(ImportRunErrorSchema)` to create a new message.
  */
 export const ImportRunErrorSchema: GenMessage<ImportRunError> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 3);
+  messageDesc(file_lapp_web_v1_web, 4);
 
 /**
  * @generated from message lapp.web.v1.DiscoveryRun
@@ -279,7 +298,24 @@ export type DiscoveryRun = Message<"lapp.web.v1.DiscoveryRun"> & {
  * Use `create(DiscoveryRunSchema)` to create a new message.
  */
 export const DiscoveryRunSchema: GenMessage<DiscoveryRun> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 4);
+  messageDesc(file_lapp_web_v1_web, 5);
+
+/**
+ * @generated from message lapp.web.v1.DiscoveryRunMetadata
+ */
+export type DiscoveryRunMetadata = Message<"lapp.web.v1.DiscoveryRunMetadata"> & {
+  /**
+   * @generated from field: lapp.web.v1.DiscoveryRun discovery_run = 1;
+   */
+  discoveryRun?: DiscoveryRun | undefined;
+};
+
+/**
+ * Describes the message lapp.web.v1.DiscoveryRunMetadata.
+ * Use `create(DiscoveryRunMetadataSchema)` to create a new message.
+ */
+export const DiscoveryRunMetadataSchema: GenMessage<DiscoveryRunMetadata> = /*@__PURE__*/
+  messageDesc(file_lapp_web_v1_web, 6);
 
 /**
  * @generated from message lapp.web.v1.DiscoveryRunProgress
@@ -301,7 +337,7 @@ export type DiscoveryRunProgress = Message<"lapp.web.v1.DiscoveryRunProgress"> &
  * Use `create(DiscoveryRunProgressSchema)` to create a new message.
  */
 export const DiscoveryRunProgressSchema: GenMessage<DiscoveryRunProgress> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 5);
+  messageDesc(file_lapp_web_v1_web, 7);
 
 /**
  * @generated from message lapp.web.v1.DiscoveryLabelBatchProgress
@@ -348,7 +384,7 @@ export type DiscoveryLabelBatchProgress = Message<"lapp.web.v1.DiscoveryLabelBat
  * Use `create(DiscoveryLabelBatchProgressSchema)` to create a new message.
  */
 export const DiscoveryLabelBatchProgressSchema: GenMessage<DiscoveryLabelBatchProgress> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 6);
+  messageDesc(file_lapp_web_v1_web, 8);
 
 /**
  * @generated from message lapp.web.v1.DiscoveryRunError
@@ -375,7 +411,7 @@ export type DiscoveryRunError = Message<"lapp.web.v1.DiscoveryRunError"> & {
  * Use `create(DiscoveryRunErrorSchema)` to create a new message.
  */
 export const DiscoveryRunErrorSchema: GenMessage<DiscoveryRunError> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 7);
+  messageDesc(file_lapp_web_v1_web, 9);
 
 /**
  * @generated from message lapp.web.v1.Pattern
@@ -437,7 +473,7 @@ export type Pattern = Message<"lapp.web.v1.Pattern"> & {
  * Use `create(PatternSchema)` to create a new message.
  */
 export const PatternSchema: GenMessage<Pattern> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 8);
+  messageDesc(file_lapp_web_v1_web, 10);
 
 /**
  * @generated from message lapp.web.v1.LineRef
@@ -459,7 +495,7 @@ export type LineRef = Message<"lapp.web.v1.LineRef"> & {
  * Use `create(LineRefSchema)` to create a new message.
  */
 export const LineRefSchema: GenMessage<LineRef> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 9);
+  messageDesc(file_lapp_web_v1_web, 11);
 
 /**
  * @generated from message lapp.web.v1.ErrorPattern
@@ -476,7 +512,7 @@ export type ErrorPattern = Message<"lapp.web.v1.ErrorPattern"> & {
  * Use `create(ErrorPatternSchema)` to create a new message.
  */
 export const ErrorPatternSchema: GenMessage<ErrorPattern> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 10);
+  messageDesc(file_lapp_web_v1_web, 12);
 
 /**
  * @generated from message lapp.web.v1.UnmatchedErrorLine
@@ -503,7 +539,7 @@ export type UnmatchedErrorLine = Message<"lapp.web.v1.UnmatchedErrorLine"> & {
  * Use `create(UnmatchedErrorLineSchema)` to create a new message.
  */
 export const UnmatchedErrorLineSchema: GenMessage<UnmatchedErrorLine> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 11);
+  messageDesc(file_lapp_web_v1_web, 13);
 
 /**
  * @generated from message lapp.web.v1.ListWorkspacesRequest
@@ -516,7 +552,7 @@ export type ListWorkspacesRequest = Message<"lapp.web.v1.ListWorkspacesRequest">
  * Use `create(ListWorkspacesRequestSchema)` to create a new message.
  */
 export const ListWorkspacesRequestSchema: GenMessage<ListWorkspacesRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 12);
+  messageDesc(file_lapp_web_v1_web, 14);
 
 /**
  * @generated from message lapp.web.v1.ListWorkspacesResponse
@@ -533,7 +569,7 @@ export type ListWorkspacesResponse = Message<"lapp.web.v1.ListWorkspacesResponse
  * Use `create(ListWorkspacesResponseSchema)` to create a new message.
  */
 export const ListWorkspacesResponseSchema: GenMessage<ListWorkspacesResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 13);
+  messageDesc(file_lapp_web_v1_web, 15);
 
 /**
  * @generated from message lapp.web.v1.GetWorkspaceRequest
@@ -550,7 +586,7 @@ export type GetWorkspaceRequest = Message<"lapp.web.v1.GetWorkspaceRequest"> & {
  * Use `create(GetWorkspaceRequestSchema)` to create a new message.
  */
 export const GetWorkspaceRequestSchema: GenMessage<GetWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 14);
+  messageDesc(file_lapp_web_v1_web, 16);
 
 /**
  * @generated from message lapp.web.v1.GetWorkspaceResponse
@@ -567,7 +603,7 @@ export type GetWorkspaceResponse = Message<"lapp.web.v1.GetWorkspaceResponse"> &
  * Use `create(GetWorkspaceResponseSchema)` to create a new message.
  */
 export const GetWorkspaceResponseSchema: GenMessage<GetWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 15);
+  messageDesc(file_lapp_web_v1_web, 17);
 
 /**
  * @generated from message lapp.web.v1.CreateWorkspaceRequest
@@ -584,7 +620,7 @@ export type CreateWorkspaceRequest = Message<"lapp.web.v1.CreateWorkspaceRequest
  * Use `create(CreateWorkspaceRequestSchema)` to create a new message.
  */
 export const CreateWorkspaceRequestSchema: GenMessage<CreateWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 16);
+  messageDesc(file_lapp_web_v1_web, 18);
 
 /**
  * @generated from message lapp.web.v1.CreateWorkspaceResponse
@@ -601,7 +637,7 @@ export type CreateWorkspaceResponse = Message<"lapp.web.v1.CreateWorkspaceRespon
  * Use `create(CreateWorkspaceResponseSchema)` to create a new message.
  */
 export const CreateWorkspaceResponseSchema: GenMessage<CreateWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 17);
+  messageDesc(file_lapp_web_v1_web, 19);
 
 /**
  * @generated from message lapp.web.v1.DeleteWorkspaceRequest
@@ -618,7 +654,7 @@ export type DeleteWorkspaceRequest = Message<"lapp.web.v1.DeleteWorkspaceRequest
  * Use `create(DeleteWorkspaceRequestSchema)` to create a new message.
  */
 export const DeleteWorkspaceRequestSchema: GenMessage<DeleteWorkspaceRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 18);
+  messageDesc(file_lapp_web_v1_web, 20);
 
 /**
  * @generated from message lapp.web.v1.DeleteWorkspaceResponse
@@ -631,7 +667,7 @@ export type DeleteWorkspaceResponse = Message<"lapp.web.v1.DeleteWorkspaceRespon
  * Use `create(DeleteWorkspaceResponseSchema)` to create a new message.
  */
 export const DeleteWorkspaceResponseSchema: GenMessage<DeleteWorkspaceResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 19);
+  messageDesc(file_lapp_web_v1_web, 21);
 
 /**
  * @generated from message lapp.web.v1.ListLogFilesRequest
@@ -648,7 +684,7 @@ export type ListLogFilesRequest = Message<"lapp.web.v1.ListLogFilesRequest"> & {
  * Use `create(ListLogFilesRequestSchema)` to create a new message.
  */
 export const ListLogFilesRequestSchema: GenMessage<ListLogFilesRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 20);
+  messageDesc(file_lapp_web_v1_web, 22);
 
 /**
  * @generated from message lapp.web.v1.ListLogFilesResponse
@@ -665,7 +701,7 @@ export type ListLogFilesResponse = Message<"lapp.web.v1.ListLogFilesResponse"> &
  * Use `create(ListLogFilesResponseSchema)` to create a new message.
  */
 export const ListLogFilesResponseSchema: GenMessage<ListLogFilesResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 21);
+  messageDesc(file_lapp_web_v1_web, 23);
 
 /**
  * @generated from message lapp.web.v1.UploadLogFileRequest
@@ -692,7 +728,7 @@ export type UploadLogFileRequest = Message<"lapp.web.v1.UploadLogFileRequest"> &
  * Use `create(UploadLogFileRequestSchema)` to create a new message.
  */
 export const UploadLogFileRequestSchema: GenMessage<UploadLogFileRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 22);
+  messageDesc(file_lapp_web_v1_web, 24);
 
 /**
  * @generated from message lapp.web.v1.UploadLogFileResponse
@@ -709,7 +745,7 @@ export type UploadLogFileResponse = Message<"lapp.web.v1.UploadLogFileResponse">
  * Use `create(UploadLogFileResponseSchema)` to create a new message.
  */
 export const UploadLogFileResponseSchema: GenMessage<UploadLogFileResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 23);
+  messageDesc(file_lapp_web_v1_web, 25);
 
 /**
  * @generated from message lapp.web.v1.DeleteLogFileRequest
@@ -726,7 +762,7 @@ export type DeleteLogFileRequest = Message<"lapp.web.v1.DeleteLogFileRequest"> &
  * Use `create(DeleteLogFileRequestSchema)` to create a new message.
  */
 export const DeleteLogFileRequestSchema: GenMessage<DeleteLogFileRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 24);
+  messageDesc(file_lapp_web_v1_web, 26);
 
 /**
  * @generated from message lapp.web.v1.DeleteLogFileResponse
@@ -739,7 +775,7 @@ export type DeleteLogFileResponse = Message<"lapp.web.v1.DeleteLogFileResponse">
  * Use `create(DeleteLogFileResponseSchema)` to create a new message.
  */
 export const DeleteLogFileResponseSchema: GenMessage<DeleteLogFileResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 25);
+  messageDesc(file_lapp_web_v1_web, 27);
 
 /**
  * @generated from message lapp.web.v1.CreateImportRunRequest
@@ -781,24 +817,7 @@ export type CreateImportRunRequest = Message<"lapp.web.v1.CreateImportRunRequest
  * Use `create(CreateImportRunRequestSchema)` to create a new message.
  */
 export const CreateImportRunRequestSchema: GenMessage<CreateImportRunRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 26);
-
-/**
- * @generated from message lapp.web.v1.CreateImportRunResponse
- */
-export type CreateImportRunResponse = Message<"lapp.web.v1.CreateImportRunResponse"> & {
-  /**
-   * @generated from field: lapp.web.v1.ImportRun import_run = 1;
-   */
-  importRun?: ImportRun | undefined;
-};
-
-/**
- * Describes the message lapp.web.v1.CreateImportRunResponse.
- * Use `create(CreateImportRunResponseSchema)` to create a new message.
- */
-export const CreateImportRunResponseSchema: GenMessage<CreateImportRunResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 27);
+  messageDesc(file_lapp_web_v1_web, 28);
 
 /**
  * @generated from message lapp.web.v1.GetImportRunRequest
@@ -815,7 +834,7 @@ export type GetImportRunRequest = Message<"lapp.web.v1.GetImportRunRequest"> & {
  * Use `create(GetImportRunRequestSchema)` to create a new message.
  */
 export const GetImportRunRequestSchema: GenMessage<GetImportRunRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 28);
+  messageDesc(file_lapp_web_v1_web, 29);
 
 /**
  * @generated from message lapp.web.v1.GetImportRunResponse
@@ -832,7 +851,7 @@ export type GetImportRunResponse = Message<"lapp.web.v1.GetImportRunResponse"> &
  * Use `create(GetImportRunResponseSchema)` to create a new message.
  */
 export const GetImportRunResponseSchema: GenMessage<GetImportRunResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 29);
+  messageDesc(file_lapp_web_v1_web, 30);
 
 /**
  * @generated from message lapp.web.v1.ListImportRunsRequest
@@ -849,7 +868,7 @@ export type ListImportRunsRequest = Message<"lapp.web.v1.ListImportRunsRequest">
  * Use `create(ListImportRunsRequestSchema)` to create a new message.
  */
 export const ListImportRunsRequestSchema: GenMessage<ListImportRunsRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 30);
+  messageDesc(file_lapp_web_v1_web, 31);
 
 /**
  * @generated from message lapp.web.v1.ListImportRunsResponse
@@ -866,7 +885,7 @@ export type ListImportRunsResponse = Message<"lapp.web.v1.ListImportRunsResponse
  * Use `create(ListImportRunsResponseSchema)` to create a new message.
  */
 export const ListImportRunsResponseSchema: GenMessage<ListImportRunsResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 31);
+  messageDesc(file_lapp_web_v1_web, 32);
 
 /**
  * @generated from message lapp.web.v1.ListRecentImportQueriesRequest
@@ -879,7 +898,7 @@ export type ListRecentImportQueriesRequest = Message<"lapp.web.v1.ListRecentImpo
  * Use `create(ListRecentImportQueriesRequestSchema)` to create a new message.
  */
 export const ListRecentImportQueriesRequestSchema: GenMessage<ListRecentImportQueriesRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 32);
+  messageDesc(file_lapp_web_v1_web, 33);
 
 /**
  * @generated from message lapp.web.v1.RecentImportQuery
@@ -906,7 +925,7 @@ export type RecentImportQuery = Message<"lapp.web.v1.RecentImportQuery"> & {
  * Use `create(RecentImportQuerySchema)` to create a new message.
  */
 export const RecentImportQuerySchema: GenMessage<RecentImportQuery> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 33);
+  messageDesc(file_lapp_web_v1_web, 34);
 
 /**
  * @generated from message lapp.web.v1.ListRecentImportQueriesResponse
@@ -923,7 +942,7 @@ export type ListRecentImportQueriesResponse = Message<"lapp.web.v1.ListRecentImp
  * Use `create(ListRecentImportQueriesResponseSchema)` to create a new message.
  */
 export const ListRecentImportQueriesResponseSchema: GenMessage<ListRecentImportQueriesResponse> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 34);
+  messageDesc(file_lapp_web_v1_web, 35);
 
 /**
  * @generated from message lapp.web.v1.CreateDiscoveryRunRequest
@@ -945,23 +964,6 @@ export type CreateDiscoveryRunRequest = Message<"lapp.web.v1.CreateDiscoveryRunR
  * Use `create(CreateDiscoveryRunRequestSchema)` to create a new message.
  */
 export const CreateDiscoveryRunRequestSchema: GenMessage<CreateDiscoveryRunRequest> = /*@__PURE__*/
-  messageDesc(file_lapp_web_v1_web, 35);
-
-/**
- * @generated from message lapp.web.v1.CreateDiscoveryRunResponse
- */
-export type CreateDiscoveryRunResponse = Message<"lapp.web.v1.CreateDiscoveryRunResponse"> & {
-  /**
-   * @generated from field: lapp.web.v1.DiscoveryRun discovery_run = 1;
-   */
-  discoveryRun?: DiscoveryRun | undefined;
-};
-
-/**
- * Describes the message lapp.web.v1.CreateDiscoveryRunResponse.
- * Use `create(CreateDiscoveryRunResponseSchema)` to create a new message.
- */
-export const CreateDiscoveryRunResponseSchema: GenMessage<CreateDiscoveryRunResponse> = /*@__PURE__*/
   messageDesc(file_lapp_web_v1_web, 36);
 
 /**
@@ -1354,7 +1356,7 @@ export const WorkspaceService: GenService<{
   createImportRun: {
     methodKind: "unary";
     input: typeof CreateImportRunRequestSchema;
-    output: typeof CreateImportRunResponseSchema;
+    output: typeof OperationSchema;
   },
   /**
    * @generated from rpc lapp.web.v1.WorkspaceService.GetImportRun
@@ -1386,7 +1388,7 @@ export const WorkspaceService: GenService<{
   createDiscoveryRun: {
     methodKind: "unary";
     input: typeof CreateDiscoveryRunRequestSchema;
-    output: typeof CreateDiscoveryRunResponseSchema;
+    output: typeof OperationSchema;
   },
   /**
    * @generated from rpc lapp.web.v1.WorkspaceService.GetDiscoveryRun

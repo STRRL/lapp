@@ -7,9 +7,9 @@ LAPP Web is a local web app for working with local LAPP workspaces. It starts fr
 - Dashboard is a simple entry point for listing, creating, opening, and permanently deleting workspaces.
 - Workspace detail is the primary analysis surface.
 - Discovery is explicit. Uploading or deleting log files does not automatically start discovery.
-- Discovery runs are asynchronous, one-time task executions. A completed run is not synchronized with later log file changes.
+- Discovery runs are asynchronous, one time task executions. Create returns a standard long running Operation. A completed run is not synchronized with later log file changes.
 - Workspace views default to the latest successful discovery run.
-- DiscoveryRun creation requires at least one log file and rejects concurrent runs for the same workspace at the API layer.
+- DiscoveryRun creation requires at least one log file. A parallel run request returns `ABORTED`.
 - If the web server starts and finds local `QUEUED` or `RUNNING` DiscoveryRuns from a previous process, it marks them as failed because no worker is still attached to them.
 - Semantic labeling runs in batches of 25 patterns with default concurrency 12, a per-batch timeout, and up to 3 attempts per batch.
 - DiscoveryRun records store structured `progress` and `error` fields. Backend code records facts; frontend code renders user-facing text.

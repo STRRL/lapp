@@ -29,6 +29,7 @@ dev: clean build
 # Generate protobuf/Connect code
 proto-gen:
 	buf generate
+	buf generate --template buf.gen.operations.yaml
 
 # Lint protobuf schemas
 proto-lint:

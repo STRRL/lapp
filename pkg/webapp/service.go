@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"connectrpc.com/connect"
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
@@ -216,7 +217,7 @@ func (s *WorkspaceService) DeleteLogFile(_ context.Context, req *connect.Request
 	return connect.NewResponse(&webv1.DeleteLogFileResponse{}), nil
 }
 
-func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Request[webv1.CreateDiscoveryRunRequest]) (*connect.Response[webv1.CreateDiscoveryRunResponse], error) {
+func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Request[webv1.CreateDiscoveryRunRequest]) (*connect.Response[longrunningpb.Operation], error) {
 	id, connectErr := workspaceIDFromName(req.Msg.Parent)
 	if connectErr != nil {
 		return nil, connectErr
@@ -225,7 +226,7 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 		return nil, connectErr
 	}
 	if !s.reserveRun(id) {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("another run is active"))
+		return nil, connect.NewError(connect.CodeAborted, errors.New("another run is active"))
 	}
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		s.releaseRun(id)
@@ -258,6 +259,11 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 		s.releaseRun(id)
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+	operation, err := s.discoveryRunOperation(id, record)
+	if err != nil {
+		s.releaseRun(id)
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
 	go func() {
 		defer s.releaseRun(id)
 		slog.Info("DiscoveryRun started", "workspace", id, "run", runID.String())
@@ -282,7 +288,7 @@ func (s *WorkspaceService) CreateDiscoveryRun(_ context.Context, req *connect.Re
 			"unmatched", result.UnmatchedCount,
 		)
 	}()
-	return connect.NewResponse(&webv1.CreateDiscoveryRunResponse{DiscoveryRun: s.discoveryRunMessage(id, record)}), nil
+	return connect.NewResponse(operation), nil
 }
 
 func (s *WorkspaceService) GetDiscoveryRun(_ context.Context, req *connect.Request[webv1.GetDiscoveryRunRequest]) (*connect.Response[webv1.GetDiscoveryRunResponse], error) {
