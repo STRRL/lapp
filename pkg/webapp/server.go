@@ -1,6 +1,7 @@
 package webapp
 
 import (
+	"context"
 	"embed"
 	"io/fs"
 	"mime"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/strrl/lapp/gen/go/lapp/web/v1/webv1connect"
+	"github.com/strrl/lapp/pkg/gcplog"
+	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -31,6 +34,22 @@ func NewHandler(config ServerConfig) (http.Handler, error) {
 		Root:   config.Root,
 		APIKey: config.APIKey,
 		Model:  config.Model,
+		ImportFetcher: func(ctx context.Context, req workspace.ImportRequest) (workspace.ImportFetchResult, error) {
+			fetched, err := gcplog.FetchLines(ctx, gcplog.FetchRequest{
+				Project: req.Project,
+				Filter:  req.Filter,
+				From:    req.From,
+				To:      req.To,
+				Limit:   req.Limit,
+			})
+			if err != nil {
+				return workspace.ImportFetchResult{}, err
+			}
+			return workspace.ImportFetchResult{
+				Lines:     fetched.Lines,
+				Truncated: fetched.Truncated,
+			}, nil
+		},
 	})
 	if err != nil {
 		return nil, err

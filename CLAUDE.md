@@ -52,7 +52,7 @@ integration_test/        Integration tests against Loghub-2.0 datasets
 ### DiscoveryRun (discover)
 
 `add-log` is a pure copy into `logs/` and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
-When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns as failed because those local workers no longer exist.
+When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns and ImportRuns as failed because those local workers no longer exist.
 DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
 
 ```

@@ -71,22 +71,9 @@ func RunImport(ctx context.Context, config ImportConfig) (ImportResult, error) {
 	if err != nil {
 		return ImportResult{}, err
 	}
-	if _, err := os.Stat(ImportRunRecordPath(config.Dir, runID)); err == nil {
-		return ImportResult{}, errors.Errorf("import run %q already exists", runID)
-	} else if !os.IsNotExist(err) {
-		return ImportResult{}, errors.Errorf("check import run %q: %w", runID, err)
-	}
-
-	record := ImportRunRecord{
-		ID:        runID,
-		Provider:  config.Provider,
-		Project:   config.Project,
-		Filter:    config.Filter,
-		From:      config.From.UTC(),
-		To:        config.To.UTC(),
-		Limit:     config.Limit,
-		State:     ImportRunStateRunning,
-		StartedAt: timeNow(),
+	record, err := claimImportRun(config, runID)
+	if err != nil {
+		return ImportResult{}, err
 	}
 	slog.Info("ImportRun started", "run", runID, "provider", config.Provider, "project", config.Project)
 	if err := WriteImportRunRecord(config.Dir, record); err != nil {
@@ -148,6 +135,42 @@ func RunImport(ctx context.Context, config ImportConfig) (ImportResult, error) {
 		Truncated:   record.Truncated,
 		LogFileName: record.LogFileName,
 	}, nil
+}
+
+func claimImportRun(config ImportConfig, runID string) (ImportRunRecord, error) {
+	record := ImportRunRecord{
+		ID:        runID,
+		Provider:  config.Provider,
+		Project:   config.Project,
+		Filter:    config.Filter,
+		From:      config.From.UTC(),
+		To:        config.To.UTC(),
+		Limit:     config.Limit,
+		State:     ImportRunStateRunning,
+		StartedAt: timeNow(),
+	}
+	existing, err := ReadImportRunRecord(config.Dir, runID)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return record, nil
+		}
+		return ImportRunRecord{}, errors.Errorf("check import run %q: %w", runID, err)
+	}
+	if existing.State != ImportRunStateQueued || !sameImportRequest(existing, record) {
+		return ImportRunRecord{}, errors.Errorf("import run %q already exists", runID)
+	}
+	existing.State = ImportRunStateRunning
+	return existing, nil
+}
+
+func sameImportRequest(left, right ImportRunRecord) bool {
+	return left.ID == right.ID &&
+		left.Provider == right.Provider &&
+		left.Project == right.Project &&
+		left.Filter == right.Filter &&
+		left.From.Equal(right.From) &&
+		left.To.Equal(right.To) &&
+		left.Limit == right.Limit
 }
 
 func importRunID(value string) (string, error) {
