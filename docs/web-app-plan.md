@@ -42,6 +42,10 @@ LAPP Web is a local web app for working with local LAPP workspaces. It starts fr
 - Show latest discovery status and progress.
 - Disable log upload, log deletion, and starting another discovery while a discovery run is running.
 
+### GCP Imports
+
+The Imports tab starts GCP imports with project, filter, time range, and limit fields. Quick time ranges cover the common one hour, six hour, and twenty four hour cases. The frontend polls the standard Operation while work is active. ImportRun records remain the source for workspace history, provenance, final counts, truncation, and structured errors. Recent project and filter pairs come from ImportRun records across every workspace. Choosing one fills both fields without creating another stored resource.
+
 ### Patterns
 
 - List patterns from the selected or latest successful discovery run.

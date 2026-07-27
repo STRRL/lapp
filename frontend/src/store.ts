@@ -1,24 +1,39 @@
 import { ConnectError } from "@connectrpc/connect";
-import { anyUnpack } from "@bufbuild/protobuf/wkt";
+import { anyUnpack, timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { create } from "zustand";
-import { workspaceClient } from "./api";
+import { operationsClient, workspaceClient } from "./api";
 import {
   DiscoveryRun,
   DiscoveryRunMetadataSchema,
   DiscoveryRunState,
+  ImportRun,
+  ImportRunMetadataSchema,
+  ImportRunState,
   LogFile,
   Pattern,
+  RecentImportQuery,
   UnmatchedErrorLine,
   Workspace
 } from "./gen/lapp/web/v1/web_pb";
 
-export type Tab = "logs" | "patterns" | "errors";
+export type Tab = "logs" | "imports" | "patterns" | "errors";
+
+export type ImportInput = {
+  project: string;
+  filter: string;
+  from: Date;
+  to: Date;
+  limit: number;
+};
 
 type AppState = {
   workspaces: Workspace[];
   selectedWorkspaceName: string;
   logFiles: LogFile[];
+  importRuns: ImportRun[];
+  recentImportQueries: RecentImportQuery[];
   discoveryRuns: DiscoveryRun[];
+  activeOperationName: string;
   selectedRunName: string;
   selectedPatternName: string;
   patterns: Pattern[];
@@ -39,12 +54,14 @@ type AppActions = {
   runAction: (action: () => Promise<void>) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   refreshWorkspaceDetails: (workspaceName?: string) => Promise<void>;
+  refreshRecentImportQueries: () => Promise<void>;
+  refreshActiveOperation: () => Promise<void>;
   refreshResults: (runName?: string) => Promise<void>;
-  refreshSelectedWorkspace: () => Promise<void>;
   createWorkspace: () => Promise<void>;
   deleteWorkspace: (workspace: Workspace) => Promise<void>;
   uploadFiles: (files: FileList | null) => Promise<void>;
   deleteLogFile: (logFile: LogFile) => Promise<void>;
+  startImport: (input: ImportInput) => Promise<void>;
   startDiscovery: () => Promise<void>;
 };
 
@@ -58,7 +75,10 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
   workspaces: [],
   selectedWorkspaceName: "",
   logFiles: [],
+  importRuns: [],
+  recentImportQueries: [],
   discoveryRuns: [],
+  activeOperationName: "",
   selectedRunName: "",
   selectedPatternName: "",
   patterns: [],
@@ -77,7 +97,9 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       selectedRunName: "",
       selectedPatternName: "",
       logFiles: [],
+      importRuns: [],
       discoveryRuns: [],
+      activeOperationName: "",
       ...emptyResults
     }),
   selectRun: (selectedRunName) => set({ selectedRunName, selectedPatternName: "" }),
@@ -107,30 +129,73 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     if (!workspaceName) {
       set({
         logFiles: [],
+        importRuns: [],
         discoveryRuns: [],
+        activeOperationName: "",
         selectedRunName: "",
         ...emptyResults
       });
       return;
     }
 
-    const [filesResponse, runsResponse] = await Promise.all([
+    const [filesResponse, importRunsResponse, discoveryRunsResponse] = await Promise.all([
       workspaceClient.listLogFiles({ parent: workspaceName }),
+      workspaceClient.listImportRuns({ parent: workspaceName }),
       workspaceClient.listDiscoveryRuns({ parent: workspaceName })
     ]);
     const currentRun = get().selectedRunName;
     const latestSuccessful =
-      runsResponse.discoveryRuns.find((run) => run.state === DiscoveryRunState.SUCCEEDED)?.name || "";
+      discoveryRunsResponse.discoveryRuns.find((run) => run.state === DiscoveryRunState.SUCCEEDED)?.name || "";
     const selectedRunName =
-      currentRun && runsResponse.discoveryRuns.some((run) => run.name === currentRun)
+      currentRun && discoveryRunsResponse.discoveryRuns.some((run) => run.name === currentRun)
         ? currentRun
         : latestSuccessful;
+    const activeOperationName =
+      findActiveOperationName(importRunsResponse.importRuns, discoveryRunsResponse.discoveryRuns) || "";
 
     set({
       logFiles: filesResponse.logFiles,
-      discoveryRuns: runsResponse.discoveryRuns,
+      importRuns: importRunsResponse.importRuns,
+      discoveryRuns: discoveryRunsResponse.discoveryRuns,
+      activeOperationName,
       selectedRunName
     });
+  },
+
+  refreshRecentImportQueries: async () => {
+    const response = await workspaceClient.listRecentImportQueries({});
+    set({ recentImportQueries: response.recentQueries });
+  },
+
+  refreshActiveOperation: async () => {
+    const activeOperationName = get().activeOperationName;
+    if (!activeOperationName) return;
+
+    const operation = await operationsClient.getOperation({ name: activeOperationName });
+    const importMetadata = operation.metadata
+      ? anyUnpack(operation.metadata, ImportRunMetadataSchema)
+      : undefined;
+    const discoveryMetadata = operation.metadata
+      ? anyUnpack(operation.metadata, DiscoveryRunMetadataSchema)
+      : undefined;
+
+    set((state) => ({
+      importRuns: importMetadata?.importRun
+        ? replaceRun(state.importRuns, importMetadata.importRun)
+        : state.importRuns,
+      discoveryRuns: discoveryMetadata?.discoveryRun
+        ? replaceRun(state.discoveryRuns, discoveryMetadata.discoveryRun)
+        : state.discoveryRuns,
+      selectedRunName: discoveryMetadata?.discoveryRun?.name || state.selectedRunName,
+      activeOperationName: operation.done ? "" : activeOperationName
+    }));
+
+    if (operation.done) {
+      await get().refreshWorkspaceDetails();
+      await get().refreshWorkspaces();
+      await get().refreshRecentImportQueries();
+      await get().refreshResults();
+    }
   },
 
   refreshResults: async (runName = get().selectedRunName) => {
@@ -154,12 +219,6 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     });
   },
 
-  refreshSelectedWorkspace: async () => {
-    await get().refreshWorkspaceDetails();
-    await get().refreshResults();
-    await get().refreshWorkspaces();
-  },
-
   createWorkspace: async () => {
     const workspaceId = get().newWorkspaceID.trim();
     if (!workspaceId) return;
@@ -171,6 +230,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       selectedWorkspaceName,
       selectedRunName: "",
       selectedPatternName: "",
+      importRuns: [],
+      activeOperationName: "",
       ...emptyResults
     });
     await get().refreshWorkspaces();
@@ -186,7 +247,9 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
       selectedRunName: "",
       selectedPatternName: "",
       logFiles: [],
+      importRuns: [],
       discoveryRuns: [],
+      activeOperationName: "",
       ...emptyResults
     });
     await get().refreshWorkspaces();
@@ -216,13 +279,43 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
     await get().refreshWorkspaces();
   },
 
+  startImport: async (input) => {
+    const selectedWorkspaceName = get().selectedWorkspaceName;
+    if (!selectedWorkspaceName) return;
+
+    const operation = await workspaceClient.createImportRun({
+      parent: selectedWorkspaceName,
+      project: input.project,
+      filter: input.filter,
+      from: timestampFromDate(input.from),
+      to: timestampFromDate(input.to),
+      limit: input.limit
+    });
+    const metadata = operation.metadata
+      ? anyUnpack(operation.metadata, ImportRunMetadataSchema)
+      : undefined;
+    set((state) => ({
+      activeTab: "imports",
+      activeOperationName: operation.name,
+      importRuns: metadata?.importRun
+        ? replaceRun(state.importRuns, metadata.importRun)
+        : state.importRuns
+    }));
+    await get().refreshWorkspaceDetails(selectedWorkspaceName);
+    await get().refreshWorkspaces();
+    await get().refreshRecentImportQueries();
+  },
+
   startDiscovery: async () => {
     const selectedWorkspaceName = get().selectedWorkspaceName;
     if (!selectedWorkspaceName) return;
 
     const response = await workspaceClient.createDiscoveryRun({ parent: selectedWorkspaceName });
     const metadata = response.metadata ? anyUnpack(response.metadata, DiscoveryRunMetadataSchema) : undefined;
-    set({ selectedRunName: metadata?.discoveryRun?.name || "" });
+    set({
+      activeOperationName: response.name,
+      selectedRunName: metadata?.discoveryRun?.name || ""
+    });
     await get().refreshWorkspaceDetails(selectedWorkspaceName);
     await get().refreshWorkspaces();
   }
@@ -240,4 +333,26 @@ function errorMessage(error: unknown) {
 
 function isPattern(value: Pattern | undefined): value is Pattern {
   return value !== undefined;
+}
+
+function replaceRun<T extends { name: string }>(runs: T[], replacement: T) {
+  const index = runs.findIndex((run) => run.name === replacement.name);
+  if (index < 0) {
+    return [replacement, ...runs];
+  }
+  return runs.map((run, runIndex) => runIndex === index ? replacement : run);
+}
+
+function findActiveOperationName(importRuns: ImportRun[], discoveryRuns: DiscoveryRun[]) {
+  const activeImport = importRuns.find(
+    (run) => run.state === ImportRunState.QUEUED || run.state === ImportRunState.RUNNING
+  );
+  if (activeImport) {
+    return activeImport.name.replace("/importRuns/", "/operations/");
+  }
+
+  const activeDiscovery = discoveryRuns.find(
+    (run) => run.state === DiscoveryRunState.QUEUED || run.state === DiscoveryRunState.RUNNING
+  );
+  return activeDiscovery?.name.replace("/discoveryRuns/", "/operations/");
 }

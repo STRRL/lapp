@@ -35,19 +35,18 @@ func NewHandler(config ServerConfig) (http.Handler, error) {
 		Root:   config.Root,
 		APIKey: config.APIKey,
 		Model:  config.Model,
-		ImportFetcher: func(ctx context.Context, req workspace.ImportRequest) (workspace.ImportFetchResult, error) {
-			fetched, err := gcplog.FetchLines(ctx, gcplog.FetchRequest{
+		ImportFetcher: func(ctx context.Context, req workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
+			fetched, err := gcplog.Fetch(ctx, gcplog.FetchRequest{
 				Project: req.Project,
 				Filter:  req.Filter,
 				From:    req.From,
 				To:      req.To,
 				Limit:   req.Limit,
-			})
+			}, writeLine)
 			if err != nil {
 				return workspace.ImportFetchResult{}, err
 			}
 			return workspace.ImportFetchResult{
-				Lines:     fetched.Lines,
 				Truncated: fetched.Truncated,
 			}, nil
 		},

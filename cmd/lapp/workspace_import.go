@@ -139,19 +139,18 @@ func runWorkspaceImportGCP(cmd *cobra.Command, _ []string) error {
 		From:     from,
 		To:       to,
 		Limit:    importGCPLimit,
-		Fetcher: func(fetchCtx context.Context, req workspace.ImportRequest) (workspace.ImportFetchResult, error) {
-			fetched, err := gcplog.FetchLines(fetchCtx, gcplog.FetchRequest{
+		Fetcher: func(fetchCtx context.Context, req workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
+			fetched, err := gcplog.Fetch(fetchCtx, gcplog.FetchRequest{
 				Project: req.Project,
 				Filter:  req.Filter,
 				From:    req.From,
 				To:      req.To,
 				Limit:   req.Limit,
-			})
+			}, writeLine)
 			if err != nil {
 				return workspace.ImportFetchResult{}, err
 			}
 			return workspace.ImportFetchResult{
-				Lines:     fetched.Lines,
 				Truncated: fetched.Truncated,
 			}, nil
 		},

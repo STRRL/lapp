@@ -34,9 +34,14 @@ func TestRunImportSuccessWritesFileAndRecord(t *testing.T) {
 		`{"ts":"2026-07-25T00:00:02Z","severity":"ERROR","payload":{"message":"b"}}`,
 	}
 	var gotReq ImportRequest
-	fetcher := func(_ context.Context, req ImportRequest) (ImportFetchResult, error) {
+	fetcher := func(_ context.Context, req ImportRequest, writeLine ImportLineWriter) (ImportFetchResult, error) {
 		gotReq = req
-		return ImportFetchResult{Lines: lines}, nil
+		for _, line := range lines {
+			if err := writeLine(line); err != nil {
+				return ImportFetchResult{}, err
+			}
+		}
+		return ImportFetchResult{}, nil
 	}
 
 	result, err := RunImport(context.Background(), importTestConfig(dir, fetcher))
@@ -80,7 +85,7 @@ func TestRunImportSuccessWritesFileAndRecord(t *testing.T) {
 func TestRunImportZeroEntriesSucceedsWithoutFile(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))
-	fetcher := func(_ context.Context, _ ImportRequest) (ImportFetchResult, error) {
+	fetcher := func(_ context.Context, _ ImportRequest, _ ImportLineWriter) (ImportFetchResult, error) {
 		return ImportFetchResult{}, nil
 	}
 
@@ -112,11 +117,11 @@ func TestRunImportZeroEntriesSucceedsWithoutFile(t *testing.T) {
 func TestRunImportTruncationIsRecorded(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))
-	fetcher := func(_ context.Context, _ ImportRequest) (ImportFetchResult, error) {
-		return ImportFetchResult{
-			Lines:     []string{`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`},
-			Truncated: true,
-		}, nil
+	fetcher := func(_ context.Context, _ ImportRequest, writeLine ImportLineWriter) (ImportFetchResult, error) {
+		if err := writeLine(`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`); err != nil {
+			return ImportFetchResult{}, err
+		}
+		return ImportFetchResult{Truncated: true}, nil
 	}
 
 	result, err := RunImport(context.Background(), importTestConfig(dir, fetcher))
@@ -139,7 +144,7 @@ func TestRunImportTruncationIsRecorded(t *testing.T) {
 func TestRunImportFetchFailureWritesFailedRecord(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))
-	fetcher := func(_ context.Context, _ ImportRequest) (ImportFetchResult, error) {
+	fetcher := func(_ context.Context, _ ImportRequest, _ ImportLineWriter) (ImportFetchResult, error) {
 		return ImportFetchResult{}, errors.New("could not find default credentials")
 	}
 
@@ -174,14 +179,17 @@ func TestRunImportFetchFailureWritesFailedRecord(t *testing.T) {
 func TestRunImportCapsLinesAtLimit(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))
-	fetcher := func(_ context.Context, _ ImportRequest) (ImportFetchResult, error) {
-		return ImportFetchResult{
-			Lines: []string{
-				`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`,
-				`{"ts":"2026-07-25T00:00:02Z","severity":"ERROR","payload":{"message":"b"}}`,
-				`{"ts":"2026-07-25T00:00:03Z","severity":"ERROR","payload":{"message":"c"}}`,
-			},
-		}, nil
+	fetcher := func(_ context.Context, _ ImportRequest, writeLine ImportLineWriter) (ImportFetchResult, error) {
+		for _, line := range []string{
+			`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`,
+			`{"ts":"2026-07-25T00:00:02Z","severity":"ERROR","payload":{"message":"b"}}`,
+			`{"ts":"2026-07-25T00:00:03Z","severity":"ERROR","payload":{"message":"c"}}`,
+		} {
+			if err := writeLine(line); err != nil {
+				return ImportFetchResult{}, err
+			}
+		}
+		return ImportFetchResult{}, nil
 	}
 
 	config := importTestConfig(dir, fetcher)
@@ -204,10 +212,11 @@ func TestRunImportCapsLinesAtLimit(t *testing.T) {
 func TestRunImportRejectsDuplicateRunID(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))
-	fetcher := func(_ context.Context, _ ImportRequest) (ImportFetchResult, error) {
-		return ImportFetchResult{
-			Lines: []string{`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`},
-		}, nil
+	fetcher := func(_ context.Context, _ ImportRequest, writeLine ImportLineWriter) (ImportFetchResult, error) {
+		if err := writeLine(`{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`); err != nil {
+			return ImportFetchResult{}, err
+		}
+		return ImportFetchResult{}, nil
 	}
 
 	config := importTestConfig(dir, fetcher)
