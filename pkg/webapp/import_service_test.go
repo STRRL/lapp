@@ -21,7 +21,7 @@ func TestCreateImportRunRejectsInvalidRequestWithoutRecord(t *testing.T) {
 	root := t.TempDir()
 	service, err := NewWorkspaceService(ServiceConfig{
 		Root: root,
-		ImportFetcher: func(context.Context, workspace.ImportRequest) (workspace.ImportFetchResult, error) {
+		ImportFetcher: func(context.Context, workspace.ImportRequest, workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
 			t.Fatal("fetcher must not run")
 			return workspace.ImportFetchResult{}, nil
 		},
@@ -135,13 +135,16 @@ func TestWorkspaceServiceImportRunAsyncSuccess(t *testing.T) {
 	fetchStarted := make(chan struct{})
 	releaseFetch := make(chan struct{})
 	line := `{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"failed request"}}`
-	service, workspaceName := newImportTestService(t, func(_ context.Context, req workspace.ImportRequest) (workspace.ImportFetchResult, error) {
+	service, workspaceName := newImportTestService(t, func(_ context.Context, req workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
 		if req.Limit != defaultImportLimit {
 			t.Errorf("fetch limit = %d, want %d", req.Limit, defaultImportLimit)
 		}
 		close(fetchStarted)
 		<-releaseFetch
-		return workspace.ImportFetchResult{Lines: []string{line}}, nil
+		if err := writeLine(line); err != nil {
+			return workspace.ImportFetchResult{}, err
+		}
+		return workspace.ImportFetchResult{}, nil
 	})
 
 	response, err := service.CreateImportRun(context.Background(), connect.NewRequest(validImportRequest(workspaceName)))
@@ -213,7 +216,7 @@ func TestWorkspaceServiceImportRunAsyncSuccess(t *testing.T) {
 }
 
 func TestWorkspaceServiceImportRunFailure(t *testing.T) {
-	service, workspaceName := newImportTestService(t, func(context.Context, workspace.ImportRequest) (workspace.ImportFetchResult, error) {
+	service, workspaceName := newImportTestService(t, func(context.Context, workspace.ImportRequest, workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
 		return workspace.ImportFetchResult{}, stderrors.New("cloud logging unavailable")
 	})
 
@@ -238,11 +241,11 @@ func TestWorkspaceServiceImportRunFailure(t *testing.T) {
 }
 
 func TestWorkspaceServiceImportRunTruncation(t *testing.T) {
-	service, workspaceName := newImportTestService(t, func(context.Context, workspace.ImportRequest) (workspace.ImportFetchResult, error) {
-		return workspace.ImportFetchResult{
-			Lines:     []string{`{"payload":{"message":"one"}}`},
-			Truncated: true,
-		}, nil
+	service, workspaceName := newImportTestService(t, func(_ context.Context, _ workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
+		if err := writeLine(`{"payload":{"message":"one"}}`); err != nil {
+			return workspace.ImportFetchResult{}, err
+		}
+		return workspace.ImportFetchResult{Truncated: true}, nil
 	})
 
 	response, err := service.CreateImportRun(context.Background(), connect.NewRequest(validImportRequest(workspaceName)))
@@ -292,7 +295,7 @@ func TestWorkspaceServiceRunMutualExclusion(t *testing.T) {
 	releaseDiscovery := make(chan struct{})
 	service, err := NewWorkspaceService(ServiceConfig{
 		Root: t.TempDir(),
-		ImportFetcher: func(context.Context, workspace.ImportRequest) (workspace.ImportFetchResult, error) {
+		ImportFetcher: func(context.Context, workspace.ImportRequest, workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
 			close(importStarted)
 			<-releaseImport
 			return workspace.ImportFetchResult{}, nil

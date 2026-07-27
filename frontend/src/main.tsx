@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   AlertTriangle,
+  CloudDownload,
   FileText,
   FolderOpen,
   Play,
@@ -14,9 +15,11 @@ import {
   DiscoveryRun,
   DiscoveryRunState,
   DiscoveryStep,
+  ImportRunState,
   Pattern,
   WorkspaceStatus
 } from "./gen/lapp/web/v1/web_pb";
+import { ImportPanel } from "./import-panel";
 import { useAppStore } from "./store";
 import "./styles.css";
 
@@ -24,7 +27,9 @@ function App() {
   const workspaces = useAppStore((state) => state.workspaces);
   const selectedWorkspaceName = useAppStore((state) => state.selectedWorkspaceName);
   const logFiles = useAppStore((state) => state.logFiles);
+  const importRuns = useAppStore((state) => state.importRuns);
   const discoveryRuns = useAppStore((state) => state.discoveryRuns);
+  const activeOperationName = useAppStore((state) => state.activeOperationName);
   const selectedRunName = useAppStore((state) => state.selectedRunName);
   const selectedPatternName = useAppStore((state) => state.selectedPatternName);
   const patterns = useAppStore((state) => state.patterns);
@@ -42,8 +47,9 @@ function App() {
   const runAction = useAppStore((state) => state.runAction);
   const refreshWorkspaces = useAppStore((state) => state.refreshWorkspaces);
   const refreshWorkspaceDetails = useAppStore((state) => state.refreshWorkspaceDetails);
+  const refreshRecentImportQueries = useAppStore((state) => state.refreshRecentImportQueries);
+  const refreshActiveOperation = useAppStore((state) => state.refreshActiveOperation);
   const refreshResults = useAppStore((state) => state.refreshResults);
-  const refreshSelectedWorkspace = useAppStore((state) => state.refreshSelectedWorkspace);
   const createWorkspace = useAppStore((state) => state.createWorkspace);
   const deleteWorkspace = useAppStore((state) => state.deleteWorkspace);
   const uploadFiles = useAppStore((state) => state.uploadFiles);
@@ -64,10 +70,16 @@ function App() {
     [patterns, selectedPatternName]
   );
   const isDiscovering = selectedWorkspace?.status === WorkspaceStatus.DISCOVERING;
+  const isImporting = importRuns.some(
+    (run) => run.state === ImportRunState.QUEUED || run.state === ImportRunState.RUNNING
+  );
+  const hasActiveRun = Boolean(activeOperationName) || isDiscovering || isImporting;
 
   useEffect(() => {
-    void runAction(refreshWorkspaces);
-  }, [refreshWorkspaces, runAction]);
+    void runAction(async () => {
+      await Promise.all([refreshWorkspaces(), refreshRecentImportQueries()]);
+    });
+  }, [refreshRecentImportQueries, refreshWorkspaces, runAction]);
 
   useEffect(() => {
     void refreshWorkspaceDetails().catch((error: unknown) => {
@@ -86,18 +98,18 @@ function App() {
   }, [refreshResults, selectedRunName, runAction]);
 
   useEffect(() => {
-    if (!selectedRun || selectedRun.state !== DiscoveryRunState.RUNNING) {
+    if (!activeOperationName) {
       return;
     }
     const timer = window.setInterval(() => {
-      void refreshSelectedWorkspace().catch((error: unknown) => {
+      void refreshActiveOperation().catch((error: unknown) => {
         void runAction(async () => {
           throw error;
         });
       });
     }, 1500);
     return () => window.clearInterval(timer);
-  }, [refreshSelectedWorkspace, runAction, selectedRun?.name, selectedRun?.state]);
+  }, [activeOperationName, refreshActiveOperation, runAction]);
 
   return (
     <main className="app-shell">
@@ -153,14 +165,14 @@ function App() {
                 </div>
               </div>
               <div className="header-actions">
-                <button onClick={() => void runAction(startDiscovery)} disabled={busy || isDiscovering || logFiles.length === 0}>
+                <button onClick={() => void runAction(startDiscovery)} disabled={busy || hasActiveRun || logFiles.length === 0}>
                   <Play size={17} />
                   Start Discovery
                 </button>
                 <button
                   className="danger"
                   onClick={() => void runAction(() => deleteWorkspace(selectedWorkspace))}
-                  disabled={busy || isDiscovering}
+                  disabled={busy || hasActiveRun}
                 >
                   <Trash2 size={17} />
                   Delete
@@ -190,6 +202,10 @@ function App() {
                 <FileText size={16} />
                 Logs
               </button>
+              <button className={activeTab === "imports" ? "active" : ""} onClick={() => setActiveTab("imports")}>
+                <CloudDownload size={16} />
+                Imports
+              </button>
               <button className={activeTab === "patterns" ? "active" : ""} onClick={() => setActiveTab("patterns")}>
                 <RefreshCw size={16} />
                 Patterns
@@ -208,7 +224,7 @@ function App() {
                     className="file-input"
                     type="file"
                     multiple
-                    disabled={busy || isDiscovering}
+                    disabled={busy || hasActiveRun}
                     onChange={(event) => {
                       void runAction(() => uploadFiles(event.target.files)).then(() => {
                         if (fileInputRef.current) {
@@ -217,7 +233,7 @@ function App() {
                       });
                     }}
                   />
-                  <button onClick={() => fileInputRef.current?.click()} disabled={busy || isDiscovering}>
+                  <button onClick={() => fileInputRef.current?.click()} disabled={busy || hasActiveRun}>
                     <Upload size={17} />
                     Upload
                   </button>
@@ -232,7 +248,7 @@ function App() {
                       key={file.name}
                       className="icon-button danger"
                       onClick={() => void runAction(() => deleteLogFile(file))}
-                      disabled={busy || isDiscovering}
+                      disabled={busy || hasActiveRun}
                       title="Delete log file"
                     >
                       <Trash2 size={16} />
@@ -240,6 +256,10 @@ function App() {
                   ])}
                 />
               </section>
+            )}
+
+            {activeTab === "imports" && (
+              <ImportPanel key={selectedWorkspaceName} hasActiveRun={hasActiveRun} />
             )}
 
             {activeTab === "patterns" && (
