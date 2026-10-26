@@ -172,3 +172,19 @@
 .dz .vs-last.down { color: var(--ink-3); }
 .dz .prow.gone { cursor: default; }
 .dz .prow.gone .cell-main, .dz .prow.gone .cell-count { opacity: .55; }
+.dz .sh-why.is-up { color: var(--serious-text); }
+.dz .sh-why.is-new { color: var(--accent-text); }
+.dz .ph-hover { cursor: help; }
+.dz .ph-hover:hover, .dz .ph-hover:focus { outline: 1px solid var(--accent); }
+.dz .valuepop { padding: 10px 12px; }
+.dz .vp-stats { margin: 2px 0 6px; }
+.dz .vp-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.dz .vp-row { display: grid; grid-template-columns: minmax(0,1fr) 80px 40px 44px; gap: 6px; align-items: center; font-size: 12px; }
+.dz .vp-row i { height: 8px; border-radius: 0 2px 2px 0; display: block; }
+.dz .vp-row b { text-align: right; font-weight: 600; }
+.dz .vp-row em { font-style: normal; color: var(--muted); text-align: right; }
+.dz .vp-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz .vp-other { color: var(--ink-2); }
+.dz .vp-ex { margin-top: 6px; font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz .vp-chart { margin-top: 8px; font-size: 12px; }
+.valuepop-root { position: static; min-height: 0 !important; background: none !important; }

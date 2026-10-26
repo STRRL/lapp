@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import { InvestigatePanel } from "./investigate";
+import { Placeholder, ValueHoverProvider } from "./valuepop";
 import "./design.css";
 import "./demo.css";
 
@@ -702,7 +703,7 @@ function PatternList({
   const [filtered, setFiltered] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [errorsOnly, setErrorsOnly] = useState(false);
-  const [sort, setSort] = useState<"lines" | "spiking" | "new">("lines");
+  const [sort, setSort] = useState<"lines" | "spiking" | "new" | "rarest">("lines");
   const [showFiltered, setShowFiltered] = useState<boolean | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [inv, setInv] = useState<{ pattern?: DemoPattern; question: string; reason?: string; spike?: boolean; key: number; jobId?: string } | null>(null);
@@ -801,6 +802,7 @@ function PatternList({
       return sb - sa || b.count - a.count;
     }
     if (sort === "new") return (b.newAt ?? -1) - (a.newAt ?? -1) || b.count - a.count;
+    if (sort === "rarest") return a.count - b.count;
     return b.count - a.count;
   };
   const visible = data ? data.patterns.filter((p) => !filtered.has(p.id)) : [];
@@ -938,6 +940,16 @@ function PatternList({
           </>
         }
       />
+      <ValueHoverProvider
+        value={{
+          wsId,
+          colorOf: (id) => {
+            const p = data.patterns.find((x) => x.id === id);
+            return p ? colorOf(p) : OTHER;
+          },
+          onShowChart: (id) => select(id)
+        }}
+      >
       <main className={`lp ${selected || (inv && !invHidden) ? "with-drawer" : ""}`}>
         <section className="lp-main">
           <div className="summary">
@@ -1050,6 +1062,9 @@ function PatternList({
                 </option>
                 <option value="new" disabled={!hasTrend}>
                   New
+                </option>
+                <option value="rarest" title="Fewest lines first. Rare patterns are often where problems hide.">
+                  Rarest first
                 </option>
               </select>
             </label>
@@ -1230,6 +1245,7 @@ function PatternList({
           </>
         )}
       </main>
+      </ValueHoverProvider>
       {toastNode}
     </>
   );
@@ -1238,6 +1254,10 @@ function PatternList({
 function short(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
+
+// Unnamed display names drop a leading "[error]" marker; it never contains
+// <*>, so field positions line up with the template.
+const levelOffset = (p: DemoPattern) => (p.template.split("<*>").length - p.name.split("<*>").length);
 
 const isError = (p: DemoPattern) => p.level === "error" || p.level === "fatal";
 const isNew = (p: DemoPattern) => p.newAt !== undefined || p.sinceLast === "new";
@@ -1259,7 +1279,7 @@ export function startHere(patterns: DemoPattern[]) {
 
 function startReason(p: DemoPattern, data: PatternsResponse) {
   if (isError(p) && p.spikeAt === undefined && p.sinceLast === "new") return "New error since last time";
-  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "up") return `Error up ×${p.ratio} vs last time`;
+  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "up") return `Error · ${p.ratio}× last time`;
   const parts: string[] = [];
   if (isError(p)) parts.push("Error");
   if (p.spikeAt !== undefined) parts.push(`spiked to ${p.buckets[p.spikeAt]}${perUnit(data.bucketSeconds)} ${atBucket(data, p.spikeAt)}`);
@@ -1299,11 +1319,11 @@ function StartHere({
                 <b className="ell">{p.name}</b>
               ) : (
                 <b className="unnamed ell">
-                  <Template text={p.name} />
+                  <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
                 </b>
               )}
-              <span className={`sh-why ${isError(p) ? "is-err" : ""}`}>
-                {isError(p) ? <OctagonAlert className="ico" /> : p.spikeAt !== undefined ? <TrendingUp className="ico" /> : <Sparkles className="ico" />}
+              <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : "is-new"}`}>
+                {p.spikeAt !== undefined || p.sinceLast === "up" ? <TrendingUp className="ico" /> : <Sparkles className="ico" />}
                 {startReason(p, data)}
               </span>
             </div>
@@ -1402,14 +1422,16 @@ function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => v
   );
 }
 
-function Template({ text, active }: { text: string; active?: number }) {
+// Renders a template with <*> chips. With patternId (and the template being
+// the pattern's own text), hovering a chip shows the values it stands for.
+function Template({ text, active, patternId, offset = 0 }: { text: string; active?: number; patternId?: string; offset?: number }) {
   const parts = text.split("<*>");
   return (
     <>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
           {part}
-          {i < parts.length - 1 && <span className={`ph ${active === i ? "ph-on" : ""}`}>&lt;*&gt;</span>}
+          {i < parts.length - 1 && <Placeholder patternId={patternId} index={i + offset} active={active === i} />}
         </React.Fragment>
       ))}
     </>
@@ -1484,7 +1506,7 @@ function Row({
           <div className="pname nowrap">
             <i className="dot" style={{ background: color }} />
             <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={p.name} />
+              <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
             </b>
           </div>
         )}
@@ -1505,7 +1527,7 @@ function Row({
               {perUnit(data.bucketSeconds)} {atBucket(data, p.spikeAt)}
             </span>
           )}
-          {!filtered && p.newAt !== undefined && (
+          {!filtered && p.newAt !== undefined && p.sinceLast !== "new" && (
             <span className="badge b-new">
               <Sparkles className="ico" />
               First seen {bucketLabel(data, p.newAt)}
@@ -1514,7 +1536,7 @@ function Row({
           {!filtered && p.sinceLast === "new" && (
             <span className="badge b-new">
               <Sparkles className="ico" />
-              New since last time
+              New since last time{p.newAt !== undefined ? ` · first seen ${bucketLabel(data, p.newAt)}` : ""}
             </span>
           )}
           {p.suggestion === "noise" && (
@@ -1532,7 +1554,7 @@ function Row({
         </div>
         {p.named && (
           <div className="ptpl mono">
-            <Template text={p.template} />
+            <Template text={p.template} patternId={p.id} />
           </div>
         )}
         {p.suggestion === "noise" && <div className="why">Why it looks like noise: {p.reason}</div>}
@@ -1558,7 +1580,7 @@ function Row({
         </div>
         {!filtered && (p.sinceLast === "up" || p.sinceLast === "down") && (
           <em className={`vs-last ${p.sinceLast}`}>
-            {p.sinceLast === "up" ? "Up" : "Down"} ×{p.ratio} vs last time
+            {p.ratio}× last time
           </em>
         )}
       </div>
@@ -1754,7 +1776,7 @@ function Drawer({
       </header>
       {!isUnmatched && (
         <div className="ptpl mono boxed">
-          <Template text={target.template} />
+          <Template text={target.template} patternId={target.id} />
         </div>
       )}
       <div className="dstats tnum">

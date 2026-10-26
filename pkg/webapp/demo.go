@@ -1062,10 +1062,23 @@ type demoField struct {
 	Other     int          `json:"other,omitempty"`
 }
 
+// fieldSummary describes one <*> for the hover popover, including fields
+// the charts skip (a single value, or a different value on every line).
+type fieldSummary struct {
+	Index    int          `json:"index"`
+	Kind     string       `json:"kind"` // same, values, numbers, distinct
+	Lines    int          `json:"lines"`
+	Distinct int          `json:"distinct"`
+	Top      []valueCount `json:"top"`
+	Overall  *fieldStat   `json:"overall,omitempty"`
+	Unit     string       `json:"unit,omitempty"`
+}
+
 type demoPatternDetail struct {
-	FirstSeen *time.Time  `json:"firstSeen,omitempty"`
-	LastSeen  *time.Time  `json:"lastSeen,omitempty"`
-	Fields    []demoField `json:"fields"`
+	FirstSeen *time.Time     `json:"firstSeen,omitempty"`
+	LastSeen  *time.Time     `json:"lastSeen,omitempty"`
+	Fields    []demoField    `json:"fields"`
+	Summary   []fieldSummary `json:"summary"`
 }
 
 var numberValue = regexp.MustCompile(`^-?\d+(?:\.\d+)?([a-zA-Zµ%]*)$`)
@@ -1114,7 +1127,7 @@ func (a *analysis) patternDetail(idx int) demoPatternDetail {
 	nb := len(a.resp.Patterns[idx].Buckets)
 	values := make([][]string, len(slots))
 	stamps := []*time.Time{}
-	out := demoPatternDetail{Fields: []demoField{}}
+	out := demoPatternDetail{Fields: []demoField{}, Summary: []fieldSummary{}}
 	for i, tl := range a.lines {
 		if a.owner[i] != idx {
 			continue
@@ -1145,6 +1158,7 @@ func (a *analysis) patternDetail(idx int) demoPatternDetail {
 		for _, v := range vals {
 			counts[v]++
 		}
+		out.Summary = append(out.Summary, summarizeField(k+1, vals, counts))
 		if len(counts) <= 20 {
 			if len(counts) == 1 {
 				continue
@@ -1348,4 +1362,47 @@ func (d *demoAPI) handleGCPRecent(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	writeJSON(w, out)
+}
+
+func summarizeField(index int, vals []string, counts map[string]int) fieldSummary {
+	fs := fieldSummary{Index: index, Lines: len(vals), Distinct: len(counts), Top: []valueCount{}}
+	for v, c := range counts {
+		fs.Top = append(fs.Top, valueCount{v, c})
+	}
+	sort.Slice(fs.Top, func(i, j int) bool {
+		if fs.Top[i].Count != fs.Top[j].Count {
+			return fs.Top[i].Count > fs.Top[j].Count
+		}
+		return fs.Top[i].Value < fs.Top[j].Value
+	})
+	if len(fs.Top) > 8 {
+		fs.Top = fs.Top[:8]
+	}
+	nums := make([]float64, 0, len(vals))
+	units := map[string]bool{}
+	for _, v := range vals {
+		if m := numberValue.FindStringSubmatch(v); m != nil {
+			var x float64
+			fmt.Sscan(strings.TrimSuffix(v, m[1]), &x)
+			nums = append(nums, x)
+			units[m[1]] = true
+		}
+	}
+	switch {
+	case len(counts) == 1:
+		fs.Kind = "same"
+	case len(counts) <= 20:
+		fs.Kind = "values"
+	case float64(len(nums)) >= 0.9*float64(len(vals)):
+		fs.Kind = "numbers"
+		fs.Overall = summarize(nums)
+		if len(units) == 1 {
+			for u := range units {
+				fs.Unit = u
+			}
+		}
+	default:
+		fs.Kind = "distinct"
+	}
+	return fs
 }
