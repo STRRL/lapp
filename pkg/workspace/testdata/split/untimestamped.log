@@ -1,0 +1,6 @@
+starting api server
+listening on :8080
+GET /health 200
+GET /health 200
+2026-10-26T05:41:50Z one stray timestamped line
+shutting down

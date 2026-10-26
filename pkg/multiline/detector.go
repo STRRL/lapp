@@ -98,10 +98,19 @@ type DetectorConfig struct {
 	// detection. If set, lines matching this regex are treated as new entries.
 	FirstLineRegex string
 
+	// IsEntryStart optionally overrides timestamp detection and
+	// FirstLineRegex: lines it accepts are treated as new entries.
+	IsEntryStart func(line string) bool
+
 	// MaxEntryBytes is the maximum size of a merged log entry in bytes.
 	// Entries exceeding this are flushed regardless of detection.
 	// Default: 65536 (64KB).
 	MaxEntryBytes int
+
+	// MaxEntryLines is the maximum number of physical lines in a merged log
+	// entry. Entries reaching this are flushed regardless of detection.
+	// Default: 0 (no line cap).
+	MaxEntryLines int
 }
 
 func (c *DetectorConfig) defaults() {
@@ -124,6 +133,8 @@ type Detector struct {
 	firstLineRegex *regexp.Regexp
 	maxScanBytes   int
 	maxEntryBytes  int
+	maxEntryLines  int
+	isEntryStart   func(line string) bool
 }
 
 // NewDetector creates a new multiline entry boundary detector.
@@ -146,12 +157,17 @@ func NewDetector(cfg DetectorConfig) (*Detector, error) {
 		firstLineRegex: re,
 		maxScanBytes:   cfg.MaxScanBytes,
 		maxEntryBytes:  cfg.MaxEntryBytes,
+		maxEntryLines:  cfg.MaxEntryLines,
+		isEntryStart:   cfg.IsEntryStart,
 	}, nil
 }
 
 // IsNewEntry returns true if the given line looks like the start of a new
 // log entry (i.e. it begins with a timestamp or matches the firstline regex).
 func (d *Detector) IsNewEntry(line string) bool {
+	if d.isEntryStart != nil {
+		return d.isEntryStart(line)
+	}
 	if d.firstLineRegex != nil {
 		return d.firstLineRegex.MatchString(line)
 	}
@@ -166,6 +182,15 @@ func (d *Detector) IsNewEntry(line string) bool {
 
 	tokens, _ := d.tokenizer.tokenize([]byte(line[:scanLen]))
 	return d.tokenGraph.matchProbability(tokens).probability > d.threshold
+}
+
+// entryFull reports whether an entry of lines physical lines cannot take
+// another line that would bring it to size bytes.
+func (d *Detector) entryFull(lines, size int) bool {
+	if lines == 0 {
+		return false
+	}
+	return size > d.maxEntryBytes || (d.maxEntryLines > 0 && lines >= d.maxEntryLines)
 }
 
 // MaxEntryBytes returns the configured maximum entry size.

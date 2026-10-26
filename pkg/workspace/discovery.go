@@ -42,13 +42,32 @@ type DiscoveryRunRecord struct {
 	FinishedAt      *time.Time            `json:"finished_at,omitempty"`
 	LogFileCount    int                   `json:"log_file_count"`
 	LineCount       int                   `json:"line_count"`
-	PatternCount    int                   `json:"pattern_count"`
-	UnmatchedCount  int                   `json:"unmatched_count"`
+	SplitMode       SplitMode             `json:"split_mode,omitempty"`
+	// PhysicalLineCount counts the lines read from logs/; LineCount counts
+	// the entries they were split into.
+	PhysicalLineCount int `json:"physical_line_count,omitempty"`
+	// CappedEntryCount counts entries cut at the maximum entry size.
+	CappedEntryCount int `json:"capped_entry_count,omitempty"`
+	PatternCount     int `json:"pattern_count"`
+	UnmatchedCount   int `json:"unmatched_count"`
 	// TruncatedLineCount counts lines cut at logsource.MaxLineBytes.
 	TruncatedLineCount int           `json:"truncated_line_count,omitempty"`
 	Patterns           []PatternInfo `json:"patterns,omitempty"`
 	Unmatched          []TaggedLine  `json:"unmatched,omitempty"`
 }
+
+// SplitMode records how plain text files were split into entries. Empty
+// means every file was structured (one record per entry).
+type SplitMode string
+
+const (
+	// SplitModeMerged marks a run where timestamps at line starts marked
+	// the entries and continuation lines joined the entry before them.
+	SplitModeMerged SplitMode = "MERGED"
+	// SplitModePerLine marks a run where at least one plain text file had
+	// too few timestamps at line starts, so each line became its own entry.
+	SplitModePerLine SplitMode = "PER_LINE"
+)
 
 type DiscoveryRunProgress struct {
 	Step       DiscoveryStep                `json:"step,omitempty"`

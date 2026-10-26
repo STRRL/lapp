@@ -92,6 +92,9 @@ type PatternsResponse = {
   patterns: DemoPattern[];
   unmatched: { count: number; buckets: number[]; samples: string[] };
   compare?: CompareInfo;
+  splitMode?: "MERGED" | "PER_LINE";
+  physicalLineCount?: number;
+  cappedEntryCount?: number;
 };
 
 type FieldStat = { median: number; p95: number; max: number };
@@ -501,7 +504,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
               ) : (
                 <>
                   <b>Drop a log file here, or click to choose one</b>
-                  <span>Plain text or NDJSON (one JSON object per line) · your file is never changed</span>
+                  <span>Plain text, NDJSON, or a Grafana export (CSV or JSON) · your file is never changed</span>
                 </>
               )}
               <input ref={inputRef} type="file" hidden onChange={(e) => choose(e.target.files?.[0])} />
@@ -603,7 +606,7 @@ function Processing({ name, gcp, status, onRetry }: { name: string; gcp: boolean
               {state === "fail" && (
                 <div className="step-fail">
                   {status?.errorCode === "FORMAT_UNRECOGNIZED" && (
-                    <p>lapp reads plain text or NDJSON (one JSON object per line). In Grafana, download logs as TXT and try again.</p>
+                    <p>lapp reads plain text, NDJSON, or Grafana exports (CSV or JSON).</p>
                   )}
                   {status?.error && (
                     <>
@@ -1131,6 +1134,13 @@ function PatternList({
                 {/^(GCP|VictoriaLogs) · /.test(data.workspace.title) ? data.workspace.title : fileName} · {fmtCount(total)} lines
                 {data.from && data.to ? ` · ${formatTime(new Date(data.from))} – ${formatTime(new Date(data.to))}` : ""}
               </span>
+              {data.splitMode === "PER_LINE" && <span className="sub">Split by line: no timestamps at line starts.</span>}
+              {data.splitMode === "MERGED" && !!data.physicalLineCount && (
+                <span className="sub tnum">
+                  Merged multi-line entries: {fmtCount(data.physicalLineCount)} lines → {fmtCount(total)} entries
+                  {data.cappedEntryCount ? ` · ${fmtCount(data.cappedEntryCount)} cut at 500 lines or 1 MB` : ""}
+                </span>
+              )}
               {data.workspace.limitReached && (
                 <span className="badge b-warn" title="Stopped at 100,000 lines. Narrow the time range or filter to see everything.">
                   <TriangleAlert className="ico" />

@@ -66,7 +66,7 @@ integration_test/        Integration tests against Loghub-2.0 datasets
 
 ### DiscoveryRun (discover)
 
-`add-log` is a pure copy into `logs/` and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. `workspace import victorialogs` lists the matching streams, maps each stream to a Service (its `service.name`, `service`, `app` or `job` label, else a short stream hash), and runs one ImportRun per Service into workspace `<topic>-<service>`, writing the raw VictoriaLogs NDJSON lines (`_msg`, `_time`) and the Service in the workspace `service` file; the ImportRun filter is narrowed to that Service's `_stream_id`s so it can be re-pulled. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
+`add-log` copies the file into `logs/` (Grafana Explore CSV/JSON exports are normalized to NDJSON on the way in, ADR 0006) and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. `workspace import victorialogs` lists the matching streams, maps each stream to a Service (its `service.name`, `service`, `app` or `job` label, else a short stream hash), and runs one ImportRun per Service into workspace `<topic>-<service>`, writing the raw VictoriaLogs NDJSON lines (`_msg`, `_time`) and the Service in the workspace `service` file; the ImportRun filter is narrowed to that Service's `_stream_id`s so it can be re-pulled. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
 When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns and ImportRuns as failed because those local workers no longer exist.
 DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
 The main page imports from VictoriaLogs into one new workspace per Service (`/api/demo/import-victorialogs`). The classic web Imports tab starts GCP or VictoriaLogs imports into the selected workspace through standard Operations, shows ImportRun history and final facts, and fills project and filter fields from recent queries across all workspaces.
@@ -85,7 +85,7 @@ workspace.Discover(ctx, cfg)
 
 ### Multiline Detection
 
-Uses a token graph trained on 70+ timestamp formats. Lines are tokenized (first 60 bytes), matched against a directed graph of valid token transitions, and scored 0.0-1.0. Score > 0.5 means "new log entry". If no timestamps are ever detected, falls back to line-by-line.
+Uses a token graph trained on 70+ timestamp formats. Lines are tokenized (first 60 bytes), matched against a directed graph of valid token transitions, and scored 0.0-1.0. Score > 0.5 means "new log entry". In the pipeline, only lines whose leading timestamp has the file's dominant `logheader.StartShape` start entries; entries are capped at 500 lines or 1 MB. When fewer than 5% of a text file's lines (or fewer than 3) start an entry, the file is split line-by-line and the DiscoveryRun records `split_mode: PER_LINE` (ADR 0006).
 
 ### Analyzer
 

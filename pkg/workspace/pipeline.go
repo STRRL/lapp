@@ -59,7 +59,7 @@ type DiscoveryResult struct {
 // ErrFormatUnrecognized marks a log file that is neither plain text nor
 // NDJSON, such as one JSON array export or a binary file. Failed runs carry
 // it as the FORMAT_UNRECOGNIZED error code.
-var ErrFormatUnrecognized = errors.New("format not recognized: expected plain text or NDJSON (one JSON object per line)")
+var ErrFormatUnrecognized = errors.New("format not recognized: expected plain text, NDJSON, or a Grafana export (CSV or JSON)")
 
 type labelProgressEvent string
 
@@ -109,7 +109,7 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 		return DiscoveryResult{}, err
 	}
 
-	tagged, content, fileCount, truncatedLines, err := mergeAllLogs(ctx, config.Dir)
+	tagged, content, fileCount, split, err := mergeAllLogs(ctx, config.Dir)
 	if err != nil {
 		failDiscoveryRun(config.Dir, &record, err)
 		span.RecordError(err)
@@ -118,12 +118,12 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 	}
 
 	slog.Info("Processing logs", "files", fileCount, "lines", len(tagged))
-	if truncatedLines > 0 {
-		slog.Warn(TruncatedLinesMessage(truncatedLines), "run", runID)
+	if split.truncatedLines > 0 {
+		slog.Warn(TruncatedLinesMessage(split.truncatedLines), "run", runID)
 	}
 	record.LogFileCount = fileCount
 	record.LineCount = len(tagged)
-	record.TruncatedLineCount = truncatedLines
+	split.record(&record)
 	setDiscoveryStep(&record, DiscoveryStepMergingEntries)
 	slog.Info("DiscoveryRun step", "run", runID, "step", record.CurrentStep, "files", fileCount, "lines", len(tagged))
 	if err := WriteDiscoveryRunRecord(config.Dir, record); err != nil {
@@ -199,7 +199,7 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 		UnmatchedCount: len(builder.Unmatched()),
 		RunID:          runID,
 
-		TruncatedLineCount: truncatedLines,
+		TruncatedLineCount: split.truncatedLines,
 	}
 	span.SetAttributes(
 		attribute.Int("workspace.files", result.FileCount),
@@ -324,10 +324,41 @@ func TruncatedLinesMessage(n int) string {
 	return fmt.Sprintf("%d lines were too long and were cut at 16 MB.", n)
 }
 
-func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content []string, fileCount, truncatedLines int, err error) {
+// splitStats describes how the files in logs/ were read and split into
+// entries.
+type splitStats struct {
+	mode           SplitMode
+	physicalLines  int
+	cappedEntries  int
+	truncatedLines int
+}
+
+// add folds one file's stats in; a per-line split anywhere wins over a
+// merged one so the page can say lines were not merged.
+func (s *splitStats) add(file splitStats) {
+	s.physicalLines += file.physicalLines
+	s.cappedEntries += file.cappedEntries
+	s.truncatedLines += file.truncatedLines
+	if s.mode != SplitModePerLine && file.mode != "" {
+		s.mode = file.mode
+	}
+}
+
+// record stores the stats on the run record and warns about capped entries.
+func (s splitStats) record(record *DiscoveryRunRecord) {
+	record.SplitMode = s.mode
+	record.PhysicalLineCount = s.physicalLines
+	record.CappedEntryCount = s.cappedEntries
+	record.TruncatedLineCount = s.truncatedLines
+	if s.cappedEntries > 0 {
+		slog.Warn("Some log entries were too long and were cut", "entries", s.cappedEntries, "max_lines", maxEntryLines, "max_bytes", maxEntryBytes)
+	}
+}
+
+func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content []string, fileCount int, split splitStats, err error) {
 	allLogs, err := ReadAllLogs(dir)
 	if err != nil {
-		return nil, nil, 0, 0, errors.Errorf("read all logs: %w", err)
+		return nil, nil, 0, splitStats{}, errors.Errorf("read all logs: %w", err)
 	}
 
 	fileNames := make([]string, 0, len(allLogs))
@@ -340,26 +371,37 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 	var allContent []string
 	for _, fileName := range fileNames {
 		file := allLogs[fileName]
-		truncatedLines += len(file.Truncated)
-		fileTagged, err := tagFileLines(ctx, fileName, file)
+		fileTagged, fileSplit, err := tagFileLines(ctx, fileName, file)
 		if err != nil {
-			return nil, nil, 0, 0, err
+			return nil, nil, 0, splitStats{}, err
 		}
+		split.add(fileSplit)
 		for _, tl := range fileTagged {
 			allTagged = append(allTagged, tl)
 			allContent = append(allContent, tl.DrainLine())
 		}
 	}
-	return allTagged, allContent, len(allLogs), truncatedLines, nil
+	return allTagged, allContent, len(allLogs), split, nil
 }
+
+// maxEntryLines and maxEntryBytes cap one merged text entry; the line that
+// would exceed either starts a new entry.
+const (
+	maxEntryLines = 500
+	maxEntryBytes = 1 << 20
+)
 
 // tagFileLines converts one log file into tagged entries. NDJSON files keep
 // the raw JSON line as Content and carry an extracted text line for pattern
-// mining; plain text files go through multiline merging unchanged. The
-// format is detected from complete lines only, so a line cut at
-// logsource.MaxLineBytes never changes how the rest of the file is read.
-func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]TaggedLine, error) {
+// mining; one record is one entry even when its message spans several lines.
+// Plain text files go through multiline merging unchanged; the returned
+// stats say whether a text file was merged or split one entry per line and
+// how many merged entries hit the cap. The format is detected from complete
+// lines only, so a line cut at logsource.MaxLineBytes never changes how the
+// rest of the file is read.
+func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]TaggedLine, splitStats, error) {
 	lines := file.Lines
+	split := splitStats{physicalLines: len(lines), truncatedLines: len(file.Truncated)}
 	complete := lines
 	if len(file.Truncated) > 0 {
 		complete = make([]string, 0, len(lines))
@@ -371,20 +413,27 @@ func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]Ta
 	}
 	switch ndjson.DetectFormat(complete) {
 	case ndjson.FormatNDJSON:
-		return tagNDJSONLines(fileName, file), nil
+		return tagNDJSONLines(fileName, file), split, nil
 	case ndjson.FormatUnrecognized:
-		return nil, errors.Errorf("read %s: %w", fileName, ErrFormatUnrecognized)
+		return nil, splitStats{}, errors.Errorf("read %s: %w", fileName, ErrFormatUnrecognized)
 	}
-	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
+	detector, err := multiline.NewDetector(multiline.DetectorConfig{
+		MaxEntryBytes: maxEntryBytes,
+		MaxEntryLines: maxEntryLines,
+		IsEntryStart:  dominantEntryStart(lines),
+	})
 	if err != nil {
-		return nil, errors.Errorf("multiline detector: %w", err)
+		return nil, splitStats{}, errors.Errorf("multiline detector: %w", err)
 	}
 	var merged []multiline.MergedLine
-	if startsWithEntry(lines, detector) {
+	if hasTimestampedEntries(lines, detector) {
+		split.mode = SplitModeMerged
 		merged = multiline.MergeSlice(ctx, lines, detector)
 	} else {
-		// Logs that don't open with a timestamp (e.g. `kubectl logs` without
-		// --timestamps) have no reliable entry boundaries: keep one entry per line.
+		// Logs with too few timestamps at line starts (e.g. `kubectl logs`
+		// without --timestamps) have no reliable entry boundaries: keep one
+		// entry per line.
+		split.mode = SplitModePerLine
 		for i, line := range lines {
 			if strings.TrimSpace(line) == "" {
 				continue
@@ -394,6 +443,9 @@ func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]Ta
 	}
 	tagged := make([]TaggedLine, 0, len(merged))
 	for _, m := range merged {
+		if m.Capped {
+			split.cappedEntries++
+		}
 		tl := TaggedLine{
 			Content:   m.Content,
 			FileName:  fileName,
@@ -416,18 +468,64 @@ func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]Ta
 		}
 		tagged = append(tagged, tl)
 	}
-	return tagged, nil
+	return tagged, split, nil
 }
 
-// startsWithEntry reports whether the first non-blank line looks like the
-// start of a timestamped log entry.
-func startsWithEntry(lines []string, detector *multiline.Detector) bool {
+// dominantEntryStart returns a matcher for the file's dominant entry start:
+// the most common logheader.StartShape among its lines. Only lines with that
+// exact shape begin entries, so a continuation line that mentions a
+// timestamp mid-line, or starts with a timestamp in another format (inside a
+// query plan, say), stays in the entry before it. It returns nil when no line
+// starts with a header logheader knows; the detector's token graph decides
+// then.
+func dominantEntryStart(lines []string) func(string) bool {
+	counts := map[string]int{}
+	dominant := ""
 	for _, line := range lines {
-		if strings.TrimSpace(line) != "" {
-			return detector.IsNewEntry(line)
+		shape := logheader.StartShape(line)
+		if shape == "" {
+			continue
+		}
+		counts[shape]++
+		if counts[shape] > counts[dominant] || (counts[shape] == counts[dominant] && shape < dominant) {
+			dominant = shape
 		}
 	}
-	return false
+	if dominant == "" {
+		return nil
+	}
+	return func(line string) bool { return logheader.StartShape(line) == dominant }
+}
+
+// minTimestampedPercent is the share of non-blank lines that must start
+// with a timestamp for timestamps to mark entry boundaries. Continuation
+// lines (stack traces, multi-line query plans) often outnumber entry lines
+// several times over; a Postgres plan export has about one timestamped line
+// in seven, so the bar is low.
+const minTimestampedPercent = 5
+
+// minTimestampedLines is how many timestamped lines a file needs, unless
+// every non-blank line is timestamped.
+const minTimestampedLines = 3
+
+// hasTimestampedEntries reports whether enough lines start with a timestamp
+// that a timestamped line can begin each entry and the lines without one can
+// join the entry before them.
+func hasTimestampedEntries(lines []string, detector *multiline.Detector) bool {
+	nonBlank, timestamped := 0, 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		nonBlank++
+		if detector.IsNewEntry(line) {
+			timestamped++
+		}
+	}
+	if timestamped == 0 || timestamped*100 < nonBlank*minTimestampedPercent {
+		return false
+	}
+	return timestamped >= minTimestampedLines || timestamped == nonBlank
 }
 
 // anyTruncated reports whether a line in the 1-based range start..end was cut.

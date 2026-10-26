@@ -1,0 +1,5 @@
+﻿"Date","Time","Line","detected_level","service.name"
+"2026-10-26T05:41:50.000Z","1792993310000","duration: 3.2 ms  plan:
+Query Text: SELECT 1
+Result  (cost=0.00..0.01 rows=1 width=4)","info","postgres"
+"2026-10-26T05:41:40.000Z","1792993300000","checkpoint complete","info","postgres"
