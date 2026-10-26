@@ -13,7 +13,7 @@
 
 .dz .linklike { border: 0; background: none; padding: 0; color: var(--ink); }
 .dz .menu-anchor { position: relative; }
-.dz .menu { position: absolute; right: 0; top: 34px; z-index: 40; min-width: 380px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 4px; }
+.dz .menu { position: absolute; right: 0; top: 34px; z-index: 40; width: 360px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 4px; }
 .dz .menu-item { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; width: 100%; border: 0; background: none; padding: 8px 10px; border-radius: 6px; text-align: left; font-size: 13px; color: var(--ink-2); }
 .dz .menu-item:hover { background: var(--surface-hover); }
 .dz .menu-item b { color: var(--ink); }
@@ -26,8 +26,14 @@
 .dz .rrow.older > .older-title { grid-column: 2 / 4; }
 .dz .rrow.older > .tnum { grid-column: 4; }
 .dz .rrow.older > svg { grid-column: 5; }
-.dz .menu-item.older small, .dz .rrow.older small { display: block; font-size: 12px; color: var(--muted); white-space: normal; }
-.dz .older-import { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.dz .rrow.older small { display: block; font-size: 12px; color: var(--muted); white-space: normal; }
+.dz .menu-item.older small { grid-column: 1 / -1; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.dz .older-import { max-width: 760px; margin: 96px auto 0; padding: 0 24px; }
+.dz .older-import > .ico { width: 24px; height: 24px; color: var(--muted); }
+.dz .older-import h2 { font-size: 18px; font-weight: 600; margin: 12px 0 6px; }
+.dz .older-import .meta { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+.dz .older-import p { font-size: 14px; color: var(--muted); }
+.dz .older-import .actions { justify-content: flex-start; align-items: center; gap: 16px; margin-top: 20px; }
 .dz .menu-empty { padding: 10px; color: var(--muted); font-size: 13px; }
 
 .dz .svc-name { display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; background: none; border-radius: 5px; padding: 1px 4px; margin: 0 -5px; font-size: 13px; color: var(--ink); }
@@ -259,3 +265,5 @@
 .dz .mask-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
 .dz .ph.masked { cursor: help; }
 .dz .modal .chk { white-space: nowrap; } .dz .key-hint { margin: 0; text-align: right; }
+/* Why Import can't be clicked yet. */
+.dz .actions .blocker { align-self: center; font-size: 12px; color: var(--muted); }

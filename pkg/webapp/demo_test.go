@@ -580,11 +580,11 @@ func TestOlderImportIsListedButNotOpened(t *testing.T) {
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/patterns?ws="+id, nil))
 	var body struct {
-		OlderVersion bool   `json:"olderVersion"`
-		Service      string `json:"service"`
+		OlderVersion bool          `json:"olderVersion"`
+		Workspace    demoWorkspace `json:"workspace"`
 	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	if rec.Code != http.StatusGone || !body.OlderVersion || body.Service != list[0].Service {
+	if rec.Code != http.StatusGone || !body.OlderVersion || body.Workspace.Service != list[0].Service || body.Workspace.Title != list[0].Title {
 		t.Fatalf("patterns: %d %s", rec.Code, rec.Body)
 	}
 }

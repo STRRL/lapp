@@ -186,7 +186,6 @@
 .dz .pbar i{display:block;height:100%;background:var(--accent);border-radius:2px}
 .dz .cap{font-size:11px;color:var(--muted);padding:0 14px 8px}
 .dz code{font-size:12px}
-.dz .b-maybe{background:var(--warning-soft);color:var(--warning-text);border:1px dashed var(--warning)}
 .dz .unnamed{font-family:var(--mono);font-size:12px;font-weight:500}
 .dz .notime{color:var(--muted)}
 .dz .notime-chart{height:72px;display:flex;align-items:center;justify-content:center}

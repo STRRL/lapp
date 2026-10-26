@@ -4,13 +4,13 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  History,
   CloudDownload,
   Copy,
   Download,
   Eye,
   EyeOff,
   File as FileIcon,
-  Info,
   KeyRound,
   LoaderCircle,
   OctagonAlert,
@@ -62,9 +62,8 @@ type DemoPattern = {
   count: number;
   level: string;
   buckets: number[];
-  suggestion: "noise" | "maybe" | "";
+  suggestion: "noise" | "";
   reason: string;
-  keptReason?: string;
   filtered: boolean;
   steadyError?: boolean;
   spikeAt?: number;
@@ -153,6 +152,11 @@ export function formatPercent(part: number, total: number) {
   return `${(Math.round((part / total) * 1000) / 10).toFixed(1)}%`;
 }
 
+// hiddenText says how much of an import is hidden as noise.
+function hiddenText(hiddenLines: number, total: number) {
+  return hiddenLines === 0 ? "Nothing hidden" : `${formatPercent(hiddenLines, total)} hidden`;
+}
+
 const fmtCount = (n: number) => n.toLocaleString("en-US");
 // "1 line" / "2,140 lines": counts shown to people agree with their noun.
 const countOf = (n: number, noun: string) => `${fmtCount(n)} ${noun}${n === 1 ? "" : "s"}`;
@@ -209,12 +213,139 @@ function serviceFromFileName(name: string) {
   return stem.split(/[^a-z0-9]+/).filter(Boolean)[0] ?? "logs";
 }
 
-// Series colors are the design tokens --s1…--s8 (values in design.css); hidden patterns use --s-other.
+// Series colors are the design tokens --s1…--s8 (values in design.css). Only the
+// patterns the volume chart draws as their own series (volumeSplit) show their
+// saved color; every other pattern, hidden ones included, uses --s-other.
 const SERIES_COLORS = 8;
 const OTHER = "var(--s-other)";
-// The one color for a pattern everywhere: list dot, volume chart, legend, Start here.
-const patternColor = (p: DemoPattern, hidden: boolean) =>
-  !hidden && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
+// The one color for a pattern everywhere: list dot, trend, volume chart, legend, Start here, detail, Investigate.
+const patternColor = (p: DemoPattern, charted: boolean) =>
+  charted && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
+
+// The one way a pattern name is shown: on one line, cut to n characters, and
+// apart from every other pattern in the workspace. Where two cut names would
+// read the same, each starts from its first difference with a leading "…"
+// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
+// If those still read the same, the words where the names differ are put in
+// front ("READ …alpha" and "SEND …alpha"; "READ …tenantA …alpha").
+// fields maps each <*> in text to its field index in the full name, for Template.
+type PatternLabel = { text: string; fields: number[] };
+type LabelOf = (p: { id: string; name: string }, n: number) => PatternLabel;
+
+// Character budgets per place; the list and Start here also cut on width.
+const NAME_ROW = 72;
+const NAME_NOTICE = 40;
+const NAME_LEGEND = 32;
+const NAME_TIP = 38;
+
+// Cuts s to n characters with a trailing "…", never inside a <*> field.
+function cutName(s: string, n: number) {
+  if (s.length <= n) return s;
+  const field = s.lastIndexOf("<*>", n - 1);
+  const end = field >= 0 && field + 3 > n ? field : n;
+  return `${s.slice(0, end)}…`;
+}
+
+// Index of the first character where a and b differ.
+function firstDifference(a: string, b: string) {
+  let k = 0;
+  while (k < a.length && a[k] === b[k]) k++;
+  return k;
+}
+
+// Moves i back to the start of its word (when the word is short) and out of a <*>.
+function backToWord(name: string, i: number) {
+  const word = name.lastIndexOf(" ", i - 1) + 1;
+  if (i - word <= 12) i = word;
+  const field = name.lastIndexOf("<*>", i - 1);
+  return field >= 0 && field + 3 > i ? field : i;
+}
+
+const fieldsBefore = (name: string, i: number) => name.slice(0, i).split("<*>").length - 1;
+
+// A label shown from position from of name, after the words in heads.
+function labelFrom(name: string, from: number, n: number, heads: [number, number][] = []): PatternLabel {
+  const fields: number[] = [];
+  let text = "";
+  let shown = 0;
+  for (const [a, b] of heads) {
+    const h = name.slice(a, b);
+    text += `${a > shown ? "…" : ""}${h} `;
+    h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, a) + k));
+    shown = b;
+  }
+  const rest = from === 0 ? cutName(name, n) : `…${cutName(name.slice(from), Math.max(8, n - 1 - text.length))}`;
+  rest.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, from) + k));
+  return { text: text + rest, fields };
+}
+
+// Groups indexes whose labels read the same but whose names differ.
+function collisions(names: string[], labels: PatternLabel[]) {
+  const by = new Map<string, number[]>();
+  labels.forEach((l, i) => by.set(l.text, [...(by.get(l.text) ?? []), i]));
+  return [...by.values()].filter((g) => new Set(g.map((i) => names[i])).size > 1);
+}
+
+function patternLabels(names: string[], n: number): PatternLabel[] {
+  const flat = names.map((s) => s.replace(/\s+/g, " ").trim());
+  const labels = flat.map((s) => labelFrom(s, 0, n));
+  const from = flat.map(() => 0);
+  for (const group of collisions(flat, labels)) {
+    for (const i of group) {
+      for (const j of group) if (flat[j] !== flat[i]) from[i] = Math.max(from[i], firstDifference(flat[i], flat[j]));
+      if (from[i] > 0) {
+        from[i] = backToWord(flat[i], from[i]);
+        labels[i] = labelFrom(flat[i], from[i], n);
+      }
+    }
+  }
+  // Same tail after a different start: put the earliest word not shown yet
+  // where the names differ in front, until every label reads differently.
+  const heads: [number, number][][] = flat.map(() => []);
+  const shown = (i: number, k: number) => k >= from[i] || heads[i].some(([a, b]) => k >= a && k < b);
+  for (let round = 0; round < 6; round++) {
+    const groups = collisions(flat, labels);
+    if (groups.length === 0) break;
+    let changed = false;
+    for (const group of groups) {
+      for (const i of group) {
+        let d = from[i];
+        for (const j of group) {
+          if (flat[j] === flat[i]) continue;
+          for (let k = 0; k < d; k++) {
+            if (!shown(i, k) && flat[i][k] !== flat[j][k]) {
+              d = k;
+              break;
+            }
+          }
+        }
+        if (d >= from[i]) continue;
+        const start = backToWord(flat[i], d);
+        const space = flat[i].indexOf(" ", d);
+        const end = Math.min(space < 0 ? flat[i].length : space, Math.max(d + 1, start + 16), from[i]);
+        heads[i] = [...heads[i], [start, end] as [number, number]].sort((x, y) => x[0] - y[0]);
+        labels[i] = labelFrom(flat[i], from[i], n, heads[i]);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return labels;
+}
+
+// labelOf for one workspace's patterns: labels are computed once per length.
+function patternNamer(patterns: { id: string; name: string }[]): LabelOf {
+  const byLength = new Map<number, Map<string, PatternLabel>>();
+  return (p, n) => {
+    let labels = byLength.get(n);
+    if (!labels) {
+      const list = patternLabels(patterns.map((x) => x.name), n);
+      labels = new Map(patterns.map((x, i) => [x.id, list[i]]));
+      byLength.set(n, labels);
+    }
+    return labels.get(p.id) ?? patternLabels([p.name], n)[0];
+  };
+}
 
 function useToast() {
   const [toast, setToast] = useState<string | null>(null);
@@ -307,11 +438,9 @@ function TopBar({
                     onClick={() => { setOpen(false); navigate(w.olderVersion ? { service: w.service } : { ws: w.id }); }}
                   >
                     <b>{w.service}</b>
-                    <span className="ell">
-                      <span className="mono">{w.title}</span>
-                      {w.olderVersion && <small>{OLDER_IMPORT_NOTE}</small>}
-                    </span>
+                    <span className="mono ell">{w.title}</span>
                     <em className="tnum">{timeAgo(w.updatedAt)}</em>
+                    {w.olderVersion && <small>{OLDER_IMPORT_NOTE}</small>}
                   </button>
                 ))}
               </div>
@@ -551,7 +680,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
 
             <div className="field">
               <label htmlFor="svc">
-                Service <span>Saved noise rules for this service apply automatically</span>
+                Service <span>lapp remembers what you hide for this service.</span>
               </label>
               <div className="combo">
                 <input id="svc" value={service} placeholder="e.g. api" onChange={(e) => setService(e.target.value)} />
@@ -578,14 +707,17 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
             this machine.
           </span>
         </div>
-        <div className="clihint">
-          <span className="sub">Or from a terminal</span>
-          {["lapp app.log", "kubectl logs pod/api | lapp --name api.log"].map((c) => (
-            <button key={c} className="chip mono" onClick={() => copyText(c, show)} title="Copy">
-              {c}
-            </button>
-          ))}
-        </div>
+        {/* GCP and VictoriaLogs have no one-command terminal form yet. */}
+        {tab === "file" && (
+          <div className="clihint">
+            <span className="sub">Or from a terminal</span>
+            {["lapp app.log", "kubectl logs pod/api | lapp --name api.log"].map((c) => (
+              <button key={c} className="chip mono" onClick={() => copyText(c, show)} title="Copy">
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         <section className="recent">
           <h3>Recent</h3>
@@ -619,7 +751,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
               <b className="ell">{w.service}</b>
               <span className="mono ell">{w.title}</span>
               <span className="tnum">
-                {fmtCount(w.lineCount)} lines · {w.patternCount} patterns · {formatPercent(w.filteredLines, w.lineCount)} filtered
+                {fmtCount(w.lineCount)} lines · {w.patternCount} patterns · {hiddenText(w.filteredLines, w.lineCount)}
               </span>
               <span className="tnum">{timeAgo(w.updatedAt)}</span>
               <ChevronRight className="ico" />
@@ -711,11 +843,11 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState("");
-  const [recent, setRecent] = useState<{ projects: string[]; filters: string[] }>({ projects: [], filters: [] });
+  const [recent, setRecent] = useState<ImportRecent["gcp"]>({ projects: [], filters: [] });
   useEffect(() => {
-    getJSON<{ projects: string[]; filters: string[] }>("/api/demo/gcp-recent").then(setRecent).catch(() => undefined);
+    getJSON<ImportRecent>("/api/demo/import-recent").then((r) => setRecent(r.gcp)).catch(() => undefined);
   }, []);
-  const ready = project.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const blocker = project.trim() === "" ? "Enter a GCP project to import." : rangeBlocker(range, from, to);
   const start = async () => {
     setError("");
     const body =
@@ -748,7 +880,7 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
         </div>
         <div className="field">
           <label htmlFor="gcp-service">
-            Service <span>Saved noise rules for this service apply automatically</span>
+            Service <span>lapp remembers what you hide for this service.</span>
           </label>
           <input id="gcp-service" value={service} placeholder={project ? project.toLowerCase() : "e.g. api"} onChange={(e) => setService(e.target.value)} />
         </div>
@@ -782,16 +914,34 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
         <p className="hint">Uses this machine's gcloud credentials. Stops at 100,000 lines.</p>
       </div>
       {error && <p className="err">Couldn't import from GCP. {error}</p>}
-      <div className="actions">
-        <button className="btn primary" disabled={!ready} onClick={start}>
-          Import
-        </button>
-      </div>
+      <ImportActions blocker={blocker} onStart={start} />
     </div>
   );
 }
 
 type StartedService = { id: string; service: string };
+
+// Past import sources, latest first (/api/demo/import-recent).
+type ImportRecent = {
+  gcp: { projects: string[]; filters: string[] };
+  victoriaLogs: { urls: string[]; filters: string[] };
+};
+
+// Why Import can't be clicked yet, shown next to the button.
+function rangeBlocker(range: string, from: string, to: string) {
+  return range === "custom" && (from === "" || to === "") ? "Pick a start and end time to import." : "";
+}
+
+function ImportActions({ blocker, onStart }: { blocker: string; onStart: () => void }) {
+  return (
+    <div className="actions">
+      {blocker && <span className="blocker">{blocker}</span>}
+      <button className="btn primary" disabled={blocker !== ""} onClick={onStart}>
+        Import
+      </button>
+    </div>
+  );
+}
 
 // VictoriaLogs imports split by service: one workspace per service, so
 // progress is a list rather than the single-file step view.
@@ -835,7 +985,9 @@ function ServicesProcessing({
     <main className="imp">
       <h1>{name}</h1>
       <p className="lead">
-        {workspaces.length} {workspaces.length === 1 ? "service" : "services"}, one workspace each. Saved noise rules for each service apply automatically.
+        {workspaces.length === 1
+          ? "Found 1 service. lapp remembers what you hide for it."
+          : `Found ${workspaces.length} services. lapp remembers what you hide for each one.`}
       </p>
       <section className="recent">
         {workspaces.map((w) => {
@@ -872,11 +1024,21 @@ function ServicesProcessing({
 function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces: StartedService[]) => void }) {
   const [url, setUrl] = useState("");
   const [query, setQuery] = useState("");
+  const [recent, setRecent] = useState<ImportRecent["victoriaLogs"]>({ urls: [], filters: [] });
+  useEffect(() => {
+    getJSON<ImportRecent>("/api/demo/import-recent")
+      .then((r) => {
+        setRecent(r.victoriaLogs);
+        // The last URL used is filled in.
+        setUrl((u) => u || (r.victoriaLogs.urls[0] ?? ""));
+      })
+      .catch(() => undefined);
+  }, []);
   const [range, setRange] = useState("1h");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState("");
-  const ready = url.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const blocker = url.trim() === "" ? "Enter your VictoriaLogs URL to import." : rangeBlocker(range, from, to);
   const start = async () => {
     setError("");
     const body =
@@ -905,13 +1067,23 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
     <div className="card form">
       <div className="field">
         <label htmlFor="vl-url">URL</label>
-        <input id="vl-url" className="mono" value={url} placeholder="http://localhost:9428" onChange={(e) => setUrl(e.target.value)} />
+        <input id="vl-url" className="mono" list="vl-urls" value={url} placeholder="http://localhost:9428" onChange={(e) => setUrl(e.target.value)} />
+        <datalist id="vl-urls">
+          {recent.urls.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
       </div>
       <div className="field">
         <label htmlFor="vl-query">
-          LogsQL filter <span>optional, defaults to all logs</span>
+          LogsQL filter <span>optional · leave empty for all logs</span>
         </label>
-        <input id="vl-query" className="mono" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
+        <input id="vl-query" className="mono" list="vl-filters" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
+        <datalist id="vl-filters">
+          {recent.filters.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
       </div>
       <div className="field">
         <label>Time range</label>
@@ -929,16 +1101,12 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
           </div>
         )}
         <p className="hint">
-          Each log stream becomes a service, named by its service.name, service, app, or job label. Credentials come from VICTORIALOGS_* variables where lapp runs. Stops at
-          100,000 lines per service.
+          lapp makes one service per log stream, named by its service.name, service, app or job label. Credentials come from the VICTORIALOGS_* environment variables on the
+          machine running lapp. Stops at 100,000 lines per service.
         </p>
       </div>
       {error && <p className="err">Couldn't import from VictoriaLogs. {error}</p>}
-      <div className="actions">
-        <button className="btn primary" disabled={!ready} onClick={start}>
-          Import
-        </button>
-      </div>
+      <ImportActions blocker={blocker} onStart={start} />
     </div>
   );
 }
@@ -957,7 +1125,7 @@ function PatternList({
   const [data, setData] = useState<PatternsResponse | null>(null);
   const [error, setError] = useState("");
   // Set when this import was made with an older lapp and has to be imported again.
-  const [olderService, setOlderService] = useState<string | null>(null);
+  const [older, setOlder] = useState<DemoWorkspace | null>(null);
   const [filtered, setFiltered] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -1004,7 +1172,7 @@ function PatternList({
         }
       })
       .catch((e) => {
-        if (e?.body?.olderVersion) setOlderService(e.body.service ?? "");
+        if (e?.body?.olderVersion) setOlder(e.body.workspace);
         else setError(e instanceof Error ? e.message : String(e));
       });
   }, [wsId, compareTo, reload]);
@@ -1059,7 +1227,7 @@ function PatternList({
       setFiltered((prev) => edit(prev, false));
     }
     if (decision === "not-noise") {
-      setData({ ...data, patterns: data.patterns.map((p) => (ids.includes(p.id) ? { ...p, suggestion: "", reason: "", keptReason: "" } : p)) });
+      setData({ ...data, patterns: data.patterns.map((p) => (ids.includes(p.id) ? { ...p, suggestion: "", reason: "" } : p)) });
     }
     const done =
       decision === "hide"
@@ -1115,6 +1283,9 @@ function PatternList({
     return b.count - a.count;
   };
   const visible = data ? data.patterns.filter((p) => !filtered.has(p.id)) : [];
+  const volume = volumeSplit(visible);
+  const charted = new Set(volume.top.map((p) => p.id));
+  const labelOf = useMemo(() => patternNamer(data?.patterns ?? []), [data?.patterns]);
   const hidden = data ? data.patterns.filter((p) => filtered.has(p.id)) : [];
   const visibleRows = visible.filter(matches).sort(sorter);
   const hiddenRows = hidden.filter(matches).sort(sorter);
@@ -1143,16 +1314,26 @@ function PatternList({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (olderService !== null) {
+  if (older) {
     return (
       <>
         <TopBar navigate={navigate} />
-        <div className="pad older-import">
-          <p>This import was made with an older version of lapp.</p>
-          <button className="btn" onClick={() => navigate(olderService ? { service: olderService } : {})}>
-            Import again
-          </button>
-        </div>
+        <main className="older-import">
+          <History className="ico" />
+          <h2>This import was made with an older version of lapp.</h2>
+          <p className="meta">
+            {older.service} · {older.title} · {timeAgo(older.updatedAt)}
+          </p>
+          <p>{OLDER_IMPORT_HINT}</p>
+          <div className="actions">
+            <button className="btn primary" onClick={() => navigate({ service: older.service })}>
+              Import again
+            </button>
+            <button className="linkbtn" onClick={() => navigate({})}>
+              Back to Recent
+            </button>
+          </div>
+        </main>
       </>
     );
   }
@@ -1169,12 +1350,11 @@ function PatternList({
   const total = data.workspace.lineCount;
   const filteredLines = hidden.reduce((s, p) => s + p.count, 0);
   const left = total - filteredLines;
-  const hiddenText = filteredLines === 0 ? "Nothing hidden" : `${formatPercent(filteredLines, total)} hidden`;
   const likelyNoise = visible.filter((p) => p.suggestion === "noise" && !leaving.has(p.id));
   const likelyNoiseLines = likelyNoise.reduce((s, p) => s + p.count, 0);
   const fileName = data.fileNames[0] ?? data.workspace.title;
   const service = data.workspace.service;
-  const colorOf = (p: DemoPattern) => patternColor(p, filtered.has(p.id));
+  const colorOf = (p: DemoPattern) => patternColor(p, charted.has(p.id));
 
   const exportHref =
     `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
@@ -1192,7 +1372,7 @@ function PatternList({
             <React.Fragment key={p.id}>
               {i > 0 && ", "}
               <button className="noise-name" title={p.name} onClick={() => jumpTo(p.id)}>
-                {short(p.name, 40)}
+                {labelOf(p, NAME_NOTICE).text}
               </button>
             </React.Fragment>
           ))}
@@ -1272,12 +1452,12 @@ function PatternList({
           <div className="summary">
             <div className="meter">
               <div className="meter-num tnum">
-                <b>{hiddenText}</b>
+                <b>{hiddenText(filteredLines, total)}</b>
                 <span>
                   <b>{fmtCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{fmtCount(data.unmatched.count)}</b> unmatched lines
                 </span>
               </div>
-              <div className="meter-bar" role="img" aria-label={hiddenText}>
+              <div className="meter-bar" role="img" aria-label={hiddenText(filteredLines, total)}>
                 <i style={{ width: formatPercent(left, total) }} />
               </div>
             </div>
@@ -1319,12 +1499,14 @@ function PatternList({
             </div>
           )}
 
-          <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
+          <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} labelOf={labelOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
 
           <LogsVolume
             data={data}
-            patterns={visible}
+            top={volume.top}
+            rest={volume.rest}
             colorOf={colorOf}
+            labelOf={labelOf}
             highlight={hoverId}
             onOpen={(id) => select(id)}
             onChooseTimeColumn={async (column) => {
@@ -1414,6 +1596,7 @@ function PatternList({
                 data={data}
                 total={total}
                 color={colorOf(p)}
+                labelOf={labelOf}
                 hidden={false}
                 leaving={leaving.has(p.id)}
                 flashKey={flash?.id === p.id ? flash.key : undefined}
@@ -1461,6 +1644,7 @@ function PatternList({
                       data={data}
                       total={total}
                       color={colorOf(p)}
+                labelOf={labelOf}
                       hidden
                       hovered={hoverId === p.id}
                       selected={selected !== "unmatched" && selected?.id === p.id}
@@ -1509,6 +1693,7 @@ function PatternList({
               data={data}
               start={inv}
               colorOf={(p) => colorOf(p as DemoPattern)}
+              labelOf={labelOf}
               filtered={filtered}
               onClose={() => setInv(null)}
               onCite={(p) => {
@@ -1575,30 +1760,6 @@ function PatternList({
   );
 }
 
-function short(s: string, n: number) {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
-}
-
-// Labels cut to n characters that stay apart: where two cut labels would be
-// the same, each starts from its first difference with a leading "…"
-// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
-function distinctLabels(names: string[], n: number) {
-  const cut = names.map((s) => short(s, n));
-  return names.map((name, i) => {
-    let from = 0;
-    names.forEach((other, j) => {
-      if (j === i || cut[j] !== cut[i] || other === name) return;
-      let k = 0;
-      while (k < name.length && name[k] === other[k]) k++;
-      from = Math.max(from, k);
-    });
-    if (from === 0) return cut[i];
-    const word = name.lastIndexOf(" ", from - 1) + 1;
-    if (from - word <= 12) from = word;
-    return `…${short(name.slice(from), n - 1)}`;
-  });
-}
-
 // Unnamed display names drop a leading "[error]" marker; it never contains
 // <*>, so field positions line up with the template.
 const levelOffset = (p: DemoPattern) => (p.template.split("<*>").length - p.name.split("<*>").length);
@@ -1621,12 +1782,14 @@ function StartHere({
   data,
   items,
   colorOf,
+  labelOf,
   onOpen,
   onInvestigate
 }: {
   data: PatternsResponse;
   items: DemoPattern[];
   colorOf: (p: DemoPattern) => string;
+  labelOf: LabelOf;
   onOpen: (p: DemoPattern) => void;
   onInvestigate?: (p: DemoPattern) => void;
 }) {
@@ -1639,17 +1802,19 @@ function StartHere({
       {items.length === 0 ? (
         <p className="sub sh-empty">Nothing stands out: no errors, spikes or new patterns.</p>
       ) : (
-        items.map((p) => (
+        items.map((p) => {
+          const label = labelOf(p, NAME_ROW);
+          return (
           <div key={p.id} className="sh-row" role="button" tabIndex={0} onClick={() => onOpen(p)} onKeyDown={(e) => e.key === "Enter" && onOpen(p)}>
             <i className="dot" style={{ background: colorOf(p) }} />
             <div className="sh-main">
               {p.named ? (
                 <b className="ell" title={p.name}>
-                  {p.name.split("\n")[0]}
+                  {label.text}
                 </b>
               ) : (
                 <b className="unnamed ell" title={p.name}>
-                  <Template text={p.name.split("\n")[0]} patternId={p.id} offset={levelOffset(p)} />
+                  <Template text={label.text} patternId={p.id} offset={levelOffset(p)} fields={label.fields} />
                 </b>
               )}
               <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : p.steadyError ? "is-err" : "is-new"}`}>
@@ -1677,7 +1842,8 @@ function StartHere({
             )}
             <ChevronRight className="ico cell-chev" />
           </div>
-        ))
+          );
+        })
       )}
     </section>
   );
@@ -1759,14 +1925,15 @@ function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => v
 
 // Renders a template with <*> chips. With patternId (and the template being
 // the pattern's own text), hovering a chip shows the values it stands for.
-function Template({ text, active, patternId, offset = 0 }: { text: string; active?: number; patternId?: string; offset?: number }) {
+// fields maps the k-th <*> of text to its field index (a shortened name); by default the k-th.
+function Template({ text, active, patternId, offset = 0, fields }: { text: string; active?: number; patternId?: string; offset?: number; fields?: number[] }) {
   const parts = text.split("<*>");
   return (
     <>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
           {part}
-          {i < parts.length - 1 && <Placeholder patternId={patternId} index={i + offset} active={active === i} />}
+          {i < parts.length - 1 && <Placeholder patternId={patternId} index={(fields?.[i] ?? i) + offset} active={active === i} />}
         </React.Fragment>
       ))}
     </>
@@ -1797,6 +1964,7 @@ function Row({
   data,
   total,
   color,
+  labelOf,
   hidden: filtered,
   leaving,
   flashKey,
@@ -1809,6 +1977,7 @@ function Row({
   data: PatternsResponse;
   total: number;
   color: string;
+  labelOf: LabelOf;
   hidden: boolean;
   leaving?: boolean;
   flashKey?: number;
@@ -1818,6 +1987,7 @@ function Row({
   onOpen: () => void;
 }) {
   const share = formatPercent(p.count, total);
+  const label = labelOf(p, NAME_ROW);
   const hasTrend = data.bucketSeconds > 0;
   const noise = p.suggestion === "noise";
   const noiseTag = noise && (
@@ -1849,7 +2019,7 @@ function Row({
             <i className="dot" style={{ background: color }} />
             {noiseTag}
             <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
+              <Template text={label.text} patternId={p.id} offset={levelOffset(p)} fields={label.fields} />
             </b>
           </div>
         )}
@@ -1858,7 +2028,7 @@ function Row({
             <>
               <i className="dot" style={{ background: color }} />
               {noiseTag}
-              <b>{p.name}</b>
+              <b title={p.name}>{label.text}</b>
             </>
           )}
           <span className="level-inline">
@@ -1883,19 +2053,12 @@ function Row({
               New since last time{p.newAt !== undefined ? ` · first seen ${bucketLabel(data, p.newAt)}` : ""}
             </span>
           )}
-          {p.suggestion === "maybe" && !filtered && (
-            <span className="badge b-maybe" title="Not filtered. Decide for yourself.">
-              <Info className="ico" />
-              Maybe noise
-            </span>
-          )}
         </div>
         {p.named && (
           <div className="ptpl mono">
             <Template text={p.template} patternId={p.id} />
           </div>
         )}
-        {p.suggestion === "maybe" && !filtered && <div className="why">Why it's not filtered: {p.keptReason}</div>}
       </div>
       <div className="cell-level col-level">
         <LevelBadge level={p.level} />
@@ -1979,6 +2142,12 @@ function useWidth<T extends HTMLElement>(fallback: number) {
 
 const VOLUME_COLLAPSED_KEY = "lapp-logs-volume-collapsed";
 const VOLUME_TOP = 8;
+// The volume chart draws the top VOLUME_TOP visible patterns (by lines, as the
+// server sorts them) as their own series and sums the rest into "Other". This
+// split is also the one source of which patterns show their own color.
+function volumeSplit(visible: DemoPattern[]) {
+  return { top: visible.slice(0, VOLUME_TOP), rest: visible.slice(VOLUME_TOP) };
+}
 // "Other" in the volume chart is darker than --s-other so it reads as a sum, not a pattern.
 const VOLUME_OTHER = "var(--ink-3)";
 const VOLUME_OTHER_ID = "~other";
@@ -1991,7 +2160,7 @@ const TICK_MIN_PX = 64;
 const TIP_GAP = 12;
 const TIP_FLIP = 0.6;
 
-// legend and tip are the series' labels in the legend and the tooltip (distinctLabels).
+// legend and tip are the series' labels in the legend and the tooltip (labelOf).
 type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean; hatched?: boolean; legend: string; tip: string };
 
 // Swatch for legends and tooltips: the same 45° hatch as the bars for unmatched lines.
@@ -2012,14 +2181,22 @@ function fmtAxis(v: number) {
   return Number.isInteger(v) ? String(v) : String(+v.toFixed(2));
 }
 
-// Top patterns by lines keep their list color; unmatched lines and the remaining patterns follow.
-function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: (p: DemoPattern) => string): VolumeSeries[] {
-  const top = patterns.slice(0, VOLUME_TOP);
-  const rest = patterns.slice(VOLUME_TOP);
-  const names = top.map((p) => p.name);
-  const legend = distinctLabels(names, 32);
-  const tip = distinctLabels(names, 38);
-  const series: VolumeSeries[] = top.map((p, i) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets, legend: legend[i], tip: tip[i] }));
+// Top patterns (volumeSplit) keep their list color; unmatched lines and the remaining patterns follow.
+function volumeSeries(
+  data: PatternsResponse,
+  top: DemoPattern[],
+  rest: DemoPattern[],
+  colorOf: (p: DemoPattern) => string,
+  labelOf: LabelOf
+): VolumeSeries[] {
+  const series: VolumeSeries[] = top.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: colorOf(p),
+    buckets: p.buckets,
+    legend: labelOf(p, NAME_LEGEND).text,
+    tip: labelOf(p, NAME_TIP).text
+  }));
   // Unmatched lines are hatched so they never read as one more pattern.
   if (data.unmatched.count > 0) {
     const name = "Unmatched lines";
@@ -2050,15 +2227,19 @@ function timeTicks(data: PatternsResponse, n: number, plotW: number) {
 
 function LogsVolume({
   data,
-  patterns,
+  top,
+  rest,
   colorOf,
+  labelOf,
   highlight,
   onOpen,
   onChooseTimeColumn
 }: {
   data: PatternsResponse;
-  patterns: DemoPattern[];
+  top: DemoPattern[];
+  rest: DemoPattern[];
   colorOf: (p: DemoPattern) => string;
+  labelOf: LabelOf;
   highlight?: string | null;
   onOpen: (id: string) => void;
   onChooseTimeColumn: (column: string) => Promise<void>;
@@ -2071,7 +2252,7 @@ function LogsVolume({
     });
   const [legendHover, setLegendHover] = useState<string | null>(null);
   const hasTrend = data.bucketSeconds > 0;
-  const series = hasTrend ? volumeSeries(data, patterns, colorOf) : [];
+  const series = hasTrend ? volumeSeries(data, top, rest, colorOf, labelOf) : [];
   return (
     <section className={`card overview${collapsed ? " is-collapsed" : ""}`}>
       <header>
@@ -2410,7 +2591,6 @@ function Drawer({
             )}
           </div>
           {target.suggestion === "noise" && <div className="why">Why it looks like noise: {target.reason}</div>}
-          {target.suggestion === "maybe" && <div className="why">Why it's not filtered: {target.keptReason}</div>}
         </>
       )}
 

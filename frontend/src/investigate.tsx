@@ -102,6 +102,7 @@ export function InvestigatePanel({
   data,
   start,
   colorOf,
+  labelOf,
   filtered,
   onClose,
   onCite,
@@ -114,6 +115,7 @@ export function InvestigatePanel({
   data: InvData;
   start: { pattern?: InvPattern; question: string; reason?: string; spike?: boolean; jobId?: string };
   colorOf: (p: InvPattern) => string;
+  labelOf: (p: InvPattern, n: number) => { text: string };
   filtered: Set<string>;
   onClose: () => void;
   onCite: (p: InvPattern) => void;
@@ -195,7 +197,7 @@ export function InvestigatePanel({
 
   const first = runs[0];
   const answered = first && first.state === "succeeded";
-  const title = start.pattern ? `Investigate · ${short(start.pattern.name, 40)}` : "Investigate";
+  const title = start.pattern ? `Investigate · ${labelOf(start.pattern, 40).text}` : "Investigate";
 
   return (
     <aside className="drawer inv" aria-label="Investigate">
@@ -207,7 +209,7 @@ export function InvestigatePanel({
       </header>
       {start.pattern && start.reason && (
         <span className={`badge ${start.spike ? "b-spike" : "b-new"} inv-ctx`}>
-          <b className="ell">{short(start.pattern.name, 36)}</b> · {start.reason}
+          <b className="ell">{labelOf(start.pattern, 36).text}</b> · {start.reason}
         </span>
       )}
 
@@ -231,6 +233,7 @@ export function InvestigatePanel({
           now={now}
           data={data}
           colorOf={colorOf}
+          labelOf={labelOf}
           filtered={filtered}
           onCite={onCite}
           onHoverPattern={onHoverPattern}
@@ -272,10 +275,6 @@ function meta(inv: Investigation) {
   const secs = Math.max(0, Math.round((end - new Date(inv.startedAt).getTime()) / 1000));
   const cited = new Set([...(inv.answer ?? "").matchAll(CITE)].flatMap(citeIds)).size;
   return `${AGENT_LABEL[inv.agent]} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · cited ${cited} ${cited === 1 ? "pattern" : "patterns"}`;
-}
-
-function short(s: string, n: number) {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
 function AskBox({
@@ -355,6 +354,7 @@ function RunView({
   now,
   data,
   colorOf,
+  labelOf,
   filtered,
   onCite,
   onHoverPattern,
@@ -364,6 +364,7 @@ function RunView({
   now: number;
   data: InvData;
   colorOf: (p: InvPattern) => string;
+  labelOf: (p: InvPattern, n: number) => { text: string };
   filtered: Set<string>;
   onCite: (p: InvPattern) => void;
   onHoverPattern: (id: string | null) => void;
@@ -400,8 +401,8 @@ function RunView({
             onMouseEnter={() => onHoverPattern(p.id)}
             onMouseLeave={() => onHoverPattern(null)}
           >
-            <i style={{ background: isFiltered ? "var(--s-other)" : colorOf(p) }} />
-            {short(p.name, 28)}
+            <i style={{ background: colorOf(p) }} />
+            {labelOf(p, 28).text}
             {m[2] ? ` · ${rangeText(m[2])}` : ""}
           </button>
         );

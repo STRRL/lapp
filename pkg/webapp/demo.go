@@ -92,9 +92,8 @@ type demoPattern struct {
 	Count       int      `json:"count"`
 	Level       string   `json:"level"`
 	Buckets     []int    `json:"buckets"`
-	Suggestion  string   `json:"suggestion"` // "noise", "maybe" or ""
+	Suggestion  string   `json:"suggestion"` // "noise" or ""
 	Reason      string   `json:"reason"`
-	KeptReason  string   `json:"keptReason,omitempty"`
 	Filtered    bool     `json:"filtered"`
 	SteadyError bool     `json:"steadyError,omitempty"` // error-like, high share, present most of the time
 	SpikeAt     *int     `json:"spikeAt,omitempty"`
@@ -167,7 +166,7 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/demo/service-rules", d.handleServiceRules)
 	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
 	mux.HandleFunc("POST /api/demo/import-gcp", d.handleImportGCP)
-	mux.HandleFunc("GET /api/demo/gcp-recent", d.handleGCPRecent)
+	mux.HandleFunc("GET /api/demo/import-recent", d.handleImportRecent)
 	mux.HandleFunc("POST /api/demo/import-victorialogs", d.handleImportVictoriaLogs)
 	mux.HandleFunc("POST /api/demo/investigate", d.handleInvestigateStart)
 	mux.HandleFunc("GET /api/demo/investigate", d.handleInvestigateGet)
@@ -593,7 +592,7 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 		markTrends(p)
 		// Suggestions are only marks: nothing is hidden unless a saved rule hides it.
 		if contains(rules.NotNoise, p.ID) && p.Suggestion != "" {
-			p.Suggestion, p.Reason, p.KeptReason = "", "", ""
+			p.Suggestion, p.Reason = "", ""
 		}
 		p.Filtered = contains(rules.Filtered, p.ID)
 		if p.Filtered {
@@ -768,7 +767,9 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		p.SteadyError = steady && share >= steadyErrorMinShare
 		return
 	}
-	if share < noiseMinShare {
+	// A pattern that comes in bursts is not marked: nothing is marked
+	// unless it is likely noise.
+	if share < noiseMinShare || !steady {
 		return
 	}
 	parts := []string{formatPercent(share)}
@@ -779,12 +780,7 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	default:
 		parts = append(parts, fmt.Sprintf("in %d of %d %s", present, bucketCount, pluralUnit(unit)))
 	}
-	switch {
-	case !steady:
-		p.Suggestion, p.KeptReason = "maybe", "comes in bursts"
-	default:
-		p.Suggestion = "noise"
-	}
+	p.Suggestion = "noise"
 	p.Reason = strings.Join(parts, " · ")
 }
 
@@ -915,7 +911,12 @@ func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 		// The page offers Import again with the service filled in.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusGone)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "olderVersion": true, "service": readService(filepath.Join(d.root, id), id)})
+		older := demoWorkspace{ID: id, Service: readService(filepath.Join(d.root, id), id)}
+		if run := workspace.LatestOldDiscoveryRun(filepath.Join(d.root, id)); run != nil {
+			older = d.workspaceInfo(id, run)
+		}
+		older.OlderVersion = true
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "olderVersion": true, "workspace": older})
 		return
 	}
 	if err != nil {
@@ -1554,32 +1555,65 @@ func describeImport(rec *workspace.ImportRunRecord) string {
 	return fmt.Sprintf("GCP · %s · last %s", rec.Project, label)
 }
 
-type gcpRecent struct {
-	Projects []string `json:"projects"`
-	Filters  []string `json:"filters"`
+// recentValues lists past values, latest first, without repeats.
+type recentValues struct {
+	seen   map[string]bool
+	values []string
 }
 
-// handleGCPRecent lists past projects and filters for autocomplete.
-func (d *demoAPI) handleGCPRecent(w http.ResponseWriter, _ *http.Request) {
-	out := gcpRecent{Projects: []string{}, Filters: []string{}}
+func (r *recentValues) add(v string) {
+	if v == "" || r.seen[v] {
+		return
+	}
+	if r.seen == nil {
+		r.seen = map[string]bool{}
+	}
+	r.seen[v] = true
+	r.values = append(r.values, v)
+}
+
+func (r *recentValues) list() []string {
+	if r.values == nil {
+		return []string{}
+	}
+	return r.values
+}
+
+type importRecent struct {
+	GCP struct {
+		Projects []string `json:"projects"`
+		Filters  []string `json:"filters"`
+	} `json:"gcp"`
+	VictoriaLogs struct {
+		URLs    []string `json:"urls"`
+		Filters []string `json:"filters"`
+	} `json:"victoriaLogs"`
+}
+
+// handleImportRecent lists past import sources, latest first, to fill in
+// and autocomplete the GCP and VictoriaLogs forms.
+func (d *demoAPI) handleImportRecent(w http.ResponseWriter, _ *http.Request) {
+	var records []workspace.ImportRunRecord
 	entries, _ := os.ReadDir(d.root)
-	seenP, seenF := map[string]bool{}, map[string]bool{}
 	for _, e := range entries {
-		records, _ := workspace.ListImportRunRecords(filepath.Join(d.root, e.Name()))
-		for _, rec := range records {
-			if rec.Provider != gcplog.Provider {
-				continue
-			}
-			if rec.Project != "" && !seenP[rec.Project] {
-				seenP[rec.Project] = true
-				out.Projects = append(out.Projects, rec.Project)
-			}
-			if rec.Filter != "" && !seenF[rec.Filter] {
-				seenF[rec.Filter] = true
-				out.Filters = append(out.Filters, rec.Filter)
-			}
+		recs, _ := workspace.ListImportRunRecords(filepath.Join(d.root, e.Name()))
+		records = append(records, recs...)
+	}
+	sort.SliceStable(records, func(i, j int) bool { return records[i].StartedAt.After(records[j].StartedAt) })
+	var projects, gcpFilters, urls, vlFilters recentValues
+	for _, rec := range records {
+		switch rec.Provider {
+		case gcplog.Provider:
+			projects.add(rec.Project)
+			gcpFilters.add(rec.Filter)
+		case victorialogs.Provider:
+			urls.add(rec.URL)
+			vlFilters.add(rec.Filter)
 		}
 	}
+	var out importRecent
+	out.GCP.Projects, out.GCP.Filters = projects.list(), gcpFilters.list()
+	out.VictoriaLogs.URLs, out.VictoriaLogs.Filters = urls.list(), vlFilters.list()
 	writeJSON(w, out)
 }
 
