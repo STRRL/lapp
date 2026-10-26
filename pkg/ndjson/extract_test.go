@@ -11,7 +11,8 @@ import (
 // TestExtractFixtures extracts every line of every input fixture under
 // testdata/extract/ and compares the result against its committed expected
 // output. Each <case>.input.ndjson pairs with <case>.expected.txt, so adding
-// a case only means adding one fixture pair.
+// a case only means adding one fixture pair. An expected line is the
+// severity, a tab, then the extracted text.
 func TestExtractFixtures(t *testing.T) {
 	inputs, err := filepath.Glob(filepath.Join("testdata", "extract", "*.input.ndjson"))
 	if err != nil {
@@ -30,8 +31,8 @@ func TestExtractFixtures(t *testing.T) {
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				text, _ := Extract(line)
-				extracted = append(extracted, text)
+				text, severity, _ := Extract(line)
+				extracted = append(extracted, severity+"\t"+text)
 			}
 			got := strings.Join(extracted, "\n") + "\n"
 
@@ -48,7 +49,7 @@ func TestExtractFixtures(t *testing.T) {
 
 func TestExtractNonJSONLineIsReturnedUnchanged(t *testing.T) {
 	line := "2026-06-06 10:00:00 INFO plain text line"
-	if got, _ := Extract(line); got != line {
+	if got, _, _ := Extract(line); got != line {
 		t.Fatalf("Extract(%q) = %q, want unchanged", line, got)
 	}
 }
@@ -66,7 +67,7 @@ func TestExtractTimestampFromVictoriaLogsTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, ts := Extract(tt.line)
+			_, _, ts := Extract(tt.line)
 			got := ""
 			if !ts.IsZero() {
 				got = ts.UTC().Format(time.RFC3339)

@@ -1,2 +1,2 @@
-{"duration_ms":12,"event":"gc"}
-{"event":"cache_evict","keys":120}
+	{"duration_ms":12,"event":"gc"}
+DEBUG	{"event":"cache_evict","keys":120}

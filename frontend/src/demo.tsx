@@ -42,9 +42,14 @@ type DemoWorkspace = {
   patternCount: number;
   filteredLines: number;
   limitReached?: boolean;
+  // Imported with an older lapp: listed, but has to be imported again.
+  olderVersion?: boolean;
   truncatedLines?: number;
   updatedAt: string;
 };
+
+const OLDER_IMPORT_NOTE = "Made with an older version of lapp. Import it again to view.";
+const OLDER_IMPORT_HINT = "lapp now reads levels differently, so older imports can't be opened.";
 
 type NoiseDecision = "hide" | "unhide" | "not-noise";
 
@@ -136,7 +141,7 @@ type ImportStatus = { state: string; step: string; error?: string; errorCode?: s
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   const body = await res.json();
-  if (!res.ok) throw new Error(body?.error ?? res.statusText);
+  if (!res.ok) throw Object.assign(new Error(body?.error ?? res.statusText), { body });
   return body as T;
 }
 
@@ -295,9 +300,17 @@ function TopBar({
               <div className="menu" onMouseLeave={() => setOpen(false)}>
                 {recent.length === 0 && <div className="menu-empty">No imports yet</div>}
                 {recent.map((w) => (
-                  <button key={w.id} className="menu-item" onClick={() => { setOpen(false); navigate({ ws: w.id }); }}>
+                  <button
+                    key={w.id}
+                    className={w.olderVersion ? "menu-item older" : "menu-item"}
+                    title={w.olderVersion ? OLDER_IMPORT_HINT : undefined}
+                    onClick={() => { setOpen(false); navigate(w.olderVersion ? { service: w.service } : { ws: w.id }); }}
+                  >
                     <b>{w.service}</b>
-                    <span className="mono ell">{w.title}</span>
+                    <span className="ell">
+                      <span className="mono">{w.title}</span>
+                      {w.olderVersion && <small>{OLDER_IMPORT_NOTE}</small>}
+                    </span>
                     <em className="tnum">{timeAgo(w.updatedAt)}</em>
                   </button>
                 ))}
@@ -377,7 +390,8 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
     return t === "gcp" || t === "victorialogs" ? t : "file";
   });
   const [file, setFile] = useState<File | null>(null);
-  const [service, setService] = useState("");
+  // Import again from an older import fills in its service.
+  const [service, setService] = useState(() => new URLSearchParams(window.location.search).get("service") ?? "");
   const [savedRules, setSavedRules] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [recent, setRecent] = useState<DemoWorkspace[] | null>(null);
@@ -580,7 +594,27 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
               Drop in a log file to find its patterns. Or run <code>lapp app.log</code> from your terminal.
             </p>
           )}
-          {recent?.map((w) => (
+          {recent?.map((w) =>
+            w.olderVersion ? (
+              <button
+                key={w.id}
+                className="rrow older"
+                title={OLDER_IMPORT_HINT}
+                onClick={() => {
+                  setService(w.service);
+                  navigate({ service: w.service });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                <b className="ell">{w.service}</b>
+                <span className="ell older-title">
+                  <span className="mono">{w.title}</span>
+                  <small>{OLDER_IMPORT_NOTE}</small>
+                </span>
+                <span className="tnum">{timeAgo(w.updatedAt)}</span>
+                <ChevronRight className="ico" />
+              </button>
+            ) : (
             <button key={w.id} className="rrow" onClick={() => navigate({ ws: w.id })}>
               <b className="ell">{w.service}</b>
               <span className="mono ell">{w.title}</span>
@@ -590,7 +624,8 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
               <span className="tnum">{timeAgo(w.updatedAt)}</span>
               <ChevronRight className="ico" />
             </button>
-          ))}
+            )
+          )}
         </section>
       </main>
       {toast}
@@ -921,6 +956,8 @@ function PatternList({
 }) {
   const [data, setData] = useState<PatternsResponse | null>(null);
   const [error, setError] = useState("");
+  // Set when this import was made with an older lapp and has to be imported again.
+  const [olderService, setOlderService] = useState<string | null>(null);
   const [filtered, setFiltered] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -966,7 +1003,10 @@ function PatternList({
             });
         }
       })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => {
+        if (e?.body?.olderVersion) setOlderService(e.body.service ?? "");
+        else setError(e instanceof Error ? e.message : String(e));
+      });
   }, [wsId, compareTo, reload]);
 
   const selected: DemoPattern | "unmatched" | null = useMemo(() => {
@@ -1103,6 +1143,19 @@ function PatternList({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  if (olderService !== null) {
+    return (
+      <>
+        <TopBar navigate={navigate} />
+        <div className="pad older-import">
+          <p>This import was made with an older version of lapp.</p>
+          <button className="btn" onClick={() => navigate(olderService ? { service: olderService } : {})}>
+            Import again
+          </button>
+        </div>
+      </>
+    );
+  }
   if (error) {
     return (
       <>

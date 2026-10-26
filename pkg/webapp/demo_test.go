@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -490,5 +491,100 @@ func TestDetectLevelUsesFirstLineOnly(t *testing.T) {
 	}
 	if got := detectLevel("ERROR: deadlock detected\nDETAIL: waits for ShareLock"); got != "error" {
 		t.Fatalf("detectLevel = %q, want error from the first line", got)
+	}
+}
+
+// The same log exported as text and as NDJSON with a level field mines to
+// the same templates; the NDJSON level only sets the pattern's level.
+func TestNDJSONLevelStaysOutOfTemplate(t *testing.T) {
+	var text, ndjson strings.Builder
+	for i := 0; i < 20; i++ {
+		ts := time.Date(2026, 10, 1, 0, i, 0, 0, time.UTC).Format(time.RFC3339)
+		msg := fmt.Sprintf(`column "member_created_here" does not exist at character %d`, 40+i%3)
+		if i%2 == 1 {
+			msg = fmt.Sprintf("connection received: host=10.0.0.%d", i)
+		}
+		level := map[bool]string{true: "error", false: "info"}[i%2 == 0]
+		fmt.Fprintf(&text, "%s %s\n", ts, msg)
+		line, _ := json.Marshal(map[string]string{"timestamp": ts, "level": level, "message": msg})
+		fmt.Fprintf(&ndjson, "%s\n", line)
+	}
+	summarize := func(name, body string) map[string]string {
+		s, err := SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", name, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		levels := map[string]string{}
+		for _, p := range s.Patterns {
+			levels[p.Template] = p.Level
+		}
+		return levels
+	}
+	fromText, fromNDJSON := summarize("pg.log", text.String()), summarize("pg.ndjson", ndjson.String())
+	if len(fromText) != 2 || len(fromNDJSON) != 2 {
+		t.Fatalf("text patterns = %v, ndjson patterns = %v", fromText, fromNDJSON)
+	}
+	for template := range fromText {
+		level, ok := fromNDJSON[template]
+		if !ok {
+			t.Fatalf("template %q from text is missing from ndjson %v", template, fromNDJSON)
+		}
+		want := "info"
+		if strings.Contains(template, "does not exist") {
+			want = "error"
+		}
+		if level != want {
+			t.Fatalf("ndjson level of %q = %q, want %q", template, level, want)
+		}
+	}
+}
+
+// An import made with an older lapp stays listed, marked, and its patterns
+// answer 410 with the service to import again into.
+func TestOlderImportIsListedButNotOpened(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	id, err := d.importLog(context.Background(), "pg.log", strings.NewReader(pgPlainLog(1, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(d.root, id)
+	records, err := workspace.ListDiscoveryRunRecords(dir)
+	if err != nil || len(records) != 1 {
+		t.Fatalf("records = %+v, err = %v", records, err)
+	}
+	path := workspace.DiscoveryRunRecordPath(dir, records[0].ID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "format")
+	data, _ = json.Marshal(raw)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	d.register(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/workspaces", nil))
+	var list []demoWorkspace
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if len(list) != 1 || !list[0].OlderVersion || list[0].ID != id || list[0].Service == "" {
+		t.Fatalf("workspaces = %+v", list)
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/patterns?ws="+id, nil))
+	var body struct {
+		OlderVersion bool   `json:"olderVersion"`
+		Service      string `json:"service"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if rec.Code != http.StatusGone || !body.OlderVersion || body.Service != list[0].Service {
+		t.Fatalf("patterns: %d %s", rec.Code, rec.Body)
 	}
 }
