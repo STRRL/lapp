@@ -537,3 +537,38 @@ func TestNDJSONLevelStaysOutOfTemplate(t *testing.T) {
 		}
 	}
 }
+
+// A run saved before the level left the extraction has "<level> <message>"
+// templates; its lines still match them.
+func TestRunWithLevelPrefixedTemplatesStillMatches(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 10; i++ {
+		fmt.Fprintf(&body, `{"level":"error","message":"invalid input syntax for type uuid: \"u%d\""}`+"\n", i)
+	}
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	ctx := context.Background()
+	id, err := d.importLog(ctx, "pg.ndjson", strings.NewReader(body.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(d.root, id)
+	records, err := workspace.ListDiscoveryRunRecords(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := workspace.LatestSuccessfulDiscoveryRun(records)
+	if run == nil || len(run.Patterns) != 1 {
+		t.Fatalf("run = %+v", run)
+	}
+	run.Patterns[0].Template = "error " + run.Patterns[0].Template
+	if err := workspace.WriteDiscoveryRunRecord(dir, *run); err != nil {
+		t.Fatal(err)
+	}
+	a, err := d.analyze(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps := a.resp.Patterns; len(ps) != 1 || ps[0].Count != 10 || ps[0].Level != "error" {
+		t.Fatalf("patterns = %+v", ps)
+	}
+}

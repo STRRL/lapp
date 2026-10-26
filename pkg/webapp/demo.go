@@ -479,7 +479,13 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	counts := make([]int, len(templates))
 	for i, tl := range lines {
 		a.owner[i] = -1
-		if t, ok := pattern.MatchTemplate(tl.DrainLine(), templates); ok {
+		t, ok := pattern.MatchTemplate(tl.DrainLine(), templates)
+		if !ok && tl.Severity != "" {
+			// Runs saved before the level left the extraction mined
+			// "<severity> <message>".
+			t, ok = pattern.MatchTemplate(tl.Severity+" "+tl.DrainLine(), templates)
+		}
+		if ok {
 			idx := int(t.ID[0])<<8 | int(t.ID[1])
 			a.owner[i] = idx
 			counts[idx]++
