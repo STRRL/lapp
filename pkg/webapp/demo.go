@@ -123,9 +123,15 @@ type demoPatternsResponse struct {
 	CappedEntryCount  int    `json:"cappedEntryCount,omitempty"`
 }
 
+// noiseRules are a service's saved noise decisions, keyed by pattern
+// template: Filtered patterns are hidden, NotNoise patterns are never
+// suggested as noise again.
 type noiseRules struct {
 	Filtered []string `json:"filtered"`
-	Shown    []string `json:"shown"`
+	NotNoise []string `json:"notNoise"`
+	// Shown is the legacy name for NotNoise (suggested noise kept visible);
+	// it is read once and folded into NotNoise.
+	Shown []string `json:"shown,omitempty"`
 }
 
 func (d *demoAPI) register(mux *http.ServeMux) {
@@ -537,12 +543,13 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 		p := &patterns[i]
 		suggestNoise(p, total, bucketCount, bucketUnit(bucketSeconds))
 		markTrends(p)
-		p.Filtered = p.Suggestion == "noise"
-		if rulesSaved {
-			p.Filtered = contains(rules.Filtered, p.ID) || (p.Filtered && !contains(rules.Shown, p.ID))
-			if contains(rules.Filtered, p.ID) {
-				a.resp.RulesApplied++
-			}
+		// Suggestions are only marks: nothing is hidden unless a saved rule hides it.
+		if contains(rules.NotNoise, p.ID) && p.Suggestion != "" {
+			p.Suggestion, p.Reason, p.KeptReason = "", "", ""
+		}
+		p.Filtered = contains(rules.Filtered, p.ID)
+		if p.Filtered {
+			a.resp.RulesApplied++
 		}
 	}
 	sort.SliceStable(patterns, func(i, j int) bool { return patterns[i].Count > patterns[j].Count })
@@ -831,6 +838,8 @@ func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.resp)
 }
 
+// handleRules saves one noise decision for patterns of this workspace's
+// service right away: "hide", "unhide" or "not-noise".
 func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("ws")
 	a, err := d.analyze(r.Context(), id)
@@ -839,21 +848,31 @@ func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Filtered []string `json:"filtered"`
+		Patterns []string `json:"patterns"`
+		Decision string   `json:"decision"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	rules, _ := d.loadRules(a.service)
-	rules.Filtered = without(rules.Filtered, a.resp.Patterns)
-	rules.Shown = without(rules.Shown, a.resp.Patterns)
+	var ids []string
 	for _, p := range a.resp.Patterns {
-		if contains(body.Filtered, p.ID) {
-			rules.Filtered = append(rules.Filtered, p.ID)
-		} else if p.Suggestion == "noise" {
-			rules.Shown = append(rules.Shown, p.ID)
+		if contains(body.Patterns, p.ID) {
+			ids = append(ids, p.ID)
 		}
+	}
+	rules, _ := d.loadRules(a.service)
+	switch body.Decision {
+	case "hide":
+		rules.Filtered = append(remove(rules.Filtered, ids), ids...)
+	case "unhide":
+		rules.Filtered = remove(rules.Filtered, ids)
+	case "not-noise":
+		rules.Filtered = remove(rules.Filtered, ids)
+		rules.NotNoise = append(remove(rules.NotNoise, ids), ids...)
+	default:
+		writeError(w, http.StatusBadRequest, errors.Errorf("unknown decision %q", body.Decision))
+		return
 	}
 	if err := d.saveRules(a.service, rules); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -942,6 +961,8 @@ func (d *demoAPI) loadRules(service string) (noiseRules, bool) {
 		slog.Warn("bad noise rules file", "service", service, "error", err)
 		return noiseRules{}, false
 	}
+	rules.NotNoise = append(remove(rules.NotNoise, rules.Shown), rules.Shown...)
+	rules.Shown = nil
 	return rules, true
 }
 
@@ -1017,19 +1038,11 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// without drops entries that refer to patterns in this workspace, so a save
-// replaces this workspace's decisions but keeps rules for other patterns.
-func without(list []string, patterns []demoPattern) []string {
+// remove returns list without the given entries.
+func remove(list, drop []string) []string {
 	out := list[:0:0]
 	for _, v := range list {
-		keep := true
-		for _, p := range patterns {
-			if p.ID == v {
-				keep = false
-				break
-			}
-		}
-		if keep {
+		if !contains(drop, v) {
 			out = append(out, v)
 		}
 	}
@@ -1057,8 +1070,8 @@ func ImportLog(ctx context.Context, root, apiKey, model, name string, body io.Re
 	return newDemoAPI(root, apiKey, model).importLog(ctx, name, body)
 }
 
-// FilterLog finds patterns in a log without an LLM, applies the saved (or
-// suggested) noise rules for its service, and writes the remaining lines.
+// FilterLog finds patterns in a log without an LLM, drops the patterns the
+// saved noise rules for its service hide, and writes the remaining lines.
 // Nothing is kept: the scratch workspace is removed afterwards.
 func FilterLog(ctx context.Context, root, service, name string, body io.Reader, out io.Writer) error {
 	root, err := resolveRoot(root)

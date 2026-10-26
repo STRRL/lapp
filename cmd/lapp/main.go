@@ -23,7 +23,7 @@ func main() {
 
   lapp app.log                  import a log and open its patterns in the browser
   kubectl logs pod/api | lapp --name api.log   same, from a pipe
-  lapp filter app.log > clean.log   print the log without lines filtered as noise
+  lapp filter app.log > clean.log   print the log without lines hidden as noise
   lapp summary app.log --json       patterns, spikes and noise marks for scripts and agents`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runQuick,

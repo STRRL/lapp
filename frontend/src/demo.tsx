@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   File as FileIcon,
   Info,
   KeyRound,
@@ -44,6 +45,8 @@ type DemoWorkspace = {
   truncatedLines?: number;
   updatedAt: string;
 };
+
+type NoiseDecision = "hide" | "unhide" | "not-noise";
 
 type DemoPattern = {
   id: string;
@@ -189,10 +192,10 @@ const OTHER = "var(--s-other)";
 function useToast() {
   const [toast, setToast] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
-  const show = useCallback((text: string) => {
+  const show = useCallback((text: string, ms = 4000) => {
     setToast(text);
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setToast(null), 4000);
+    timer.current = window.setTimeout(() => setToast(null), ms);
   }, []);
   const node = toast ? (
     <div className="toast toast-fixed" role="status">
@@ -901,7 +904,8 @@ function PatternList({
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [sort, setSort] = useState<"lines" | "spiking" | "new" | "rarest">("lines");
   const [showFiltered, setShowFiltered] = useState<boolean | null>(null);
-  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [leaving, setLeaving] = useState<Set<string>>(new Set());
+  const [flash, setFlash] = useState<{ id: string; key: number } | null>(null);
   const [inv, setInv] = useState<{ pattern?: DemoPattern; question: string; reason?: string; spike?: boolean; key: number; jobId?: string } | null>(null);
   const [invHidden, setInvHidden] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -981,14 +985,56 @@ function PatternList({
     select(null);
   };
 
-  const toggle = useCallback((id: string) => {
-    setFiltered((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+  // Every Hide / Not noise / Unhide is saved for the service right away.
+  const decide = (ids: string[], decision: NoiseDecision) => {
+    if (!data || ids.length === 0) return;
+    const service = data.workspace.service;
+    const edit = (set: Set<string>, add: boolean) => {
+      const next = new Set(set);
+      ids.forEach((id) => (add ? next.add(id) : next.delete(id)));
       return next;
-    });
-  }, []);
+    };
+    if (decision === "hide") {
+      setLeaving((prev) => edit(prev, true));
+      window.setTimeout(() => {
+        setFiltered((prev) => edit(prev, true));
+        setLeaving((prev) => edit(prev, false));
+      }, 200);
+    } else {
+      setFiltered((prev) => edit(prev, false));
+    }
+    if (decision === "not-noise") {
+      setData({ ...data, patterns: data.patterns.map((p) => (ids.includes(p.id) ? { ...p, suggestion: "", reason: "", keptReason: "" } : p)) });
+    }
+    const done =
+      decision === "hide"
+        ? `Hidden. lapp will hide ${ids.length === 1 ? "it" : "them"} in ${service} next time.`
+        : decision === "not-noise"
+          ? `Got it. lapp won't flag it in ${service} again.`
+          : `Unhidden for ${service}.`;
+    getJSON(`/api/demo/rules?ws=${encodeURIComponent(wsId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ patterns: ids, decision })
+    })
+      .then(() => toast(done, 2000))
+      .catch((e) => toast(`Couldn't save: ${e instanceof Error ? e.message : String(e)}`));
+  };
+  const toggle = (id: string) => decide([id], filtered.has(id) ? "unhide" : "hide");
+  // Scroll to a pattern row and highlight it briefly.
+  const jumpTo = (id: string, retry = true) => {
+    const row = [...document.querySelectorAll<HTMLElement>(".prow[data-pattern]")].find((el) => el.dataset.pattern === id);
+    if (!row) {
+      if (!retry) return;
+      setQuery("");
+      setErrorsOnly(false);
+      setCompareFilter(null);
+      window.setTimeout(() => jumpTo(id, false), 0);
+      return;
+    }
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlash({ id, key: Date.now() });
+  };
 
   const hasTrend = !!data && data.bucketSeconds > 0;
   const matches = (p: DemoPattern) => {
@@ -1051,59 +1097,36 @@ function PatternList({
   const total = data.workspace.lineCount;
   const filteredLines = hidden.reduce((s, p) => s + p.count, 0);
   const left = total - filteredLines;
-  const autoNoise = data.patterns.filter((p) => p.suggestion === "noise" && filtered.has(p.id));
-  const autoNoiseLines = autoNoise.reduce((s, p) => s + p.count, 0);
+  const likelyNoise = visible.filter((p) => p.suggestion === "noise" && !leaving.has(p.id));
+  const likelyNoiseLines = likelyNoise.reduce((s, p) => s + p.count, 0);
   const fileName = data.fileNames[0] ?? data.workspace.title;
   const service = data.workspace.service;
   const colorOf = (p: DemoPattern) => (filtered.has(p.id) ? OTHER : seriesColor(rank.get(p.id) ?? 99));
-
-  const save = async () => {
-    await getJSON(`/api/demo/rules?ws=${encodeURIComponent(wsId)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filtered: [...filtered] })
-    });
-    setBannerDismissed(true);
-    toast(`Noise rules saved for ${service}. They'll apply next time.`);
-  };
-  const unfilterAll = () => {
-    setFiltered(new Set());
-    setBannerDismissed(true);
-  };
 
   const exportHref =
     `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
     (filtered.size === 0 ? "&filtered=" : [...filtered].map((id) => `&filtered=${encodeURIComponent(id)}`).join(""));
 
   let banner: React.ReactNode = null;
-  if (!bannerDismissed && data.rulesSaved && data.rulesApplied > 0) {
+  if (likelyNoise.length > 0) {
+    const n = likelyNoise.length;
     banner = (
-      <div className="callout">
-        <VolumeX className="ico" />
-        <div>
-          Applied {data.rulesApplied} saved noise {data.rulesApplied === 1 ? "rule" : "rules"} for <b>{service}</b>.
+      <div className="callout noise-notice">
+        <EyeOff className="ico" />
+        <div className="ell">
+          {n} {n === 1 ? "pattern looks" : "patterns look"} like noise:{" "}
+          {likelyNoise.slice(0, 3).map((p, i) => (
+            <React.Fragment key={p.id}>
+              {i > 0 && ", "}
+              <button className="noise-name" title={p.name} onClick={() => jumpTo(p.id)}>
+                {short(p.name, 40)}
+              </button>
+            </React.Fragment>
+          ))}
+          {n > 3 && ` +${n - 3} more`} · {fmtCount(likelyNoiseLines)} lines ({formatPercent(likelyNoiseLines, total)}).
         </div>
-        <button className="btn sm ghost" onClick={unfilterAll}>
-          Unfilter all
-        </button>
-      </div>
-    );
-  } else if (!bannerDismissed && !data.rulesSaved && autoNoise.length > 0) {
-    banner = (
-      <div className="callout">
-        <VolumeX className="ico" />
-        <div>
-          <b>
-            lapp filtered {autoNoise.length} {autoNoise.length === 1 ? "pattern that looks" : "patterns that look"} like noise ({fmtCount(autoNoiseLines)} lines,{" "}
-            {formatPercent(autoNoiseLines, total)}).
-          </b>{" "}
-          Based on share and repetition, not log level. Save to apply the same rules to <b>{service}</b> logs next time.
-        </div>
-        <button className="btn sm primary" onClick={save}>
-          <Check className="ico" /> Save noise rules
-        </button>
-        <button className="btn sm ghost" onClick={unfilterAll}>
-          Unfilter all
+        <button className="btn sm" onClick={() => decide(likelyNoise.map((p) => p.id), "hide")}>
+          {n === 1 ? "Hide it?" : "Hide all"}
         </button>
       </div>
     );
@@ -1127,7 +1150,7 @@ function PatternList({
                 value={service}
                 onRenamed={(s) => {
                   setData({ ...data, workspace: { ...data.workspace, service: s } });
-                  toast(`Noise rules will be saved for ${s}.`);
+                  toast(`Noise decisions will be saved for ${s}.`);
                 }}
               />
               <span className="tnum">
@@ -1174,12 +1197,12 @@ function PatternList({
           <div className="summary">
             <div className="meter">
               <div className="meter-num tnum">
-                <b>{formatPercent(filteredLines, total)} filtered</b>
+                <b>{formatPercent(filteredLines, total)} hidden</b>
                 <span>
                   <b>{fmtCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{fmtCount(data.unmatched.count)}</b> unmatched lines
                 </span>
               </div>
-              <div className="meter-bar" role="img" aria-label={`${formatPercent(filteredLines, total)} filtered`}>
+              <div className="meter-bar" role="img" aria-label={`${formatPercent(filteredLines, total)} hidden`}>
                 <i style={{ width: formatPercent(left, total) }} />
               </div>
             </div>
@@ -1272,11 +1295,6 @@ function PatternList({
               </button>
             </div>
             <div style={{ flex: 1 }} />
-            {!banner && (
-              <button className="btn sm" onClick={save}>
-                Save noise rules
-              </button>
-            )}
             <label className="sel">
               Sort
               <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
@@ -1296,11 +1314,11 @@ function PatternList({
 
           <section className="table card" role="table">
             <div className="thead" role="row">
-              <span>Filter</span>
               <span>Pattern</span>
               <span className="col-level">Level</span>
               <span>{hasTrend ? `Trend (${unitName(data.bucketSeconds) === "hour" ? "hourly" : `per ${unitName(data.bucketSeconds)}`})` : "Trend"}</span>
               <span>Lines · Share</span>
+              <span />
               <span />
             </div>
             <div className="group-h">
@@ -1309,7 +1327,7 @@ function PatternList({
             {visible.length === 0 && (
               <div className="emptyall">
                 <VolumeX className="ico" />
-                Everything here is filtered as noise.
+                Everything here is hidden as noise.
                 <button
                   className="btn sm"
                   onClick={() => {
@@ -1317,7 +1335,7 @@ function PatternList({
                     window.setTimeout(() => filteredGroupRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
                   }}
                 >
-                  Show filtered patterns
+                  Show hidden patterns
                 </button>
               </div>
             )}
@@ -1336,10 +1354,12 @@ function PatternList({
                 data={data}
                 total={total}
                 color={colorOf(p)}
-                filtered={false}
+                hidden={false}
+                leaving={leaving.has(p.id)}
+                flashKey={flash?.id === p.id ? flash.key : undefined}
                 selected={selected !== "unmatched" && selected?.id === p.id}
                 hovered={hoverId === p.id}
-                onToggle={toggle}
+                onDecide={(d) => decide([p.id], d)}
                 onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
               />
             ))}
@@ -1350,7 +1370,6 @@ function PatternList({
               onClick={() => select(selected === "unmatched" ? null : "unmatched")}
               onKeyDown={(e) => e.key === "Enter" && select("unmatched")}
             >
-              <span />
               <div className="cell-main">
                 <div className="pname">
                   <i className="dot" style={{ background: "var(--muted)" }} />
@@ -1366,12 +1385,13 @@ function PatternList({
                 <b>{fmtCount(data.unmatched.count)}</b>
                 <span>{formatPercent(data.unmatched.count, total)}</span>
               </div>
+              <span />
               <span className="cell-chev">{data.unmatched.count > 0 && <ChevronRight className="ico" />}</span>
             </div>
             {hidden.length > 0 && (
               <>
                 <button ref={filteredGroupRef} className="group-h filt grouptoggle" onClick={() => setShowFiltered(!filteredOpen)} aria-expanded={filteredOpen}>
-                  {filteredOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Filtered · {hidden.length} patterns · {fmtCount(filteredLines)} lines
+                  {filteredOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Hidden as noise · {hidden.length} patterns · {fmtCount(filteredLines)} lines
                 </button>
                 {filteredOpen &&
                   hiddenRows.map((p) => (
@@ -1381,10 +1401,10 @@ function PatternList({
                       data={data}
                       total={total}
                       color={OTHER}
-                      filtered
+                      hidden
                       hovered={hoverId === p.id}
                       selected={selected !== "unmatched" && selected?.id === p.id}
-                      onToggle={toggle}
+                      onDecide={(d) => decide([p.id], d)}
                       onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
                     />
                   ))}
@@ -1398,7 +1418,6 @@ function PatternList({
                 {goneOpen &&
                   data.compare.gone.map((g) => (
                     <div key={g.template} className="prow gone" role="row">
-                      <span />
                       <div className="cell-main">
                         <div className="pname nowrap">
                           <i className="dot" style={{ background: OTHER }} />
@@ -1413,6 +1432,7 @@ function PatternList({
                         <b>0</b>
                         <span>{fmtCount(g.count)} last time</span>
                       </div>
+                      <span />
                       <span />
                     </div>
                   ))}
@@ -1652,7 +1672,6 @@ function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => v
           <div className="card table">
             {[0, 1, 2].map((i) => (
               <div key={i} className="prow">
-                <span />
                 <div className="cell-main">
                   <span className="sk" style={{ width: "40%" }} />
                   <span className="sk" style={{ width: "70%", marginTop: 8 }} />
@@ -1706,27 +1725,40 @@ function Row({
   data,
   total,
   color,
-  filtered,
+  hidden: filtered,
+  leaving,
+  flashKey,
   selected,
   hovered,
-  onToggle,
+  onDecide,
   onOpen
 }: {
   p: DemoPattern;
   data: PatternsResponse;
   total: number;
   color: string;
-  filtered: boolean;
+  hidden: boolean;
+  leaving?: boolean;
+  flashKey?: number;
   selected: boolean;
   hovered?: boolean;
-  onToggle: (id: string) => void;
+  onDecide: (d: NoiseDecision) => void;
   onOpen: () => void;
 }) {
   const share = formatPercent(p.count, total);
   const hasTrend = data.bucketSeconds > 0;
+  const noise = p.suggestion === "noise";
+  const noiseTag = noise && (
+    <span className="badge b-noise" title={`Repeats often: ${fmtCount(p.count)} lines, ${share} of this log.`}>
+      <EyeOff className="ico" />
+      Likely noise
+    </span>
+  );
   return (
     <div
-      className={`prow ${filtered ? "filtered" : ""} ${selected ? "selected" : ""} ${hovered ? "hovered" : ""}`}
+      key={flashKey}
+      data-pattern={p.id}
+      className={`prow ${filtered ? "filtered" : ""} ${selected ? "selected" : ""} ${hovered ? "hovered" : ""} ${leaving ? "leaving" : ""} ${flashKey ? "flash" : ""}`}
       role="row"
       tabIndex={0}
       onClick={onOpen}
@@ -1735,20 +1767,15 @@ function Row({
         if (e.key === "Enter") onOpen();
         if (e.key === " ") {
           e.preventDefault();
-          onToggle(p.id);
+          onDecide(filtered ? "unhide" : "hide");
         }
       }}
     >
-      <label className="cell-check" title={filtered ? "Show this pattern" : "Filter this pattern"} onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={filtered} aria-label={`Filter ${p.name}`} onChange={() => onToggle(p.id)} />
-        <span className="cb">
-          <Check className="ico" />
-        </span>
-      </label>
       <div className="cell-main">
         {!p.named && (
           <div className="pname nowrap">
             <i className="dot" style={{ background: color }} />
+            {noiseTag}
             <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
               <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
             </b>
@@ -1758,6 +1785,7 @@ function Row({
           {p.named && (
             <>
               <i className="dot" style={{ background: color }} />
+              {noiseTag}
               <b>{p.name}</b>
             </>
           )}
@@ -1783,12 +1811,6 @@ function Row({
               New since last time{p.newAt !== undefined ? ` · first seen ${bucketLabel(data, p.newAt)}` : ""}
             </span>
           )}
-          {p.suggestion === "noise" && (
-            <span className="badge b-noise" title={filtered ? "Filtered automatically. Uncheck to show it again." : undefined}>
-              <VolumeX className="ico" />
-              Likely noise
-            </span>
-          )}
           {p.suggestion === "maybe" && !filtered && (
             <span className="badge b-maybe" title="Not filtered. Decide for yourself.">
               <Info className="ico" />
@@ -1801,7 +1823,6 @@ function Row({
             <Template text={p.template} patternId={p.id} />
           </div>
         )}
-        {p.suggestion === "noise" && <div className="why">Why it looks like noise: {p.reason}</div>}
         {p.suggestion === "maybe" && !filtered && <div className="why">Why it's not filtered: {p.keptReason}</div>}
       </div>
       <div className="cell-level col-level">
@@ -1826,6 +1847,24 @@ function Row({
           <em className={`vs-last ${p.sinceLast}`}>
             {p.ratio}× last time
           </em>
+        )}
+      </div>
+      <div className={`cell-act ${noise || filtered ? "pinned" : ""}`} onClick={(e) => e.stopPropagation()}>
+        {filtered ? (
+          <button className="linkbtn" onClick={() => onDecide("unhide")}>
+            Unhide
+          </button>
+        ) : (
+          <>
+            <button className="btn xs" onClick={() => onDecide("hide")}>
+              Hide
+            </button>
+            {noise && (
+              <button className="linkbtn" onClick={() => onDecide("not-noise")}>
+                Not noise
+              </button>
+            )}
+          </>
         )}
       </div>
       <div className="cell-chev">
@@ -2049,7 +2088,7 @@ function Drawer({
               <span className="cb">
                 <Check className="ico" />
               </span>
-              Filter this pattern
+              Hide this pattern
             </label>
             <button className="btn sm" onClick={() => onShowOnly(target)}>
               <Eye className="ico" /> Show only this

@@ -251,7 +251,7 @@ func (s *Summary) WriteText(w io.Writer) {
 	if s.From != nil && s.To != nil {
 		fmt.Fprintf(w, " · %s – %s", fmtTime(*s.From), fmtTime(*s.To))
 	}
-	fmt.Fprintf(w, "\n%.1f%% filtered as noise · %d patterns · %d unmatched lines\n", s.FilteredPercent, len(s.Patterns), s.Unmatched.Lines)
+	fmt.Fprintf(w, "\n%.1f%% hidden as noise · %d patterns · %d unmatched lines\n", s.FilteredPercent, len(s.Patterns), s.Unmatched.Lines)
 	if s.Compare != nil {
 		fmt.Fprintf(w, "Since last time (%s): %d new · %d gone · %d changed a lot\n", s.Compare.Previous, s.Compare.New, len(s.Compare.Gone), s.Compare.Changed)
 	}
@@ -265,12 +265,15 @@ func (s *Summary) WriteText(w io.Writer) {
 	fmt.Fprintln(w, "\nPatterns:")
 	for _, p := range s.Patterns {
 		mark := " "
-		if p.Filtered {
+		switch {
+		case p.Filtered:
 			mark = "~"
+		case p.Noise != nil && p.Noise.Suggestion == "likely":
+			mark = "?"
 		}
 		fmt.Fprintf(w, " %s%6d %5.1f%%  %s\n", mark, p.Lines, p.Percent, p.Name)
 	}
-	fmt.Fprintln(w, "\n(~ = filtered as noise)")
+	fmt.Fprintln(w, "\n(~ = hidden as noise, ? = likely noise)")
 }
 
 // Same wording as the page: "Dec 4 06:00" for hourly slots, "Jul 10" for days.

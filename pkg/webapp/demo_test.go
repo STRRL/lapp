@@ -143,8 +143,68 @@ func TestSummarizeLog(t *testing.T) {
 	if len(s.StartHere) == 0 || !strings.HasPrefix(s.StartHere[0].Reason, "Error") {
 		t.Fatalf("startHere = %+v", s.StartHere)
 	}
-	if !s.Patterns[0].Filtered || s.Patterns[0].Noise == nil {
-		t.Fatalf("health checks should be filtered as noise: %+v", s.Patterns[0])
+	if s.Patterns[0].Filtered || s.Patterns[0].Noise == nil || s.Patterns[0].Noise.Suggestion != "likely" {
+		t.Fatalf("health checks should be marked likely noise but not hidden: %+v", s.Patterns[0])
+	}
+}
+
+func TestDemoNoiseDecisionsPersistPerService(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	d := newDemoAPI(root, "", "")
+	var b strings.Builder
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 300; i++ {
+		fmt.Fprintf(&b, "%s INFO health check ok from 10.0.0.%d\n", base.Add(time.Duration(i)*time.Minute).Format(time.RFC3339), i%7)
+		fmt.Fprintf(&b, "%s INFO cache refreshed in %d ms\n", base.Add(time.Duration(i)*time.Minute).Format(time.RFC3339), i%9)
+	}
+	ctx := context.Background()
+	mux := http.NewServeMux()
+	d.register(mux)
+	decide := func(ws, decision string, ids ...string) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"patterns": ids, "decision": decision})
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/demo/rules?ws="+ws, strings.NewReader(string(body))))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", decision, rec.Code, rec.Body)
+		}
+	}
+	byWord := func(ws string) map[string]demoPattern {
+		t.Helper()
+		a, err := d.analyze(ctx, ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]demoPattern{}
+		for _, p := range a.resp.Patterns {
+			out[strings.Fields(p.Template)[1]] = p
+		}
+		return out
+	}
+
+	first, err := d.importLog(ctx, "api-1.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byWord(first)
+	if got["health"].Suggestion != "noise" || got["health"].Filtered || got["cache"].Suggestion != "noise" {
+		t.Fatalf("suggestions should only mark, not hide: %+v", got)
+	}
+	decide(first, "hide", got["health"].ID)
+	decide(first, "not-noise", got["cache"].ID)
+
+	// A later import of the same service applies both decisions.
+	second, err := d.importLog(ctx, "api-2.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = byWord(second)
+	if !got["health"].Filtered || got["cache"].Filtered || got["cache"].Suggestion != "" {
+		t.Fatalf("decisions not applied: %+v", got)
+	}
+	decide(second, "unhide", got["health"].ID)
+	if got = byWord(second); got["health"].Filtered || got["health"].Suggestion != "noise" {
+		t.Fatalf("unhide: %+v", got["health"])
 	}
 }
 

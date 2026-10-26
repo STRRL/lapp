@@ -33,12 +33,12 @@ VICTORIALOGS_HEADERS='CF-Access-Client-Id: <id>; CF-Access-Client-Secret: <secre
 
 1. **Start here.** A short list of the patterns most likely to be the problem: spiking errors first, then new errors, then other spikes.
 2. **Investigate.** Click **Investigate** on any of them. Your local Claude Code or Codex reads the filtered patterns and explains the likely cause, citing the patterns and times it relied on.
-3. **Filter.** Patterns that look like noise are already filtered, with the reason shown. Check or uncheck any pattern. The share filtered and the lines left update as you go.
-4. **Save.** Click **Save noise rules** to keep these noise rules. lapp applies them the next time you open logs from the same service.
+3. **Hide noise.** Patterns that look like noise are tagged **Likely noise**, with the reason on hover. Click **Hide** or **Not noise** on the row, or hide any other pattern from its row. The share hidden and the lines left update as you go.
+4. **Keep the decisions.** Every Hide, Not noise and Unhide is saved for the service right away, and lapp applies it the next time you open logs from the same service.
 5. **Take the result with you.** Export an investigation summary (Markdown) for an issue, or export the filtered logs. From the command line:
 
 ```bash
-lapp filter app.log > clean.log          # the log without lines filtered as noise
+lapp filter app.log > clean.log          # the log without lines hidden as noise
 lapp summary app.log --json              # patterns, spikes and noise marks for scripts and coding agents
 ```
 
@@ -63,7 +63,7 @@ Needs Go 1.26+, Node.js and pnpm. Optional: `OPENROUTER_API_KEY` for readable pa
 |---|---|
 | `lapp <file>` | Import a log file, find patterns, open the page (`--no-open` to skip the browser) |
 | `<cmd> \| lapp --name <name>` | Same, from a pipe. lapp names the service after it (`api.log` → `api`); without `--name` the service is `stdin` |
-| `lapp filter <file>` | Print the log without lines filtered as noise, using the service's saved rules |
+| `lapp filter <file>` | Print the log without lines hidden as noise, using the service's saved rules |
 | `lapp summary <file> [--json]` | Print patterns, counts, spikes, new patterns and noise marks |
 | `lapp web` | Open the page without importing anything |
 | `lapp workspace import victorialogs --topic <t> --url <url> [--query <LogsQL>] (--since <dur> \| --from <ts> --to <ts>) [--limit <n>]` | Pull logs from VictoriaLogs into one workspace per service, `<t>-<service>`; `--limit` applies per service. Then run `lapp workspace discover --topic <t>-<service>` |
