@@ -836,10 +836,15 @@ func detectLevel(template string) string {
 // errorWords is the one list of words and phrases that make a message look
 // like an error, whatever its log level. Patterns matching it are never
 // suggested as noise. Keep it short: every entry can keep real noise visible.
-var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b|\b\w*(?:error|exception)\b`)
+var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b`)
+
+// errorTypeNames matches exception class names such as TypeError or
+// IOException. It is case-sensitive on purpose: identifiers like has_error or
+// is_exception in SQL or code are field names, not errors.
+var errorTypeNames = regexp.MustCompile(`\b[A-Z][A-Za-z0-9]*(?:Error|Exception)\b`)
 
 func isErrorLike(s string) bool {
-	return errorWords.MatchString(s)
+	return errorWords.MatchString(s) || errorTypeNames.MatchString(s)
 }
 
 // isErrorLevel reports whether a detected level (see detectLevel) is an error.

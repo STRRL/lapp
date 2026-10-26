@@ -356,7 +356,9 @@ func TestPlanVictoriaLogsServicesFallsBackToStreamHash(t *testing.T) {
 func pgPlainLog(day int, extra map[int]string) string {
 	var b strings.Builder
 	base := time.Date(2026, 10, day, 0, 0, 0, 0, time.UTC)
-	at := func(m, s int) string { return base.Add(time.Duration(m)*time.Minute + time.Duration(s)*time.Second).Format(time.RFC3339) }
+	at := func(m, s int) string {
+		return base.Add(time.Duration(m)*time.Minute + time.Duration(s)*time.Second).Format(time.RFC3339)
+	}
 	plans := map[int]string{
 		45: "duration: 12745.859 ms  plan:\n\tQuery Text: SELECT sr.application_id FROM submissions sr\n\tSeq Scan on submissions sr  (cost=0.00..431.00 rows=10000 width=16)",
 		47: "duration: 17384.464 ms  plan:\n\tQuery Text: WITH pgrst_source AS ( SELECT * FROM members WHERE id = $1 )\n\tIndex Scan using members_pkey on members  (cost=0.29..8.30 rows=1 width=64)\n\t  Index Cond: (id = $1)",
@@ -453,6 +455,26 @@ func TestStartHerePlainTextErrors(t *testing.T) {
 		listed := len(got) == 4 && strings.Contains(got[3], "checkpoint starting: time <*> | New since last time")
 		if n == 2 && len(got) != 3 || n == 3 && !listed {
 			t.Fatalf("second import with %d new lines: start here = %q", n, got)
+		}
+	}
+}
+
+func TestIsErrorLike(t *testing.T) {
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{`column "x" does not exist`, true},
+		{"canceling statement due to statement timeout", true},
+		{"ERROR: invalid input syntax for type uuid", true},
+		{"java.io.IOException: broken pipe", true},
+		{"TypeError: cannot read properties of undefined", true},
+		{"statement: CREATE MATERIALIZED VIEW app_index AS SELECT has_error, is_exception FROM t -- this invalidates the cache", false},
+		{"health check ok in 3 ms", false},
+	}
+	for _, tt := range tests {
+		if got := isErrorLike(tt.text); got != tt.want {
+			t.Errorf("isErrorLike(%q) = %v, want %v", tt.text, got, tt.want)
 		}
 	}
 }
