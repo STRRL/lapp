@@ -808,7 +808,12 @@ func markTrends(p *demoPattern) {
 }
 
 func detectLevel(template string) string {
+	// Only the first line names the level; later lines of a multi-line entry
+	// are payload (SQL, plans, stack frames) and may mention ERROR in passing.
 	head := template
+	if i := strings.IndexByte(head, '\n'); i >= 0 {
+		head = head[:i]
+	}
 	if len(head) > 48 {
 		head = head[:48]
 	}

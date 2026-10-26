@@ -480,3 +480,12 @@ func TestIsErrorLike(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectLevelUsesFirstLineOnly(t *testing.T) {
+	if got := detectLevel("statement: SELECT 1\n-- ERROR handling is elsewhere"); got != "" {
+		t.Fatalf("detectLevel = %q, want no level from a later line", got)
+	}
+	if got := detectLevel("ERROR: deadlock detected\nDETAIL: waits for ShareLock"); got != "error" {
+		t.Fatalf("detectLevel = %q, want error from the first line", got)
+	}
+}
