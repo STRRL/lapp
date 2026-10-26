@@ -200,6 +200,8 @@ with the ImportRun recorded under import-runs/. --limit applies per service.
 
 Credentials come from the environment (or .env): VICTORIALOGS_BEARER_TOKEN,
 or VICTORIALOGS_USERNAME and VICTORIALOGS_PASSWORD for basic auth.
+VICTORIALOGS_HEADERS adds extra headers ("Name: value", separated by ";"),
+for example Cloudflare Access service-token headers in front of a proxy.
 Exactly one time range form is required: --since, or --from together with --to.
 This never starts discovery. Run 'lapp workspace discover --topic <topic>-<service>'
 afterwards.`,
@@ -221,12 +223,20 @@ afterwards.`,
 }
 
 // victoriaLogsAuthFromEnv reads VictoriaLogs credentials at the CLI edge.
-func victoriaLogsAuthFromEnv() victorialogs.Auth {
+// VICTORIALOGS_HEADERS adds headers for a gateway in front of VictoriaLogs,
+// e.g. "CF-Access-Client-Id: …; CF-Access-Client-Secret: …"; values stay out
+// of the command line and shell history.
+func victoriaLogsAuthFromEnv() (victorialogs.Auth, error) {
+	headers, err := victorialogs.ParseHeaders(os.Getenv("VICTORIALOGS_HEADERS"))
+	if err != nil {
+		return victorialogs.Auth{}, errors.Errorf("VICTORIALOGS_HEADERS: %w", err)
+	}
 	return victorialogs.Auth{
 		BearerToken: os.Getenv("VICTORIALOGS_BEARER_TOKEN"),
 		Username:    os.Getenv("VICTORIALOGS_USERNAME"),
 		Password:    os.Getenv("VICTORIALOGS_PASSWORD"),
-	}
+		Headers:     headers,
+	}, nil
 }
 
 func runWorkspaceImportVictoriaLogs(cmd *cobra.Command, _ []string) error {
@@ -256,7 +266,10 @@ func runWorkspaceImportVictoriaLogs(cmd *cobra.Command, _ []string) error {
 	if err := request.Validate(); err != nil {
 		return err
 	}
-	auth := victoriaLogsAuthFromEnv()
+	auth, err := victoriaLogsAuthFromEnv()
+	if err != nil {
+		return err
+	}
 	if err := auth.Validate(); err != nil {
 		return err
 	}

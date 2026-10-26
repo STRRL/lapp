@@ -170,3 +170,16 @@ func TestServiceLabelAndCombinedQuery(t *testing.T) {
 		}
 	}
 }
+
+func TestParseHeaders(t *testing.T) {
+	headers, err := ParseHeaders("CF-Access-Client-Id: abc.access ;\nCF-Access-Client-Secret: s3cret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headers.Get("CF-Access-Client-Id") != "abc.access" || headers.Get("CF-Access-Client-Secret") != "s3cret" {
+		t.Fatalf("unexpected headers: %v", headers)
+	}
+	if _, err := ParseHeaders("no colon here"); err == nil {
+		t.Fatal("want an error for an entry without a colon")
+	}
+}

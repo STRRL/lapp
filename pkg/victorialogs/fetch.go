@@ -40,10 +40,33 @@ var retryDelay = func(attempt int) time.Duration {
 
 // Auth holds credentials for a VictoriaLogs instance: a bearer token, or a
 // username and password for basic auth. Zero value means no auth.
+// Headers are extra headers sent with every request, for gateways in front of
+// VictoriaLogs (for example Cloudflare Access service-token headers before a
+// Grafana data source proxy).
 type Auth struct {
 	BearerToken string
 	Username    string
 	Password    string
+	Headers     http.Header
+}
+
+// ParseHeaders reads extra headers written as "Name: value", one per line or
+// separated by ";". Empty entries are ignored.
+func ParseHeaders(spec string) (http.Header, error) {
+	headers := http.Header{}
+	for _, entry := range strings.FieldsFunc(spec, func(r rune) bool { return r == '\n' || r == ';' }) {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		name, value, ok := strings.Cut(entry, ":")
+		name = strings.TrimSpace(name)
+		if !ok || name == "" || strings.ContainsAny(name, " \t") {
+			return nil, errors.Errorf("invalid header %q: want \"Name: value\"", name)
+		}
+		headers.Add(name, strings.TrimSpace(value))
+	}
+	return headers, nil
 }
 
 // Validate rejects ambiguous credentials.
@@ -307,6 +330,11 @@ func (c *Client) setHeaders(httpReq *http.Request, accountID, projectID string) 
 	if accountID != "" {
 		httpReq.Header.Set("AccountID", accountID)
 		httpReq.Header.Set("ProjectID", projectID)
+	}
+	for name, values := range c.Auth.Headers {
+		for _, value := range values {
+			httpReq.Header.Add(name, value)
+		}
 	}
 	switch {
 	case c.Auth.BearerToken != "":

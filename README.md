@@ -21,8 +21,11 @@ lapp finds the patterns and opens them in your browser. To pull logs from GCP Cl
 
 If VictoriaLogs is only reachable through Grafana, point `--url` at the Grafana data source proxy and use a Grafana service account token:
 
+If a gateway such as Cloudflare Access sits in front, add its headers with `VICTORIALOGS_HEADERS` (`Name: value`, separated by `;`), preferably in `.env` so the values stay out of shell history:
+
 ```bash
 VICTORIALOGS_BEARER_TOKEN=<grafana-service-account-token> \
+VICTORIALOGS_HEADERS='CF-Access-Client-Id: <id>; CF-Access-Client-Secret: <secret>' \
   lapp workspace import victorialogs --topic prod --since 30m \
   --url https://grafana.example.com/api/datasources/proxy/uid/<datasource-uid> \
   --query 'service.name:postgres_logs'
