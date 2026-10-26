@@ -56,7 +56,11 @@ function formatCount(n: number) {
 function bucketLabel(data: PatternsResponse, index: number) {
   if (!data.bucketStart) return "";
   const t = new Date(new Date(data.bucketStart).getTime() + index * data.bucketSeconds * 1000);
-  return formatTime(t);
+  return data.bucketSeconds >= 86400 ? formatTime(t).slice(0, 5) : formatTime(t);
+}
+
+function atBucket(data: PatternsResponse, index: number) {
+  return `${data.bucketSeconds >= 86400 ? "on" : "at"} ${bucketLabel(data, index)}`;
 }
 
 function formatTime(t: Date) {
@@ -220,6 +224,10 @@ function PatternList({ wsId, onOpen }: { wsId: string; onOpen: (id: string) => v
         setData(d);
         setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
         setBannerOpen(!d.rulesSaved);
+        // ?p=<template> (or ?p=unmatched) opens a pattern's detail directly.
+        const want = new URLSearchParams(window.location.search).get("p");
+        if (want === "unmatched") setDetail("unmatched");
+        else if (want) setDetail(d.patterns.find((x) => x.id === want) ?? null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [wsId]);
@@ -366,7 +374,7 @@ function PatternList({ wsId, onOpen }: { wsId: string; onOpen: (id: string) => v
               <b>{data.workspace.service}</b> logs next time.
             </span>
             <button className="d-primary" onClick={save}>
-              <Check size={16} /> Confirm and save
+              <Check size={16} /> Save noise rules
             </button>
             <button className="d-ghost" onClick={() => { setFiltered(new Set()); setSavedNote(false); }}>
               Unfilter all
@@ -442,7 +450,17 @@ function PatternList({ wsId, onOpen }: { wsId: string; onOpen: (id: string) => v
           )}
         </section>
       </main>
-      {detail && <Detail wsId={wsId} data={data} target={detail} color={detail === "unmatched" ? "#8b95a1" : colors.get(detail.id)!} onClose={() => setDetail(null)} />}
+      {detail && (
+        <Detail
+          wsId={wsId}
+          data={data}
+          target={detail}
+          color={detail === "unmatched" ? "#8b95a1" : colors.get(detail.id)!}
+          filtered={detail !== "unmatched" && filtered.has(detail.id)}
+          onToggle={toggle}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </div>
   );
 }
@@ -500,12 +518,12 @@ function PatternRow({
             <b>{p.name}</b>
           ) : (
             <b className="d-mono d-unnamed" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={p.template} />
+              <Template text={p.name} />
             </b>
           )}
           {!filtered && p.spikeAt !== undefined && (
             <span className="d-badge d-spike">
-              <TrendingUp size={13} /> Spiked to {p.buckets[p.spikeAt]}{perUnit(data.bucketSeconds)} at {bucketLabel(data, p.spikeAt)}
+              <TrendingUp size={13} /> Spiked to {p.buckets[p.spikeAt]}{perUnit(data.bucketSeconds)} {atBucket(data, p.spikeAt)}
             </span>
           )}
           {!filtered && p.newAt !== undefined && (
@@ -526,7 +544,7 @@ function PatternRow({
         </span>
         {p.named && <Template text={p.template} />}
       </span>
-      <span>{p.level && <span className={`d-level d-level-${p.level}`}>{p.level}</span>}</span>
+      <span>{p.level ? <span className={`d-level d-level-${p.level}`}>{p.level}</span> : <span className="d-muted">—</span>}</span>
       <span>{data.bucketSeconds > 0 && <Sparkline buckets={p.buckets} color={color} mark={filtered ? undefined : p.spikeAt} />}</span>
       <span className="d-count">
         <span>
@@ -612,7 +630,7 @@ function StackedChart({ data, patterns, colors }: { data: PatternsResponse; patt
       {hover !== null && (
         <div className="d-tooltip" style={{ left: `${((padL + (hover + 1) * bw) / W) * 100}%` }}>
           <div className="d-muted">
-            {bucketLabel(data, hover)} – {bucketLabel(data, hover + 1).slice(6)}
+            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).slice(6)}`}
           </div>
           {series
             .filter((s) => s.buckets[hover] > 0)
@@ -638,55 +656,203 @@ function niceMax(v: number) {
   return 10 * p;
 }
 
+type FieldStat = { median: number; p95: number; max: number };
+type DemoField = {
+  index: number;
+  kind: "number" | "text";
+  unit?: string;
+  buckets?: (FieldStat | null)[];
+  overall?: FieldStat;
+  breakdown?: { value: string; count: number }[];
+  other?: number;
+};
+type PatternDetail = { firstSeen?: string; lastSeen?: string; fields: DemoField[] };
+
 function Detail({
   wsId,
   data,
   target,
   color,
+  filtered,
+  onToggle,
   onClose
 }: {
   wsId: string;
   data: PatternsResponse;
   target: DemoPattern | "unmatched";
   color: string;
+  filtered: boolean;
+  onToggle: (id: string) => void;
   onClose: () => void;
 }) {
   const [lines, setLines] = useState<string[] | null>(null);
+  const [shown, setShown] = useState(200);
+  const [detail, setDetail] = useState<PatternDetail | null>(null);
   const isUnmatched = target === "unmatched";
   useEffect(() => {
     const q = isUnmatched ? "" : `&pattern=${encodeURIComponent(target.id)}`;
     getJSON<string[]>(`/api/demo/lines?ws=${encodeURIComponent(wsId)}${q}`).then(setLines).catch(() => setLines([]));
+    if (!isUnmatched) {
+      getJSON<PatternDetail>(`/api/demo/pattern?ws=${encodeURIComponent(wsId)}${q}`).then(setDetail).catch(() => setDetail({ fields: [] }));
+    }
   }, [wsId, target, isUnmatched]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const buckets = isUnmatched ? data.unmatched.buckets : target.buckets;
   const count = isUnmatched ? data.unmatched.count : target.count;
+  const total = data.workspace.lineCount;
   return (
     <div className="d-drawer-backdrop" onClick={onClose}>
       <aside className="d-drawer" onClick={(e) => e.stopPropagation()}>
         <header>
-          <h2>
-            <i style={{ background: color }} />
-            {isUnmatched ? "Unmatched lines" : target.name}
-          </h2>
-          <button className="d-ghost" onClick={onClose}>
+          <button className="d-ghost d-back" onClick={onClose}>
+            ← All patterns
+          </button>
+          <button className="d-ghost" onClick={onClose} title="Close">
             <X size={18} />
           </button>
         </header>
-        {!isUnmatched && <Template text={target.template} />}
+        <h2>
+          <i style={{ background: color }} />
+          {isUnmatched ? "Unmatched lines" : target.named ? target.name : <Template text={target.name} />}
+        </h2>
+        {!isUnmatched && target.named && <Template text={target.template} />}
+        <div className="d-stats">
+          {formatCount(count)} lines · {formatPercent(count, total)} of all lines
+          {detail?.firstSeen && ` · First seen ${formatTime(new Date(detail.firstSeen))}`}
+          {detail?.lastSeen && ` · Last seen ${formatTime(new Date(detail.lastSeen))}`}
+        </div>
+        {!isUnmatched && (
+          <label className="d-filter-check">
+            <input type="checkbox" checked={filtered} onChange={() => onToggle(target.id)} /> Filter this pattern
+          </label>
+        )}
+        {!isUnmatched && target.suggestion === "noise" && <div className="d-why">Why it looks like noise: {target.reason}</div>}
+
         <h3>Over time</h3>
         {data.bucketSeconds > 0 ? (
-          <div className="d-detail-chart">
-            <Sparkline buckets={buckets} color={color} mark={isUnmatched ? undefined : target.spikeAt} />
-            <div className="d-axis-row">
-              <span>{bucketLabel(data, 0)}</span>
-              <span>{bucketLabel(data, buckets.length - 1)}</span>
-            </div>
-          </div>
+          <BarChart data={data} values={buckets} color={color} />
         ) : (
           <p className="d-muted">Trend unavailable — no timestamps found in these lines</p>
         )}
+
+        {!isUnmatched && (
+          <>
+            <h3>Fields</h3>
+            {detail === null && <p className="d-muted">Loading…</p>}
+            {detail && detail.fields.length === 0 && <p className="d-muted">No variable fields in this pattern.</p>}
+            {detail?.fields.map((f) => (
+              <FieldChart key={f.index} field={f} data={data} color={color} />
+            ))}
+          </>
+        )}
+
         <h3>Lines ({formatCount(count)})</h3>
-        <pre className="d-lines">{lines === null ? "Loading…" : lines.join("\n")}</pre>
+        <pre className="d-lines">{lines === null ? "Loading…" : lines.slice(0, shown).join("\n")}</pre>
+        {lines && lines.length > shown && (
+          <button className="d-outline d-more" onClick={() => setShown((n) => n + 200)}>
+            Load more
+          </button>
+        )}
       </aside>
+    </div>
+  );
+}
+
+function BarChart({ data, values, color }: { data: PatternsResponse; values: number[]; color: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 700;
+  const H = 120;
+  const maxV = Math.max(1, ...values);
+  const bw = W / Math.max(values.length, 1);
+  return (
+    <div className="d-detail-chart" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+        {values.map((v, i) => (
+          <g key={i} onMouseEnter={() => setHover(i)}>
+            <rect x={i * bw} y={0} width={bw} height={H} fill={hover === i ? "#eef1f4" : "transparent"} />
+            {v > 0 && <rect x={i * bw + bw * 0.15} width={bw * 0.7} y={H - (v / maxV) * (H - 4)} height={(v / maxV) * (H - 4)} fill={color} />}
+          </g>
+        ))}
+      </svg>
+      <div className="d-axis-row">
+        <span>{bucketLabel(data, 0)}</span>
+        <span className="d-muted">{hover !== null ? `${bucketLabel(data, hover)}: ${values[hover]} lines` : ""}</span>
+        <span>{bucketLabel(data, values.length - 1)}</span>
+      </div>
+    </div>
+  );
+}
+
+function formatNumber(x: number) {
+  if (Math.abs(x) >= 1e6) return `${(x / 1e6).toFixed(1)}M`;
+  if (Math.abs(x) >= 1e4) return `${(x / 1e3).toFixed(1)}k`;
+  return Number.isInteger(x) ? String(x) : x.toFixed(2);
+}
+
+function FieldChart({ field, data, color }: { field: DemoField; data: PatternsResponse; color: string }) {
+  if (field.kind === "text") {
+    const rows = field.breakdown ?? [];
+    const sum = rows.reduce((s, r) => s + r.count, 0) + (field.other ?? 0);
+    const allDifferent = rows.length > 0 && rows[0].count === 1;
+    return (
+      <div className="d-field">
+        <div className="d-field-title">Field {field.index} — Breakdown by value</div>
+        {allDifferent ? (
+          <p className="d-muted d-small">Every value is different ({formatCount(sum)} values), e.g. <span className="d-mono">{rows[0].value}</span></p>
+        ) : (
+          <div className="d-breakdown">
+            {[...rows, ...(field.other ? [{ value: "Other", count: field.other }] : [])].map((r) => (
+              <div key={r.value} className="d-bd-row">
+                <span className="d-mono">{r.value}</span>
+                <span className="d-bar"><span style={{ width: formatPercent(r.count, sum), background: r.value === "Other" ? GRAY : color }} /></span>
+                <em>{formatCount(r.count)}</em>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  const o = field.overall!;
+  const buckets = field.buckets ?? [];
+  const W = 700;
+  const H = 120;
+  const maxV = Math.max(1e-9, ...buckets.map((b) => b?.max ?? 0));
+  const bw = W / Math.max(buckets.length, 1);
+  const line = (key: keyof FieldStat) =>
+    buckets
+      .map((b, i) => (b ? `${i * bw + bw / 2},${H - (b[key] / maxV) * (H - 6)}` : null))
+      .filter(Boolean)
+      .join(" ");
+  const u = field.unit ?? "";
+  return (
+    <div className="d-field">
+      <div className="d-field-title">
+        Field {field.index} (numbers) <span className="d-muted">· Median {formatNumber(o.median)}{u} · p95 {formatNumber(o.p95)}{u} · Max {formatNumber(o.max)}{u}</span>
+      </div>
+      {buckets.length > 0 && (
+        <>
+          <svg className="d-field-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+            <polyline points={line("max")} fill="none" stroke="#c7cdd4" strokeWidth={1.5} />
+            <polyline points={line("p95")} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />
+            <polyline points={line("median")} fill="none" stroke={color} strokeWidth={2} />
+          </svg>
+          <div className="d-axis-row">
+            <span>{bucketLabel(data, 0)}</span>
+            <span className="d-legend">
+              <span><i style={{ background: color }} />Median</span>
+              <span><i style={{ background: color, opacity: 0.5 }} />p95</span>
+              <span><i style={{ background: "#c7cdd4" }} />Max</span>
+            </span>
+            <span>{bucketLabel(data, buckets.length - 1)}</span>
+          </div>
+          <p className="d-muted d-small">p95 means 95% of values are at or below this line.</p>
+        </>
+      )}
     </div>
   );
 }

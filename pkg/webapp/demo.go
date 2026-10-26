@@ -32,7 +32,9 @@ const (
 	noiseMinPresent = 0.5
 )
 
-var levelPattern = regexp.MustCompile(`(?i)\b(fatal|panic|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\b`)
+var leadingLevel = regexp.MustCompile(`(?i)^\[?(?:fatal|panic|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\]?:?\s+`)
+
+var levelPattern = regexp.MustCompile(`(?i)\b(fatal|panic|emerg|alert|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\b`)
 
 type demoAPI struct {
 	root     string
@@ -100,6 +102,7 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/demo/patterns", d.handlePatterns)
 	mux.HandleFunc("POST /api/demo/rules", d.handleRules)
 	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
+	mux.HandleFunc("GET /api/demo/pattern", d.handlePatternDetail)
 	mux.HandleFunc("GET /api/demo/export", d.handleExport)
 }
 
@@ -285,7 +288,8 @@ func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
 		named := p.SemanticID != "" && p.SemanticID != p.Template
 		name := p.SemanticID
 		if !named {
-			name = p.Template
+			// The Level column already shows "[error]"-style markers.
+			name = leadingLevel.ReplaceAllString(p.Template, "")
 		}
 		patterns[i] = demoPattern{
 			ID:       p.Template,
@@ -378,15 +382,15 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	case present == bucketCount:
 		parts = append(parts, "every "+unit)
 	default:
-		parts = append(parts, fmt.Sprintf("%d of %d %ss", present, bucketCount, unit))
+		parts = append(parts, fmt.Sprintf("in %d of %d %ss", present, bucketCount, unit))
 	}
 	switch {
 	case isErrorLike(p.Template):
 		p.Suggestion = "maybe"
-		parts = append(parts, "looks like an error")
+		parts = append(parts, "kept because it looks like an error")
 	case !steady:
 		p.Suggestion = "maybe"
-		parts = append(parts, "comes in bursts")
+		parts = append(parts, "kept because it comes in bursts")
 	default:
 		p.Suggestion = "noise"
 	}
@@ -448,7 +452,7 @@ func detectLevel(template string) string {
 	}
 	m := levelPattern.FindString(head)
 	switch strings.ToLower(m) {
-	case "fatal", "panic", "crit", "critical":
+	case "fatal", "panic", "emerg", "alert", "crit", "critical":
 		return "fatal"
 	case "err", "error":
 		return "error"
@@ -467,8 +471,10 @@ func detectLevel(template string) string {
 	return ""
 }
 
+var failureLike = regexp.MustCompile(`(?i)\b(failure|denied|refused|abnormal)`)
+
 func isErrorLike(s string) bool {
-	return errorLikePattern.MatchString(s)
+	return errorLikePattern.MatchString(s) || failureLike.MatchString(s)
 }
 
 // formatPercent is the one place percentages are rounded (one decimal,
@@ -717,4 +723,174 @@ func resolveRoot(root string) (string, error) {
 		return "", errors.Errorf("resolve home dir: %w", err)
 	}
 	return filepath.Join(home, ".lapp", "workspaces"), nil
+}
+
+type fieldStat struct {
+	Median float64 `json:"median"`
+	P95    float64 `json:"p95"`
+	Max    float64 `json:"max"`
+}
+
+type valueCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+type demoField struct {
+	Index     int          `json:"index"` // 1-based position among the template's <*>
+	Kind      string       `json:"kind"`  // "number" or "text"
+	Unit      string       `json:"unit,omitempty"`
+	Buckets   []*fieldStat `json:"buckets,omitempty"`
+	Overall   *fieldStat   `json:"overall,omitempty"`
+	Breakdown []valueCount `json:"breakdown,omitempty"`
+	Other     int          `json:"other,omitempty"`
+}
+
+type demoPatternDetail struct {
+	FirstSeen *time.Time  `json:"firstSeen,omitempty"`
+	LastSeen  *time.Time  `json:"lastSeen,omitempty"`
+	Fields    []demoField `json:"fields"`
+}
+
+var numberValue = regexp.MustCompile(`^-?\d+(?:\.\d+)?([a-zA-Zµ%]*)$`)
+
+func fieldTokens(s string) []string {
+	for _, d := range []string{"|", "=", ","} {
+		s = strings.ReplaceAll(s, d, " ")
+	}
+	return strings.Split(strings.TrimSpace(s), " ")
+}
+
+// handlePatternDetail computes per-field metrics for one pattern: number
+// fields get median/p95/max per time slot, text fields a value breakdown.
+func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
+	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	want := r.URL.Query().Get("pattern")
+	idx := -1
+	for i, p := range a.resp.Patterns {
+		if p.ID == want {
+			idx = i
+		}
+	}
+	if idx < 0 {
+		writeError(w, http.StatusNotFound, errors.New("no such pattern"))
+		return
+	}
+	tmpl := fieldTokens(a.resp.Patterns[idx].Template)
+	var slots []int
+	for i, t := range tmpl {
+		if t == "<*>" {
+			slots = append(slots, i)
+		}
+	}
+	nb := len(a.resp.Patterns[idx].Buckets)
+	values := make([][]string, len(slots))
+	stamps := []*time.Time{}
+	out := demoPatternDetail{Fields: []demoField{}}
+	for i, tl := range a.lines {
+		if a.owner[i] != idx {
+			continue
+		}
+		if ts := tl.Timestamp; ts != nil {
+			if out.FirstSeen == nil || ts.Before(*out.FirstSeen) {
+				out.FirstSeen = ts
+			}
+			if out.LastSeen == nil || ts.After(*out.LastSeen) {
+				out.LastSeen = ts
+			}
+		}
+		toks := fieldTokens(tl.DrainLine())
+		if len(toks) != len(tmpl) {
+			continue
+		}
+		stamps = append(stamps, tl.Timestamp)
+		for k, s := range slots {
+			values[k] = append(values[k], toks[s])
+		}
+	}
+	for k, vals := range values {
+		if len(vals) == 0 {
+			continue
+		}
+		f := demoField{Index: k + 1}
+		nums := make([]float64, 0, len(vals))
+		units := map[string]int{}
+		for _, v := range vals {
+			m := numberValue.FindStringSubmatch(v)
+			if m == nil {
+				break
+			}
+			var x float64
+			fmt.Sscan(strings.TrimSuffix(v, m[1]), &x)
+			nums = append(nums, x)
+			units[m[1]]++
+		}
+		if len(nums) == len(vals) && !allSame(nums) {
+			f.Kind = "number"
+			for u := range units {
+				f.Unit = u
+			}
+			f.Overall = summarize(nums)
+			if nb > 0 && a.resp.BucketStart != nil {
+				per := make([][]float64, nb)
+				for j, x := range nums {
+					if ts := stamps[j]; ts != nil {
+						b := int(ts.Unix()-a.resp.BucketStart.Unix()) / int(a.resp.BucketSeconds)
+						if b >= 0 && b < nb {
+							per[b] = append(per[b], x)
+						}
+					}
+				}
+				f.Buckets = make([]*fieldStat, nb)
+				for b, xs := range per {
+					if len(xs) > 0 {
+						f.Buckets[b] = summarize(xs)
+					}
+				}
+			}
+		} else {
+			f.Kind = "text"
+			counts := map[string]int{}
+			for _, v := range vals {
+				counts[v]++
+			}
+			for v, c := range counts {
+				f.Breakdown = append(f.Breakdown, valueCount{v, c})
+			}
+			sort.Slice(f.Breakdown, func(i, j int) bool {
+				if f.Breakdown[i].Count != f.Breakdown[j].Count {
+					return f.Breakdown[i].Count > f.Breakdown[j].Count
+				}
+				return f.Breakdown[i].Value < f.Breakdown[j].Value
+			})
+			if len(f.Breakdown) > 8 {
+				for _, vc := range f.Breakdown[8:] {
+					f.Other += vc.Count
+				}
+				f.Breakdown = f.Breakdown[:8]
+			}
+		}
+		out.Fields = append(out.Fields, f)
+	}
+	writeJSON(w, out)
+}
+
+func allSame(xs []float64) bool {
+	for _, x := range xs {
+		if x != xs[0] {
+			return false
+		}
+	}
+	return true
+}
+
+func summarize(xs []float64) *fieldStat {
+	s := append([]float64(nil), xs...)
+	sort.Float64s(s)
+	q := func(p float64) float64 { return s[int(math.Ceil(p*float64(len(s))))-1] }
+	return &fieldStat{Median: q(0.5), P95: q(0.95), Max: s[len(s)-1]}
 }
