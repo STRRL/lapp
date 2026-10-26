@@ -40,7 +40,8 @@ function cutName(s: string, n: number) {
 const fieldsBefore = (name: string, i: number) => name.slice(0, i).split("<*>").length - 1;
 
 // The label shown from position from of name, after the head ranges.
-function labelFrom(name: string, from: number, n: number, heads: [number, number][]): PatternLabel {
+// It also returns where the shown part of the name after from ends.
+function labelFrom(name: string, from: number, n: number, heads: [number, number][]): [PatternLabel, number] {
   const fields: number[] = [];
   let text = "";
   let shown = 0;
@@ -50,9 +51,10 @@ function labelFrom(name: string, from: number, n: number, heads: [number, number
     h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, a) + k));
     shown = b;
   }
-  const rest = from === 0 ? cutName(name, n) : `…${cutName(name.slice(from), Math.max(8, n - 1 - text.length))}`;
+  const tail = cutName(name.slice(from), from === 0 ? n : Math.max(8, n - 1 - text.length));
+  const rest = from === 0 ? tail : `…${tail}`;
   rest.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, from) + k));
-  return { text: text + rest, fields };
+  return [{ text: text + rest, fields }, from + tail.replace(/…$/, "").length];
 }
 
 // Groups indexes whose labels read the same but whose names differ.
@@ -79,6 +81,20 @@ export function patternLabels(names: string[], n: number, compact = false): Patt
     const word = flat[i].lastIndexOf(" ", start - 1) + 1;
     return start - word <= 3 && (k === 0 || word >= toks[i][k - 1].end) ? word : start;
   };
+  // Where name i starts to differ from name j: the start of the first
+  // differing word, or inside it when the two words share a long start
+  // ("gmv_max_item_reports_alpha" and "…_beta" differ at "alpha").
+  const diffAt = (i: number, j: number) => {
+    const k = differ(i, j);
+    const a = toks[i][k];
+    const b = toks[j][k];
+    if (!a || !b) return at(i, k);
+    let c = 0;
+    while (c < a.t.length && a.t[c] === b.t[c]) c++;
+    if (c <= 8) return at(i, k);
+    const cut = Math.max(a.t.lastIndexOf("_", c - 1), a.t.lastIndexOf(".", c - 1));
+    return a.start + (cut >= 0 ? cut + 1 : c);
+  };
   // Where the word ending at end really ends, taking in punctuation after it ("plan:").
   const wordEnd = (i: number, end: number) => {
     const space = flat[i].indexOf(" ", end);
@@ -91,7 +107,7 @@ export function patternLabels(names: string[], n: number, compact = false): Patt
   flat.forEach((name, i) => {
     let shared = 0;
     flat.forEach((other, j) => {
-      if (other !== name) shared = Math.max(shared, at(i, differ(i, j)));
+      if (other !== name) shared = Math.max(shared, diffAt(i, j));
     });
     if (shared >= name.length) return;
     const collides = cut.some((c, j) => j !== i && c === cut[i] && flat[j] !== name);
@@ -102,11 +118,13 @@ export function patternLabels(names: string[], n: number, compact = false): Patt
     const keep = toks[i].filter((t) => t.end <= SHARED_START && t.end < shared);
     if (keep.length > 0) heads[i] = [[0, Math.min(wordEnd(i, keep[keep.length - 1].end), shared)]];
   });
-  const labels = flat.map((name, i) => labelFrom(name, from[i], n, heads[i]));
+  const built = flat.map((name, i) => labelFrom(name, from[i], n, heads[i]));
+  const labels = built.map(([l]) => l);
+  const shownEnd = built.map(([, end]) => end);
 
   // Same label from different names: put the earliest word not shown yet
   // where they differ in front, until every label reads differently.
-  const shown = (i: number, pos: number) => pos >= from[i] || heads[i].some(([a, b]) => pos >= a && pos < b);
+  const shown = (i: number, pos: number) => (pos >= from[i] && pos < shownEnd[i]) || heads[i].some(([a, b]) => pos >= a && pos < b);
   for (let round = 0; round < 6; round++) {
     const groups = collisions(flat, labels);
     if (groups.length === 0) break;
@@ -117,9 +135,14 @@ export function patternLabels(names: string[], n: number, compact = false): Patt
         for (const j of group) {
           if (flat[j] !== flat[i]) k = Math.min(k, differ(i, j, (x) => !shown(i, toks[i][x].start)));
         }
-        if (k >= toks[i].length || toks[i][k].start >= from[i]) continue;
-        heads[i] = [...heads[i], [toks[i][k].start, toks[i][k].end] as [number, number]].sort((x, y) => x[0] - y[0]);
-        labels[i] = labelFrom(flat[i], from[i], n, heads[i]);
+        if (k >= toks[i].length || (toks[i][k].start >= from[i] && toks[i][k].start < shownEnd[i])) continue;
+        if (toks[i][k].start >= from[i]) {
+          // The difference was cut off the end: show from it instead.
+          from[i] = toks[i][k].start;
+        } else {
+          heads[i] = [...heads[i], [toks[i][k].start, toks[i][k].end] as [number, number]].sort((x, y) => x[0] - y[0]);
+        }
+        [labels[i], shownEnd[i]] = labelFrom(flat[i], from[i], n, heads[i]);
         changed = true;
       }
     }
