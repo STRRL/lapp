@@ -55,7 +55,9 @@ func filterCmd() *cobra.Command {
 		Short: "Print a log without the lines of patterns hidden as noise",
 		Long: `Find patterns in the log, drop the lines of patterns you hid as noise
 for this service (in the web app), and print the rest. Patterns lapp only
-suggests as likely noise are kept. The input file is never modified.`,
+suggests as likely noise are kept. Once a CSV time column is chosen for
+the service, the CSV header row is left out too. The input file is never
+modified.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, body, closeFn, err := openInput(args)

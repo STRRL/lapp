@@ -133,6 +133,22 @@ func TestTimeColumnTwoColumnCSV(t *testing.T) {
 	if resp.Time.Timed != 40 || resp.Time.Lines != 40 || resp.Workspace.LineCount != 40 || resp.Unmatched.Count != 0 || resp.BucketSeconds != 3600 || !resp.From.Equal(base) {
 		t.Fatalf("after choosing: time = %+v, lines = %d, unmatched = %d, bucket = %d, from = %v", resp.Time, resp.Workspace.LineCount, resp.Unmatched.Count, resp.BucketSeconds, resp.From)
 	}
+	// The status and the workspace list count the same 40 lines.
+	get := func(path string, v any) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if err := json.Unmarshal(rec.Body.Bytes(), v); err != nil {
+			t.Fatalf("%s: %v %s", path, err, rec.Body)
+		}
+	}
+	var st demoStatus
+	get("/api/demo/status?ws="+id, &st)
+	var list []demoWorkspace
+	get("/api/demo/workspaces", &list)
+	if st.Lines != 40 || len(list) != 1 || list[0].LineCount != 40 {
+		t.Fatalf("status lines = %d, list = %+v", st.Lines, list)
+	}
 }
 
 // TestTimeColumnMultilineCSV checks that a quoted field spanning lines keeps

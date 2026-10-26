@@ -294,6 +294,27 @@ func (l *csvLogs) dropHeaders(lines []workspace.TaggedLine) []workspace.TaggedLi
 	return kept
 }
 
+// entryCount is the run's entry count as the overview shows it: once the
+// service has a time column for its CSV logs, their header rows are not
+// entries (see applyTimeSource).
+func (d *demoAPI) entryCount(dir, service string, run *workspace.DiscoveryRunRecord) int {
+	rules, _ := d.loadRules(service)
+	if rules.TimeColumn == "" {
+		return run.LineCount
+	}
+	table := readCSVLogs(dir)
+	if table == nil || !contains(table.names, rules.TimeColumn) {
+		return run.LineCount
+	}
+	headers := 0
+	for _, file := range table.files {
+		if file.headerEnd > 0 {
+			headers++
+		}
+	}
+	return max(run.LineCount-headers, 0)
+}
+
 // value returns a function reading the named column of the record an entry
 // starts in.
 func (l *csvLogs) value(column string) func(workspace.TaggedLine) (string, bool) {

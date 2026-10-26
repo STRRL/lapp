@@ -210,7 +210,8 @@ func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 func (d *demoAPI) workspaceInfo(id string, run *workspace.DiscoveryRunRecord) demoWorkspace {
 	dir := filepath.Join(d.root, id)
-	info := demoWorkspace{ID: id, Title: id, Service: readService(dir, id), LineCount: run.LineCount, PatternCount: run.PatternCount, TruncatedLines: run.TruncatedLineCount}
+	service := readService(dir, id)
+	info := demoWorkspace{ID: id, Title: id, Service: service, LineCount: d.entryCount(dir, service, run), PatternCount: run.PatternCount, TruncatedLines: run.TruncatedLineCount}
 	if files, err := workspace.ListLogFiles(dir); err == nil && len(files) > 0 {
 		info.Title = files[0]
 	}
@@ -358,7 +359,7 @@ func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
 		st.State = strings.ToLower(string(run.State))
 		st.Step = string(run.CurrentStep)
 		if run.LineCount > 0 {
-			st.Lines = run.LineCount
+			st.Lines = d.entryCount(dir, readService(dir, id), run)
 		}
 		if run.Error != nil {
 			st.Error, st.ErrorCode = run.Error.Message, run.Error.Code
