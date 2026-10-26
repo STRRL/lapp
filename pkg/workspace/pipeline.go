@@ -546,12 +546,13 @@ func tagNDJSONLines(fileName string, file LogFileLines) []TaggedLine {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		extracted, ts := ndjson.Extract(line)
+		extracted, severity, ts := ndjson.Extract(line)
 		tl := TaggedLine{
 			Content:       line,
 			FileName:      fileName,
 			LineNum:       i + 1,
 			ExtractedLine: extracted,
+			Severity:      severity,
 			Truncated:     file.Truncated[i],
 		}
 		if !ts.IsZero() {

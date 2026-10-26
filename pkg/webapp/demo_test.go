@@ -492,3 +492,48 @@ func TestDetectLevelUsesFirstLineOnly(t *testing.T) {
 		t.Fatalf("detectLevel = %q, want error from the first line", got)
 	}
 }
+
+// The same log exported as text and as NDJSON with a level field mines to
+// the same templates; the NDJSON level only sets the pattern's level.
+func TestNDJSONLevelStaysOutOfTemplate(t *testing.T) {
+	var text, ndjson strings.Builder
+	for i := 0; i < 20; i++ {
+		ts := time.Date(2026, 10, 1, 0, i, 0, 0, time.UTC).Format(time.RFC3339)
+		msg := fmt.Sprintf(`column "member_created_here" does not exist at character %d`, 40+i%3)
+		if i%2 == 1 {
+			msg = fmt.Sprintf("connection received: host=10.0.0.%d", i)
+		}
+		level := map[bool]string{true: "error", false: "info"}[i%2 == 0]
+		fmt.Fprintf(&text, "%s %s\n", ts, msg)
+		line, _ := json.Marshal(map[string]string{"timestamp": ts, "level": level, "message": msg})
+		fmt.Fprintf(&ndjson, "%s\n", line)
+	}
+	summarize := func(name, body string) map[string]string {
+		s, err := SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", name, strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		levels := map[string]string{}
+		for _, p := range s.Patterns {
+			levels[p.Template] = p.Level
+		}
+		return levels
+	}
+	fromText, fromNDJSON := summarize("pg.log", text.String()), summarize("pg.ndjson", ndjson.String())
+	if len(fromText) != 2 || len(fromNDJSON) != 2 {
+		t.Fatalf("text patterns = %v, ndjson patterns = %v", fromText, fromNDJSON)
+	}
+	for template := range fromText {
+		level, ok := fromNDJSON[template]
+		if !ok {
+			t.Fatalf("template %q from text is missing from ndjson %v", template, fromNDJSON)
+		}
+		want := "info"
+		if strings.Contains(template, "does not exist") {
+			want = "error"
+		}
+		if level != want {
+			t.Fatalf("ndjson level of %q = %q, want %q", template, level, want)
+		}
+	}
+}

@@ -18,6 +18,9 @@ type TaggedLine struct {
 	// entries, or the body after the timestamp/host header for plain text.
 	// Empty when Content is mined directly.
 	ExtractedLine string `json:",omitempty"`
+	// Severity is the NDJSON entry's severity/level field. It is kept out of
+	// ExtractedLine so it never becomes part of a template.
+	Severity string `json:",omitempty"`
 	// Timestamp is parsed from the line header or the NDJSON timestamp field
 	// when one is recognised.
 	Timestamp *time.Time `json:",omitempty"`

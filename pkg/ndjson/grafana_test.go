@@ -64,7 +64,7 @@ func TestNormalizeGrafanaExportFeedsNDJSONPath(t *testing.T) {
 			}
 			var got []string
 			for _, line := range lines {
-				_, ts := Extract(line)
+				_, _, ts := Extract(line)
 				got = append(got, ts.Format(time.RFC3339Nano))
 			}
 			if strings.Join(got, " ") != strings.Join(tt.want, " ") {

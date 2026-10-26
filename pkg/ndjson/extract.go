@@ -31,17 +31,17 @@ var severityFields = []string{"severity", "level"}
 // Extract converts one NDJSON line into the text line fed to pattern mining.
 // Envelope entries {"ts": ..., "severity": ..., "payload": {...}} extract
 // from the payload; any other object is the payload itself. The extracted line is
-// "<severity> <message>", just "<message>" when no severity-like string field
-// exists, or the compact payload JSON when no message-like string field
+// the message, or the compact payload JSON when no message-like string field
 // exists. A line that does not parse as a JSON object is returned unchanged.
-// The timestamp is kept out of the extracted line and returned separately for
-// time-based metrics; it is zero when no timestamp field parses.
-func Extract(line string) (string, time.Time) {
+// The severity and timestamp are kept out of the extracted line, so the same
+// log mines to the same pattern whatever format it was exported in; they are
+// returned separately ("" and zero when absent).
+func Extract(line string) (text, severity string, timestamp time.Time) {
 	var entry map[string]any
 	if err := json.Unmarshal([]byte(line), &entry); err != nil || entry == nil {
-		return line, time.Time{}
+		return line, "", time.Time{}
 	}
-	timestamp := firstTimestampField(entry)
+	timestamp = firstTimestampField(entry)
 
 	payload, severity := splitEnvelope(entry)
 	if severity == "" {
@@ -50,12 +50,9 @@ func Extract(line string) (string, time.Time) {
 
 	message := firstStringField(payload, messageFields)
 	if message == "" {
-		return compactJSON(payload), timestamp
+		return compactJSON(payload), severity, timestamp
 	}
-	if severity == "" {
-		return message, timestamp
-	}
-	return severity + " " + message, timestamp
+	return message, severity, timestamp
 }
 
 // splitEnvelope returns the payload object and the envelope severity when the
