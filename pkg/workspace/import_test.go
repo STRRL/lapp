@@ -98,6 +98,34 @@ func TestRunImportSuccessWritesFileAndRecord(t *testing.T) {
 	}
 }
 
+func TestRunImportPassesProviderAndRecordsURL(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "logs"))
+	var gotReq ImportRequest
+	config := importTestConfig(dir, func(_ context.Context, req ImportRequest, writeLine ImportLineWriter) (ImportFetchResult, error) {
+		gotReq = req
+		return ImportFetchResult{}, writeLine(`{"_msg":"a","_time":"2026-07-25T00:00:01Z"}`)
+	})
+	config.Provider = "victorialogs"
+	config.URL = "http://logs.example.com:9428"
+	config.Project = ""
+
+	result, err := RunImport(context.Background(), config)
+	if err != nil {
+		t.Fatalf("RunImport: %v", err)
+	}
+	if gotReq.Provider != "victorialogs" || gotReq.URL != config.URL {
+		t.Fatalf("unexpected fetch request: %+v", gotReq)
+	}
+	record, err := ReadImportRunRecord(dir, result.RunID)
+	if err != nil {
+		t.Fatalf("ReadImportRunRecord: %v", err)
+	}
+	if record.URL != config.URL || record.LogFileName != "victorialogs-"+result.RunID+".ndjson" {
+		t.Fatalf("unexpected record: %+v", record)
+	}
+}
+
 func TestRunImportZeroEntriesSucceedsWithoutFile(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "logs"))

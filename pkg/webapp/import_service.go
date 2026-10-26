@@ -15,6 +15,8 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
+	"github.com/strrl/lapp/pkg/gcplog"
+	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -30,7 +32,7 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 	if connectErr := s.ensureWorkspaceExists(id); connectErr != nil {
 		return nil, connectErr
 	}
-	from, to, limit, connectErr := validateImportRunRequest(req.Msg)
+	provider, from, to, limit, connectErr := validateImportRunRequest(req.Msg)
 	if connectErr != nil {
 		return nil, connectErr
 	}
@@ -52,7 +54,8 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 	}
 	record := workspace.ImportRunRecord{
 		ID:        runID.String(),
-		Provider:  "gcp",
+		Provider:  provider,
+		URL:       req.Msg.Url,
 		Project:   req.Msg.Project,
 		Filter:    req.Msg.Filter,
 		From:      from,
@@ -77,6 +80,7 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 			Dir:      s.workspaceDir(id),
 			RunID:    record.ID,
 			Provider: record.Provider,
+			URL:      record.URL,
 			Project:  record.Project,
 			Filter:   record.Filter,
 			From:     record.From,
@@ -93,32 +97,51 @@ func (s *WorkspaceService) CreateImportRun(_ context.Context, req *connect.Reque
 	return connect.NewResponse(operation), nil
 }
 
-func validateImportRunRequest(req *webv1.CreateImportRunRequest) (from, to time.Time, limit int, connectErr *connect.Error) {
-	if strings.TrimSpace(req.Project) == "" {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.New("project must not be blank"))
+func validateImportRunRequest(req *webv1.CreateImportRunRequest) (provider string, from, to time.Time, limit int, connectErr *connect.Error) {
+	invalid := func(err error) (string, time.Time, time.Time, int, *connect.Error) {
+		return "", time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	provider = req.Provider
+	if provider == "" {
+		provider = gcplog.Provider
+	}
+	switch provider {
+	case gcplog.Provider:
+		if strings.TrimSpace(req.Project) == "" {
+			return invalid(errors.New("project must not be blank"))
+		}
+	case victorialogs.Provider:
+		if err := victorialogs.ValidateURL(req.Url); err != nil {
+			return invalid(err)
+		}
+		if _, _, err := victorialogs.ParseTenant(req.Project); err != nil {
+			return invalid(err)
+		}
+	default:
+		return invalid(errors.Errorf("unknown provider %q", req.Provider))
 	}
 	if req.From == nil || req.To == nil {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.New("from and to are required"))
+		return invalid(errors.New("from and to are required"))
 	}
 	if err := req.From.CheckValid(); err != nil {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid from timestamp: %w", err))
+		return invalid(errors.Errorf("invalid from timestamp: %w", err))
 	}
 	if err := req.To.CheckValid(); err != nil {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.Errorf("invalid to timestamp: %w", err))
+		return invalid(errors.Errorf("invalid to timestamp: %w", err))
 	}
 	from = req.From.AsTime().UTC()
 	to = req.To.AsTime().UTC()
 	if from.After(to) {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.New("from must not be after to"))
+		return invalid(errors.New("from must not be after to"))
 	}
 	if req.Limit < 0 {
-		return time.Time{}, time.Time{}, 0, connect.NewError(connect.CodeInvalidArgument, errors.New("limit must not be negative"))
+		return invalid(errors.New("limit must not be negative"))
 	}
 	limit = int(req.Limit)
 	if limit == 0 {
 		limit = defaultImportLimit
 	}
-	return from, to, limit, nil
+	return provider, from, to, limit, nil
 }
 
 func (s *WorkspaceService) GetImportRun(_ context.Context, req *connect.Request[webv1.GetImportRunRequest]) (*connect.Response[webv1.GetImportRunResponse], error) {
@@ -181,8 +204,10 @@ func (s *WorkspaceService) ListRecentImportQueries(_ context.Context, _ *connect
 	}
 
 	type queryKey struct {
-		project string
-		filter  string
+		provider string
+		url      string
+		project  string
+		filter   string
 	}
 	latest := make(map[queryKey]time.Time)
 	for _, entry := range entries {
@@ -194,7 +219,7 @@ func (s *WorkspaceService) ListRecentImportQueries(_ context.Context, _ *connect
 			return nil, connect.NewError(connect.CodeInternal, err)
 		}
 		for _, record := range records {
-			key := queryKey{project: record.Project, filter: record.Filter}
+			key := queryKey{provider: record.Provider, url: record.URL, project: record.Project, filter: record.Filter}
 			if usedAt, ok := latest[key]; !ok || record.StartedAt.After(usedAt) {
 				latest[key] = record.StartedAt
 			}
@@ -204,6 +229,8 @@ func (s *WorkspaceService) ListRecentImportQueries(_ context.Context, _ *connect
 	queries := make([]*webv1.RecentImportQuery, 0, len(latest))
 	for key, usedAt := range latest {
 		queries = append(queries, &webv1.RecentImportQuery{
+			Provider:   key.provider,
+			Url:        key.url,
 			Project:    key.project,
 			Filter:     key.filter,
 			LastUsedAt: timestamppb.New(usedAt),
@@ -214,6 +241,12 @@ func (s *WorkspaceService) ListRecentImportQueries(_ context.Context, _ *connect
 		rightTime := queries[j].LastUsedAt.AsTime()
 		if !leftTime.Equal(rightTime) {
 			return leftTime.After(rightTime)
+		}
+		if queries[i].Provider != queries[j].Provider {
+			return queries[i].Provider < queries[j].Provider
+		}
+		if queries[i].Url != queries[j].Url {
+			return queries[i].Url < queries[j].Url
 		}
 		if queries[i].Project != queries[j].Project {
 			return queries[i].Project < queries[j].Project
@@ -239,6 +272,7 @@ func (s *WorkspaceService) importRunMessage(workspaceID string, record workspace
 		Name:        fmt.Sprintf("%s/importRuns/%s", workspaceName(workspaceID), record.ID),
 		ImportRunId: record.ID,
 		Provider:    record.Provider,
+		Url:         record.URL,
 		Project:     record.Project,
 		Filter:      record.Filter,
 		From:        timestamppb.New(record.From),

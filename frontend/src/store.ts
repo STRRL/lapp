@@ -18,7 +18,11 @@ import {
 
 export type Tab = "logs" | "imports" | "patterns" | "errors";
 
+export type ImportProvider = "gcp" | "victorialogs";
+
 export type ImportInput = {
+  provider: ImportProvider;
+  url: string;
   project: string;
   filter: string;
   from: Date;
@@ -285,6 +289,8 @@ export const useAppStore = create<AppState & AppActions>()((set, get) => ({
 
     const operation = await workspaceClient.createImportRun({
       parent: selectedWorkspaceName,
+      provider: input.provider,
+      url: input.url,
       project: input.project,
       filter: input.filter,
       from: timestampFromDate(input.from),

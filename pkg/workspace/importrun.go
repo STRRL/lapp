@@ -23,10 +23,11 @@ const (
 // ImportRunRecord is the persisted provenance for one provider import.
 // These records are the only store of import history (ADR 0004). Provider
 // metadata such as labels, trace, and resource belongs here, never in the
-// imported log lines.
+// imported log lines. URL never contains credentials.
 type ImportRunRecord struct {
 	ID          string          `json:"id"`
 	Provider    string          `json:"provider"`
+	URL         string          `json:"url,omitempty"`
 	Project     string          `json:"project"`
 	Filter      string          `json:"filter,omitempty"`
 	From        time.Time       `json:"from"`

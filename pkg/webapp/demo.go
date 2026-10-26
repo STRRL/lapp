@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,8 +20,10 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	llmconfig "github.com/strrl/lapp/pkg/config"
+	"github.com/strrl/lapp/pkg/gcplog"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
+	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 )
 
@@ -45,7 +48,10 @@ type demoAPI struct {
 	apiKey   string
 	model    string
 	fetcher  workspace.ImportFetcher
-	jobs     *investigations
+	// victoriaLogsStreams lists matching VictoriaLogs streams; injectable
+	// so tests run without a VictoriaLogs instance.
+	victoriaLogsStreams func(context.Context, victorialogs.FetchRequest) ([]victorialogs.Stream, error)
+	jobs                *investigations
 }
 
 func newDemoAPI(root, apiKey, model string) *demoAPI {
@@ -125,6 +131,7 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
 	mux.HandleFunc("POST /api/demo/import-gcp", d.handleImportGCP)
 	mux.HandleFunc("GET /api/demo/gcp-recent", d.handleGCPRecent)
+	mux.HandleFunc("POST /api/demo/import-victorialogs", d.handleImportVictoriaLogs)
 	mux.HandleFunc("POST /api/demo/investigate", d.handleInvestigateStart)
 	mux.HandleFunc("GET /api/demo/investigate", d.handleInvestigateGet)
 	mux.HandleFunc("POST /api/demo/investigate/stop", d.handleInvestigateStop)
@@ -267,7 +274,7 @@ func writeLog(dir, name, service string, body io.Reader) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "service"), []byte(service), 0o644)
+	return writeService(dir, service)
 }
 
 type demoStatus struct {
@@ -291,7 +298,7 @@ func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
 	st := demoStatus{State: "queued", Named: d.apiKey != ""}
 	dir := filepath.Join(d.root, id)
 	if rec := latestImport(dir); rec != nil {
-		st.Source = "gcp"
+		st.Source = rec.Provider
 		switch rec.State {
 		case workspace.ImportRunStateFailed:
 			st.State, st.Step = "failed", "IMPORTING"
@@ -353,7 +360,7 @@ func (d *demoAPI) handleRenameService(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
-	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(name), 0o644); err != nil {
+	if err := writeService(dir, name); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -960,8 +967,28 @@ func cleanServiceName(name string) string {
 	return n
 }
 
+// serviceFileName holds the service a workspace's noise rules are saved
+// under; one workspace belongs to one service.
+const serviceFileName = "service"
+
+func writeService(dir, service string) error {
+	return os.WriteFile(filepath.Join(dir, serviceFileName), []byte(service), 0o644)
+}
+
+// prepareImportWorkspace creates logs/ and records the service for a
+// workspace that a provider import is about to fill.
+func prepareImportWorkspace(dir, service string) error {
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
+		return errors.Errorf("create logs dir: %w", err)
+	}
+	if err := writeService(dir, service); err != nil {
+		return errors.Errorf("write service: %w", err)
+	}
+	return nil
+}
+
 func readService(dir, fallback string) string {
-	if b, err := os.ReadFile(filepath.Join(dir, "service")); err == nil && strings.TrimSpace(string(b)) != "" {
+	if b, err := os.ReadFile(filepath.Join(dir, serviceFileName)); err == nil && strings.TrimSpace(string(b)) != "" {
 		return strings.TrimSpace(string(b))
 	}
 	return serviceFromFileName(fallback)
@@ -1254,7 +1281,8 @@ func summarize(xs []float64) *fieldStat {
 	return &fieldStat{Median: q(0.5), P95: q(0.95), Max: s[len(s)-1]}
 }
 
-const gcpImportLimit = 100000
+// providerImportLimit caps each provider import started from the web app.
+const providerImportLimit = 100000
 
 type gcpImportRequest struct {
 	Project string    `json:"project"`
@@ -1282,18 +1310,9 @@ func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("project is required"))
 		return
 	}
-	to, from := req.To, req.From
-	if from.IsZero() || to.IsZero() {
-		since, err := time.ParseDuration(req.Since)
-		if err != nil || since <= 0 {
-			writeError(w, http.StatusBadRequest, errors.New("choose a time range"))
-			return
-		}
-		to = time.Now().UTC()
-		from = to.Add(-since)
-	}
-	if !from.Before(to) {
-		writeError(w, http.StatusBadRequest, errors.New("the start must be before the end"))
+	from, to, err := importTimeRange(req.Since, req.From, req.To)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	svc := cleanServiceName(req.Service)
@@ -1305,11 +1324,7 @@ func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(svc), 0o644); err != nil {
+	if err := prepareImportWorkspace(dir, svc); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -1317,8 +1332,8 @@ func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
 		res, err := workspace.RunImport(ctx, workspace.ImportConfig{
-			Dir: dir, Provider: "gcp", Project: req.Project, Filter: req.Filter,
-			From: from, To: to, Limit: gcpImportLimit, Fetcher: d.fetcher,
+			Dir: dir, Provider: gcplog.Provider, Project: req.Project, Filter: req.Filter,
+			From: from, To: to, Limit: providerImportLimit, Fetcher: d.fetcher,
 		})
 		if err != nil {
 			slog.Error("gcp import failed", "workspace", id, "error", err)
@@ -1352,6 +1367,13 @@ func latestImport(dir string) *workspace.ImportRunRecord {
 func describeImport(rec *workspace.ImportRunRecord) string {
 	span := rec.To.Sub(rec.From).Round(time.Minute)
 	label := strings.TrimSuffix(strings.TrimSuffix(span.String(), "0s"), "0m")
+	if rec.Provider == victorialogs.Provider {
+		host := rec.URL
+		if u, err := url.Parse(rec.URL); err == nil && u.Host != "" {
+			host = u.Host
+		}
+		return fmt.Sprintf("VictoriaLogs · %s · last %s", host, label)
+	}
 	return fmt.Sprintf("GCP · %s · last %s", rec.Project, label)
 }
 
@@ -1368,6 +1390,9 @@ func (d *demoAPI) handleGCPRecent(w http.ResponseWriter, _ *http.Request) {
 	for _, e := range entries {
 		records, _ := workspace.ListImportRunRecords(filepath.Join(d.root, e.Name()))
 		for _, rec := range records {
+			if rec.Provider != gcplog.Provider {
+				continue
+			}
 			if rec.Project != "" && !seenP[rec.Project] {
 				seenP[rec.Project] = true
 				out.Projects = append(out.Projects, rec.Project)

@@ -82,6 +82,9 @@ message ImportRun {
   google.protobuf.Timestamp started_at = 13;
   google.protobuf.Timestamp finished_at = 14;
   ImportRunError error = 15;
+  // Base URL of the provider instance, without credentials. Set for
+  // providers addressed by URL, such as VictoriaLogs.
+  string url = 16;
 }
 
 message ImportRunMetadata {
@@ -241,11 +244,19 @@ message DeleteLogFileResponse {}
 
 message CreateImportRunRequest {
   string parent = 1;
+  // GCP project id, or for VictoriaLogs the optional tenant as
+  // "<AccountID>:<ProjectID>".
   string project = 2;
+  // Cloud Logging filter, or a LogsQL filter for VictoriaLogs.
   string filter = 3;
   google.protobuf.Timestamp from = 4;
   google.protobuf.Timestamp to = 5;
   int32 limit = 6;
+  // "gcp" (default when empty) or "victorialogs".
+  string provider = 7;
+  // VictoriaLogs base URL, without credentials. Credentials come from the
+  // server environment, never from the request.
+  string url = 8;
 }
 
 message GetImportRunRequest {
@@ -270,6 +281,8 @@ message RecentImportQuery {
   string project = 1;
   string filter = 2;
   google.protobuf.Timestamp last_used_at = 3;
+  string provider = 4;
+  string url = 5;
 }
 
 message ListRecentImportQueriesResponse {

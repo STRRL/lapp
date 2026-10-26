@@ -17,7 +17,7 @@ lapp app.log                                    # a file
 kubectl logs deploy/api | lapp --name api.log   # a pipe
 ```
 
-lapp finds the patterns and opens them in your browser. To pull logs from GCP Cloud Logging, use **Import logs** in the page.
+lapp finds the patterns and opens them in your browser. To pull logs from GCP Cloud Logging or VictoriaLogs, use **Import logs** in the page. A VictoriaLogs import splits logs by stream into one service each, named by the stream's `service.name`, `service`, `app` or `job` label, so each service keeps its own noise rules. VictoriaLogs credentials come from `VICTORIALOGS_BEARER_TOKEN`, or `VICTORIALOGS_USERNAME` and `VICTORIALOGS_PASSWORD`, in the environment or `.env` where lapp runs; the page never asks for them.
 
 1. **Start here.** A short list of the patterns most likely to be the problem: spiking errors first, then new errors, then other spikes.
 2. **Investigate.** Click **Investigate** on any of them. Your local Claude Code or Codex reads the filtered patterns and explains the likely cause, citing the patterns and times it relied on.
@@ -54,6 +54,7 @@ Needs Go 1.26+, Node.js and pnpm. Optional: `OPENROUTER_API_KEY` for readable pa
 | `lapp filter <file>` | Print the log without lines filtered as noise, using the service's saved rules |
 | `lapp summary <file> [--json]` | Print patterns, counts, spikes, new patterns and noise marks |
 | `lapp web` | Open the page without importing anything |
+| `lapp workspace import victorialogs --topic <t> --url <url> [--query <LogsQL>] (--since <dur> \| --from <ts> --to <ts>) [--limit <n>]` | Pull logs from VictoriaLogs into one workspace per service, `<t>-<service>`; `--limit` applies per service. Then run `lapp workspace discover --topic <t>-<service>` |
 
 The earlier `lapp workspace …` commands still work. The previous web UI is at `/classic`.
 

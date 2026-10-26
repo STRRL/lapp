@@ -106,6 +106,8 @@ type DemoField = {
 };
 type PatternDetail = { firstSeen?: string; lastSeen?: string; fields: DemoField[] };
 type DemoLine = { n: number; text: string };
+type ImportTab = "file" | "gcp" | "victorialogs";
+
 type ImportStatus = { state: string; step: string; error?: string; errorCode?: string; named: boolean; lines: number; batches?: string };
 
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
@@ -342,13 +344,17 @@ const STEPS = [
 ];
 
 function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replace?: boolean) => void }) {
-  const [tab, setTab] = useState<"file" | "gcp">(() => (new URLSearchParams(window.location.search).get("tab") === "gcp" ? "gcp" : "file"));
+  const [tab, setTab] = useState<ImportTab>(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "gcp" || t === "victorialogs" ? t : "file";
+  });
   const [file, setFile] = useState<File | null>(null);
   const [service, setService] = useState("");
   const [savedRules, setSavedRules] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [recent, setRecent] = useState<DemoWorkspace[] | null>(null);
   const [job, setJob] = useState<{ id: string; name: string } | null>(null);
+  const [serviceJobs, setServiceJobs] = useState<{ name: string; workspaces: StartedService[] } | null>(null);
   const [status, setStatus] = useState<ImportStatus | null>(null);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -415,6 +421,15 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
     }
   };
 
+  if (serviceJobs) {
+    return (
+      <>
+        <TopBar navigate={navigate} full={false} />
+        <ServicesProcessing name={serviceJobs.name} workspaces={serviceJobs.workspaces} navigate={navigate} onRetry={() => setServiceJobs(null)} />
+      </>
+    );
+  }
+
   if (job) {
     return (
       <>
@@ -445,9 +460,14 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
           <button className={tab === "gcp" ? "on" : ""} onClick={() => setTab("gcp")} role="tab" aria-selected={tab === "gcp"}>
             <CloudDownload className="ico" /> Import from GCP
           </button>
+          <button className={tab === "victorialogs" ? "on" : ""} onClick={() => setTab("victorialogs")} role="tab" aria-selected={tab === "victorialogs"}>
+            <CloudDownload className="ico" /> Import from VictoriaLogs
+          </button>
         </div>
 
-        {tab === "gcp" ? (
+        {tab === "victorialogs" ? (
+          <VictoriaLogsForm onStarted={(name, workspaces) => setServiceJobs({ name, workspaces })} />
+        ) : tab === "gcp" ? (
           <GCPForm
             onStarted={(id, name) => {
               setStatus(null);
@@ -708,6 +728,158 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
   );
 }
 
+type StartedService = { id: string; service: string };
+
+// VictoriaLogs imports split by service: one workspace per service, so
+// progress is a list rather than the single-file step view.
+function ServicesProcessing({
+  name,
+  workspaces,
+  navigate,
+  onRetry
+}: {
+  name: string;
+  workspaces: StartedService[];
+  navigate: (q: Record<string, string>, replace?: boolean) => void;
+  onRetry: () => void;
+}) {
+  const [statuses, setStatuses] = useState<Record<string, ImportStatus>>({});
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      const next: Record<string, ImportStatus> = {};
+      await Promise.all(
+        workspaces.map(async (w) => {
+          try {
+            next[w.id] = await getJSON<ImportStatus>(`/api/demo/status?ws=${encodeURIComponent(w.id)}`);
+          } catch (e) {
+            next[w.id] = { state: "failed", step: "", error: String(e), named: false, lines: 0 };
+          }
+        })
+      );
+      if (stop) return;
+      setStatuses(next);
+      if (workspaces.every((w) => next[w.id]?.state === "succeeded" || next[w.id]?.state === "failed")) return;
+      window.setTimeout(tick, 600);
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
+  }, [workspaces]);
+  const anyFailed = workspaces.some((w) => statuses[w.id]?.state === "failed");
+  return (
+    <main className="imp">
+      <h1>{name}</h1>
+      <p className="lead">
+        {workspaces.length} {workspaces.length === 1 ? "service" : "services"}, one workspace each. Saved noise rules for each service apply automatically.
+      </p>
+      <section className="recent">
+        {workspaces.map((w) => {
+          const st = statuses[w.id];
+          const done = st?.state === "succeeded";
+          const failed = st?.state === "failed";
+          const detail = failed ? st?.error || "Import failed." : done ? "Patterns ready" : st?.step === "IMPORTING" ? "Fetching from VictoriaLogs…" : st?.state === "running" ? "Finding patterns…" : "Waiting…";
+          return (
+            <button key={w.id} className="rrow" disabled={!done} onClick={() => navigate({ ws: w.id })}>
+              <b className="ell">{w.service}</b>
+              <span className="ell">{detail}</span>
+              <span className="tnum">{st?.lines ? `${fmtCount(st.lines)} lines` : ""}</span>
+              <span>
+                {done && <Check className="ico" />}
+                {failed && <X className="ico" />}
+                {!done && !failed && <LoaderCircle className="ico spin" />}
+              </span>
+              <ChevronRight className="ico" />
+            </button>
+          );
+        })}
+      </section>
+      {anyFailed && (
+        <div className="actions left">
+          <button className="btn primary" onClick={onRetry}>
+            Try again
+          </button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces: StartedService[]) => void }) {
+  const [url, setUrl] = useState("");
+  const [query, setQuery] = useState("");
+  const [range, setRange] = useState("1h");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [error, setError] = useState("");
+  const ready = url.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const start = async () => {
+    setError("");
+    const body =
+      range === "custom"
+        ? { url, query, from: new Date(from).toISOString(), to: new Date(to).toISOString() }
+        : { url, query, since: range };
+    try {
+      const res = await getJSON<{ workspaces: StartedService[] }>("/api/demo/import-victorialogs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const label = range === "custom" ? "custom range" : `last ${range}`;
+      let host = url;
+      try {
+        host = new URL(url).host;
+      } catch {
+        // keep the URL as typed
+      }
+      onStarted(`VictoriaLogs · ${host} · ${label}`, res.workspaces);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className="card form">
+      <div className="field">
+        <label htmlFor="vl-url">URL</label>
+        <input id="vl-url" className="mono" value={url} placeholder="http://localhost:9428" onChange={(e) => setUrl(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="vl-query">
+          LogsQL filter <span>optional, defaults to all logs</span>
+        </label>
+        <input id="vl-query" className="mono" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>Time range</label>
+        <div className="seg" role="tablist">
+          {RANGES.map((r) => (
+            <button key={r.key} className={range === r.key ? "on" : ""} onClick={() => setRange(r.key)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {range === "custom" && (
+          <div className="frow" style={{ marginTop: 8 }}>
+            <input type="datetime-local" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input type="datetime-local" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        )}
+        <p className="hint">
+          Each log stream becomes a service, named by its service.name, service, app, or job label. Credentials come from VICTORIALOGS_* variables where lapp runs. Stops at
+          100,000 lines per service.
+        </p>
+      </div>
+      {error && <p className="err">Couldn't import from VictoriaLogs. {error}</p>}
+      <div className="actions">
+        <button className="btn primary" disabled={!ready} onClick={start}>
+          Import
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- pattern list ----------
 
 function PatternList({
@@ -956,7 +1128,7 @@ function PatternList({
                 }}
               />
               <span className="tnum">
-                {data.workspace.title.startsWith("GCP · ") ? data.workspace.title : fileName} · {fmtCount(total)} lines
+                {/^(GCP|VictoriaLogs) · /.test(data.workspace.title) ? data.workspace.title : fileName} · {fmtCount(total)} lines
                 {data.from && data.to ? ` · ${formatTime(new Date(data.from))} – ${formatTime(new Date(data.to))}` : ""}
               </span>
               {data.workspace.limitReached && (

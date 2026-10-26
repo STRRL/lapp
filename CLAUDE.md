@@ -39,6 +39,7 @@ go run ./cmd/lapp/ workspace create <topic>
 go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile>
 go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin
 go run ./cmd/lapp/ workspace import gcp --topic <topic> --project <project> [--filter <filter>] (--since <duration> | --from <ts> --to <ts>) [--limit <n>]
+go run ./cmd/lapp/ workspace import victorialogs --topic <topic> --url <base-url> [--query <LogsQL>] (--since <duration> | --from <ts> --to <ts>) [--limit <n>] [--account-id <id> --project-id <id>]
 go run ./cmd/lapp/ workspace discover --topic <topic> [--model <model>]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
@@ -55,6 +56,8 @@ pkg/multiline/           Detect log entry boundaries, merge continuation lines
 pkg/pattern/             Drain-based log pattern discovery and template matching
 pkg/semantic/            LLM-based semantic labeling of Drain patterns
 pkg/workspace/           DiscoveryRun execution and run-scoped file writer
+pkg/gcplog/              GCP Cloud Logging fetch for ImportRuns
+pkg/victorialogs/        VictoriaLogs LogsQL fetch and stream listing for ImportRuns
 pkg/store/               DuckDB storage primitives (not yet on the CLI discovery path)
 pkg/config/              Model resolution (flag → $MODEL_NAME → default)
 pkg/analyzer/            Agentic log analysis via eino ADK + ACP providers
@@ -63,10 +66,10 @@ integration_test/        Integration tests against Loghub-2.0 datasets
 
 ### DiscoveryRun (discover)
 
-`add-log` is a pure copy into `logs/` and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
+`add-log` is a pure copy into `logs/` and never triggers discovery. `workspace import gcp` pulls a snapshot from GCP Cloud Logging through ADC credentials, lands it as enveloped NDJSON in `logs/`, and records provenance under `import-runs/<run-id>/record.json`; it never triggers discovery either. `workspace import victorialogs` lists the matching streams, maps each stream to a Service (its `service.name`, `service`, `app` or `job` label, else a short stream hash), and runs one ImportRun per Service into workspace `<topic>-<service>`, writing the raw VictoriaLogs NDJSON lines (`_msg`, `_time`) and the Service in the workspace `service` file; the ImportRun filter is narrowed to that Service's `_stream_id`s so it can be re-pulled. Each `workspace discover` starts a DiscoveryRun: reads ALL files in `logs/`, runs fresh Drain + semantic labeling, and writes run-scoped `patterns/` and `notes/`.
 When `lapp web` starts, it marks any previous `QUEUED` or `RUNNING` DiscoveryRuns and ImportRuns as failed because those local workers no longer exist.
 DiscoveryRun records persist structured `progress` and `error` fields; frontend code renders those facts into user-facing text.
-The web Imports tab starts GCP imports through standard Operations, shows ImportRun history and final facts, and fills project and filter fields from recent queries across all workspaces.
+The main page imports from VictoriaLogs into one new workspace per Service (`/api/demo/import-victorialogs`). The classic web Imports tab starts GCP or VictoriaLogs imports into the selected workspace through standard Operations, shows ImportRun history and final facts, and fills project and filter fields from recent queries across all workspaces.
 
 ```
 workspace.Discover(ctx, cfg)
@@ -92,6 +95,7 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 
 - `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace discover`
 - GCP ADC (`gcloud auth application-default login`): Required for `workspace import gcp`
+- `VICTORIALOGS_BEARER_TOKEN`, or `VICTORIALOGS_USERNAME` + `VICTORIALOGS_PASSWORD`: Optional credentials for VictoriaLogs imports (CLI and web); never part of the URL or the ImportRun record
 - `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
 - ACP provider credentials/login: Required for `workspace analyze` through the selected provider
 - `.env` file is auto-loaded via godotenv
