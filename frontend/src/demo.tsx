@@ -101,6 +101,18 @@ type PatternsResponse = {
   splitMode?: "MERGED" | "PER_LINE";
   physicalLineCount?: number;
   cappedEntryCount?: number;
+  time: TimeSource;
+};
+
+// Where line times came from; explains a missing volume chart.
+type TimeSource = {
+  format: "text" | "json" | "csv";
+  timed: number;
+  lines: number;
+  fields?: string[];
+  columns?: string[];
+  column?: string;
+  columnUnreadable?: boolean;
 };
 
 type FieldStat = { median: number; p95: number; max: number };
@@ -1251,38 +1263,25 @@ function PatternList({
 
           <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
 
-          <section className="card overview">
-            <header>
-              <h2>Remaining lines over time</h2>
-              <span className="sub tnum">{hasTrend ? `Per ${unitName(data.bucketSeconds)} · filtered patterns not shown` : ""}</span>
-              <div style={{ flex: 1 }} />
-              {hasTrend && (
-                <div className="legend">
-                  {visible.slice(0, 8).map((p) => (
-                    <span key={p.id}>
-                      <i style={{ background: colorOf(p) }} />
-                      {short(p.name, p.named ? 32 : 22)}
-                    </span>
-                  ))}
-                  {visible.length > 8 && (
-                    <span>
-                      <i style={{ background: OTHER }} />
-                      Other
-                    </span>
-                  )}
-                </div>
-              )}
-            </header>
-            {hasTrend ? (
-              <Overview data={data} patterns={visible} colorOf={colorOf} highlight={hoverId} />
-            ) : (
-              <div className="notime-chart">
-                <span className="sub">
-                  <Clock className="ico" /> Trend unavailable — no timestamps found in these lines
-                </span>
-              </div>
-            )}
-          </section>
+          <LogsVolume
+            data={data}
+            patterns={visible}
+            colorOf={colorOf}
+            highlight={hoverId}
+            onOpen={(id) => select(id)}
+            onChooseTimeColumn={async (column) => {
+              try {
+                const resp = await getJSON<PatternsResponse>(
+                  `/api/demo/time-column?ws=${encodeURIComponent(wsId)}${compareTo ? `&compare=${encodeURIComponent(compareTo)}` : ""}`,
+                  { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ column }) }
+                );
+                setData(resp);
+                if (!resp.time.columnUnreadable && resp.bucketSeconds > 0) toast(`Using ${column} as time. lapp will remember it for ${service}.`);
+              } catch (e) {
+                toast(e instanceof Error ? e.message : String(e));
+              }
+            }}
+          />
 
           {banner}
 
@@ -1900,41 +1899,133 @@ function useWidth<T extends HTMLElement>(fallback: number) {
   return [ref, w] as const;
 }
 
-function Overview({
+// ---------- logs volume ----------
+
+const VOLUME_COLLAPSED_KEY = "lapp-logs-volume-collapsed";
+const VOLUME_TOP = 8;
+// "Other" in the volume chart is darker than --s-other so it reads as a sum, not a pattern.
+const VOLUME_OTHER = "var(--ink-3)";
+const VOLUME_OTHER_ID = "~other";
+const VOLUME_UNMATCHED_ID = "~unmatched";
+// Candidate x-axis tick steps in seconds; the smallest that leaves room for a label wins.
+const TICK_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400];
+const TICK_MIN_PX = 36;
+
+type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean };
+
+function plural(n: number, word: string) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+// Axis numbers: 1000 → "1K", 1500 → "1.5K".
+function fmtAxis(v: number) {
+  if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
+  if (v >= 1e3) return `${+(v / 1e3).toFixed(1)}K`;
+  return Number.isInteger(v) ? String(v) : String(+v.toFixed(2));
+}
+
+// Top patterns by lines keep their list color; unmatched lines and the remaining patterns follow.
+function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: (p: DemoPattern) => string): VolumeSeries[] {
+  const top = patterns.slice(0, VOLUME_TOP);
+  const rest = patterns.slice(VOLUME_TOP);
+  const series: VolumeSeries[] = top.map((p) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets }));
+  if (data.unmatched.count > 0) series.push({ id: VOLUME_UNMATCHED_ID, name: "Unmatched lines", color: "var(--muted)", buckets: data.unmatched.buckets });
+  if (rest.length > 0) {
+    const n = data.unmatched.buckets.length;
+    const buckets = Array.from({ length: n }, (_, i) => rest.reduce((s, p) => s + p.buckets[i], 0));
+    series.push({ id: VOLUME_OTHER_ID, name: `Other (${plural(rest.length, "pattern")})`, color: VOLUME_OTHER, buckets, other: true });
+  }
+  return series;
+}
+
+function timeTicks(data: PatternsResponse, n: number, plotW: number) {
+  const unit = data.bucketSeconds;
+  const start = new Date(data.bucketStart!).getTime() / 1000;
+  const pxPerSec = plotW / Math.max(1, n * unit);
+  const step = TICK_STEPS.find((s) => s >= unit && s * pxPerSec >= TICK_MIN_PX) ?? TICK_STEPS[TICK_STEPS.length - 1];
+  const ticks: { at: number; label: string; day: boolean }[] = [];
+  for (let t = Math.ceil(start / step) * step; t < start + n * unit; t += step) {
+    const d = new Date(t * 1000);
+    const day = t % 86400 === 0;
+    ticks.push({ at: (t - start) / unit, label: step >= 86400 || day ? formatDate(d) : `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`, day });
+  }
+  return ticks;
+}
+
+function LogsVolume({
   data,
   patterns,
   colorOf,
-  highlight
+  highlight,
+  onOpen,
+  onChooseTimeColumn
 }: {
   data: PatternsResponse;
   patterns: DemoPattern[];
   colorOf: (p: DemoPattern) => string;
   highlight?: string | null;
+  onOpen: (id: string) => void;
+  onChooseTimeColumn: (column: string) => Promise<void>;
 }) {
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(VOLUME_COLLAPSED_KEY) === "1");
+  const toggle = () =>
+    setCollapsed((c) => {
+      localStorage.setItem(VOLUME_COLLAPSED_KEY, c ? "0" : "1");
+      return !c;
+    });
+  const hasTrend = data.bucketSeconds > 0;
+  const series = hasTrend ? volumeSeries(data, patterns, colorOf) : [];
+  return (
+    <section className={`card overview${collapsed ? " is-collapsed" : ""}`}>
+      <header>
+        <button className="vol-toggle" aria-expanded={!collapsed} aria-label={collapsed ? "Show logs volume" : "Hide logs volume"} onClick={toggle}>
+          <ChevronDown className="ico" />
+        </button>
+        <h2>Logs volume</h2>
+        <span className="sub tnum">{hasTrend ? `Per ${unitName(data.bucketSeconds)} · hidden noise not shown` : ""}</span>
+        <div style={{ flex: 1 }} />
+        {hasTrend && !collapsed && (
+          <div className="legend">
+            {series.map((s) => (
+              <span key={s.id}>
+                <i style={{ background: s.color }} />
+                {s.other || s.id === VOLUME_UNMATCHED_ID ? s.name : short(s.name, 32)}
+              </span>
+            ))}
+          </div>
+        )}
+      </header>
+      {!collapsed &&
+        (hasTrend ? (
+          <Overview data={data} series={series} highlight={highlight} onOpen={(id) => onOpen(id === VOLUME_UNMATCHED_ID ? "unmatched" : id)} />
+        ) : (
+          <NoTimes data={data} onChoose={onChooseTimeColumn} />
+        ))}
+    </section>
+  );
+}
+
+function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse; series: VolumeSeries[]; highlight?: string | null; onOpen: (id: string) => void }) {
   const [ref, W] = useWidth<HTMLDivElement>(1000);
-  const [hover, setHover] = useState<number | null>(null);
+  const [hover, setHover] = useState<{ i: number; id: string | null } | null>(null);
   const n = data.unmatched.buckets.length;
-  // Stacked in list order, largest at the bottom; unmatched lines on top.
-  const series = [
-    ...patterns.map((p) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets })),
-    { id: "~unmatched", name: "Unmatched lines", color: "var(--muted)", buckets: data.unmatched.buckets }
-  ];
   const totals = Array.from({ length: n }, (_, i) => series.reduce((s, x) => s + x.buckets[i], 0));
   const maxV = niceMax(Math.max(1, ...totals));
-  const H = 132;
+  const H = 160;
   const top = 6;
-  const padL = 36;
+  const padL = 40;
   const bw = (W - padL) / Math.max(n, 1);
-  const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - padL) / 120))));
+  const gap = bw > 4 ? 2 : 0;
   const y = (v: number) => top + H - (v / maxV) * H;
+  const ticks = timeTicks(data, n, W - padL);
+  const tipLeft = hover ? padL + (hover.i + 1) * bw + 8 : 0;
   return (
     <div className="chart-wrap" ref={ref} onMouseLeave={() => setHover(null)}>
-      <svg width={W} height={H + top + 22} role="img" aria-label="Remaining lines over time, stacked by pattern">
+      <svg width={W} height={H + top + 22} role="img" aria-label="Logs volume over time, stacked by pattern">
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
             <text x={padL - 8} y={y(maxV * f) + 4} textAnchor="end" className="axis">
-              {fmtNum(maxV * f)}
+              {fmtAxis(maxV * f)}
             </text>
           </g>
         ))}
@@ -1942,46 +2033,128 @@ function Overview({
           let acc = 0;
           const x = padL + i * bw;
           return (
-            <g key={i} onMouseEnter={() => setHover(i)}>
-              <rect x={x} y={top} width={bw} height={H} fill={hover === i ? "var(--ring)" : "transparent"} />
+            <g key={i} onMouseEnter={() => setHover({ i, id: null })}>
+              <rect x={x} y={top} width={bw} height={H} fill={hover?.i === i ? "var(--ring)" : "transparent"} />
               {series.map((s) => {
                 const v = s.buckets[i];
                 if (!v) return null;
                 const y0 = y(acc);
                 acc += v;
-                const h = Math.max(0.5, y0 - y(acc) - (acc > v ? 1 : 0));
                 return (
-                  <rect key={s.id} x={x + 1} width={Math.max(1, bw - 2)} y={y(acc)} height={h} rx={1.5} fill={s.color} opacity={highlight && highlight !== s.id ? 0.3 : 1} />
+                  <rect
+                    key={s.id}
+                    className={s.other ? undefined : "vol-seg"}
+                    x={x + gap / 2}
+                    width={Math.max(1, bw - gap)}
+                    y={y(acc)}
+                    height={Math.max(0.5, y0 - y(acc))}
+                    fill={s.color}
+                    opacity={highlight && highlight !== s.id ? 0.3 : 1}
+                    onMouseEnter={() => setHover({ i, id: s.id })}
+                    onMouseLeave={() => setHover({ i, id: null })}
+                    onClick={s.other ? undefined : () => onOpen(s.id)}
+                  />
                 );
               })}
-              {i % every === 0 && (
-                <text x={x} y={H + top + 16} className="axis">
-                  {bucketLabel(data, i)}
-                </text>
-              )}
+            </g>
+          );
+        })}
+        {ticks.map((t) => {
+          const x = padL + t.at * bw;
+          return (
+            <g key={t.at}>
+              <line x1={x} x2={x} y1={top + H} y2={top + H + 4} stroke="var(--line-strong)" />
+              <text x={x} y={H + top + 16} textAnchor={x < padL + 16 ? "start" : x > W - 20 ? "end" : "middle"} className={t.day ? "axis lbl" : "axis"}>
+                {t.label}
+              </text>
             </g>
           );
         })}
       </svg>
-      {hover !== null && totals[hover] > 0 && (
-        <div className="tooltip tnum" style={{ left: Math.min(padL + (hover + 1) * bw + 8, W - 240), top: 8 }}>
+      {hover !== null && totals[hover.i] > 0 && (
+        <div className="tooltip tnum" style={{ left: tipLeft + 240 > W ? Math.max(0, tipLeft - bw - 256) : tipLeft, top: 8, pointerEvents: "none" }}>
           <div className="tt-h">
-            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).split(" ").pop()}`}
+            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover.i) : `${bucketLabel(data, hover.i)} – ${bucketLabel(data, hover.i + 1).split(" ").pop()}`}
           </div>
           {series
-            .filter((s) => s.buckets[hover] > 0)
-            .sort((a, b) => b.buckets[hover] - a.buckets[hover])
-            .slice(0, 10)
+            .filter((s) => s.buckets[hover.i] > 0)
+            .sort((a, b) => Number(!!a.other) - Number(!!b.other) || b.buckets[hover.i] - a.buckets[hover.i])
             .map((s) => (
-              <div key={s.id} className="tt-row">
+              <div key={s.id} className={`tt-row${hover.id === s.id ? " is-on" : ""}`}>
                 <i style={{ background: s.color }} />
                 <span>{short(s.name, 38)}</span>
-                <b>{s.buckets[hover]}</b>
+                <b>{fmtCount(s.buckets[hover.i])}</b>
               </div>
             ))}
-          <div className="tt-f">Total {totals[hover]} lines</div>
+          <div className="tt-f">Total {fmtCount(totals[hover.i])} lines</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Says why there is no volume chart; for CSV and JSON files without a recognized time,
+// lets the user pick the time column.
+function NoTimes({ data, onChoose }: { data: PatternsResponse; onChoose: (column: string) => Promise<void> }) {
+  const t = data.time;
+  const [busy, setBusy] = useState<string | null>(null);
+  const partial = t.timed > 0;
+  // The server lists columns only when no time was recognized on its own.
+  const canPick = (t.format === "csv" || t.format === "json") && (t.columns?.length ?? 0) > 0;
+  let reason: React.ReactNode;
+  if (partial) {
+    reason = `Only ${fmtCount(t.timed)} of ${fmtCount(t.lines)} lines have a time, too few to draw a chart.`;
+  } else if (t.format === "json") {
+    reason = `None of the JSON lines have a time field lapp looks for (${(t.fields ?? []).join(", ")}).${canPick ? " Pick the time field below." : ""}`;
+  } else if (t.format === "csv" && canPick) {
+    reason = "None of the columns look like a time lapp can read. Pick the time column below.";
+  } else {
+    reason = (
+      <>
+        None of the lines start with a time lapp can read, like <span className="mono">2026-10-26 05:41:47</span> or{" "}
+        <span className="mono">Oct 26 05:41:47</span>.
+      </>
+    );
+  }
+  const choose = async (column: string) => {
+    setBusy(column);
+    try {
+      await onChoose(column);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const bad = !busy && t.columnUnreadable && !!t.column;
+  return (
+    <div className="notime-chart">
+      <Clock className="ico" />
+      <div className="notime-text">
+        <div className="notime-main">No timestamps found, so there's no volume chart. Line counts are still below.</div>
+        <div className="sub">{reason}</div>
+        {canPick && (
+          <div className="timecol">
+            <label className="sel">
+              <span>Time column</span>
+              <select className={bad ? "is-bad" : undefined} value={busy ?? t.column ?? ""} disabled={!!busy} onChange={(e) => choose(e.target.value)}>
+                <option value="" disabled>
+                  Choose…
+                </option>
+                {t.columns!.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {busy && <LoaderCircle className="ico spin" aria-label="Reading times" />}
+          </div>
+        )}
+        {canPick && bad && (
+          <div className="timecol-err">
+            <OctagonAlert className="ico" /> Couldn't read times in {t.column}. Try another column.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

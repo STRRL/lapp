@@ -75,3 +75,21 @@ func TestStartShapeIgnoresPrecisionAndZone(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTime(t *testing.T) {
+	cases := []struct {
+		value string
+		ts    time.Time
+	}{
+		{"2026-10-25 22:29:46.046 UTC", time.Date(2026, 10, 25, 22, 29, 46, 46e6, time.UTC)},
+		{"2026-10-25T22:29:46Z", time.Date(2026, 10, 25, 22, 29, 46, 0, time.UTC)},
+		{" 2026/10/25 22:29:46 ", time.Date(2026, 10, 25, 22, 29, 46, 0, time.UTC)},
+		{"checkout", time.Time{}},
+		{"", time.Time{}},
+	}
+	for _, c := range cases {
+		if got := ParseTime(c.value); !got.Equal(c.ts) {
+			t.Errorf("ParseTime(%q) = %v, want %v", c.value, got, c.ts)
+		}
+	}
+}

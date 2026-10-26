@@ -18,6 +18,12 @@ var messageFields = []string{"_msg", "message", "msg", "log", "error"}
 // envelope timestamp (ADR 0006), which has no "_time".
 var timestampFields = []string{"_time", "ts"}
 
+// TimestampFields lists the top-level fields a time is read from, in order,
+// so the UI can name them when none is present.
+func TimestampFields() []string {
+	return append([]string(nil), timestampFields...)
+}
+
 // severityFields are checked in order; the first string value wins.
 // Numeric levels are ignored in v1.
 var severityFields = []string{"severity", "level"}

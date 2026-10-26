@@ -129,20 +129,24 @@ type demoPatternsResponse struct {
 	// SplitMode is the run's workspace.SplitMode: "MERGED" when continuation
 	// lines joined timestamped entries, "PER_LINE" when a text file had too
 	// few timestamps at line starts to merge entries.
-	SplitMode         string `json:"splitMode,omitempty"`
-	PhysicalLineCount int    `json:"physicalLineCount,omitempty"`
-	CappedEntryCount  int    `json:"cappedEntryCount,omitempty"`
+	SplitMode         string         `json:"splitMode,omitempty"`
+	PhysicalLineCount int            `json:"physicalLineCount,omitempty"`
+	CappedEntryCount  int            `json:"cappedEntryCount,omitempty"`
+	Time              demoTimeSource `json:"time"`
 }
 
-// noiseRules are a service's saved noise decisions, keyed by pattern
-// template: Filtered patterns are hidden, NotNoise patterns are never
-// suggested as noise again.
+// noiseRules are a service's saved settings: noise decisions keyed by
+// pattern template (Filtered patterns are hidden, NotNoise patterns are
+// never suggested as noise again) and the time column picked when lapp
+// found no time on its own.
 type noiseRules struct {
 	Filtered []string `json:"filtered"`
 	NotNoise []string `json:"notNoise"`
 	// Shown is the legacy name for NotNoise (suggested noise kept visible);
 	// it is read once and folded into NotNoise.
 	Shown []string `json:"shown,omitempty"`
+	// TimeColumn is the CSV column chosen to time entries.
+	TimeColumn string `json:"timeColumn,omitempty"`
 }
 
 func (d *demoAPI) register(mux *http.ServeMux) {
@@ -150,6 +154,7 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/demo/import", d.handleImport)
 	mux.HandleFunc("GET /api/demo/patterns", d.handlePatterns)
 	mux.HandleFunc("POST /api/demo/rules", d.handleRules)
+	mux.HandleFunc("POST /api/demo/time-column", d.handleTimeColumn)
 	mux.HandleFunc("GET /api/demo/status", d.handleStatus)
 	mux.HandleFunc("GET /api/demo/service-rules", d.handleServiceRules)
 	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
@@ -461,7 +466,6 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	}
 	a.owner = make([]int, len(lines))
 	counts := make([]int, len(templates))
-	var from, to time.Time
 	for i, tl := range lines {
 		a.owner[i] = -1
 		if t, ok := pattern.MatchTemplate(tl.DrainLine(), templates); ok {
@@ -469,7 +473,12 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 			a.owner[i] = idx
 			counts[idx]++
 		}
-		if tl.Timestamp != nil {
+	}
+	rules, rulesSaved := d.loadRules(a.service)
+	a.resp.Time = applyTimeSource(lines, rules.TimeColumn)
+	var from, to time.Time
+	for _, tl := range lines {
+		if tl.Timestamp != nil && a.resp.Time.enoughTimes() {
 			if from.IsZero() || tl.Timestamp.Before(from) {
 				from = *tl.Timestamp
 			}
@@ -490,7 +499,6 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	}
 	a.resp.BucketSeconds = bucketSeconds
 
-	rules, rulesSaved := d.loadRules(a.service)
 	a.resp.RulesSaved = rulesSaved
 	a.resp.KeySet = d.apiKey != ""
 	a.resp.NamingApproved = d.namingApproved(a.service)
@@ -871,6 +879,38 @@ func formatPercent(share float64) string {
 
 func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 	a, err := d.analyzeWith(r.Context(), r.URL.Query().Get("ws"), r.URL.Query().Get("compare"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, a.resp)
+}
+
+// handleTimeColumn saves the service's time column and returns the
+// recomputed patterns, so the chart appears without another request.
+func (d *demoAPI) handleTimeColumn(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	a, err := d.analyze(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		Column string `json:"column"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.Column != "" && !contains(a.resp.Time.Columns, body.Column) {
+		writeError(w, http.StatusBadRequest, errors.New("unknown time column "+body.Column))
+		return
+	}
+	if err := d.updateRules(a.service, func(r *noiseRules) { r.TimeColumn = body.Column }); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	a, err = d.analyzeWith(r.Context(), id, r.URL.Query().Get("compare"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
