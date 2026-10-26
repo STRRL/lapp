@@ -19,6 +19,8 @@ kubectl logs deploy/api | lapp --name api.log   # a pipe
 
 lapp reads plain text, NDJSON, and Grafana Explore exports (Download as CSV or JSON). It finds the patterns and opens them in your browser. To pull logs from GCP Cloud Logging or VictoriaLogs, use **Import logs** in the page. A VictoriaLogs import splits logs by stream into one service each, named by the stream's `service.name`, `service`, `app` or `job` label, so each service keeps its own noise rules. VictoriaLogs credentials come from `VICTORIALOGS_BEARER_TOKEN`, or `VICTORIALOGS_USERNAME` and `VICTORIALOGS_PASSWORD`, in the environment or `.env` where lapp runs; the page never asks for them.
 
+Tested against a local VictoriaLogs; not yet verified through a real Grafana proxy.
+
 If VictoriaLogs is only reachable through Grafana, point `--url` at the Grafana data source proxy and use a Grafana service account token:
 
 If a gateway such as Cloudflare Access sits in front, add its headers with `VICTORIALOGS_HEADERS` (`Name: value`, separated by `;`), preferably in `.env` so the values stay out of shell history:
