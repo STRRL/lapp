@@ -921,6 +921,8 @@ function PatternList({
             )}
           </section>
 
+          <StartHere data={data} items={startHere(visible)} colorOf={colorOf} onOpen={(p) => select(p.id)} />
+
           {banner}
 
           <div className="toolbar">
@@ -1077,6 +1079,88 @@ function PatternList({
 
 function short(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
+const isError = (p: DemoPattern) => p.level === "error" || p.level === "fatal";
+
+// "Start here": rule-based shortlist of the patterns most likely to be the
+// problem — spiking errors, new errors, other spikes, other new (max 5).
+export function startHere(patterns: DemoPattern[]) {
+  const spike = (p: DemoPattern) => (p.spikeAt !== undefined ? p.buckets[p.spikeAt] : 0);
+  const groups = [
+    patterns.filter((p) => isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
+    patterns.filter((p) => isError(p) && p.spikeAt === undefined && p.newAt !== undefined).sort((a, b) => b.count - a.count),
+    patterns.filter((p) => !isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
+    patterns.filter((p) => !isError(p) && p.spikeAt === undefined && p.newAt !== undefined).sort((a, b) => b.count - a.count)
+  ];
+  return groups.flat().slice(0, 5);
+}
+
+function startReason(p: DemoPattern, data: PatternsResponse) {
+  const parts: string[] = [];
+  if (isError(p)) parts.push("Error");
+  if (p.spikeAt !== undefined) parts.push(`spiked to ${p.buckets[p.spikeAt]}${perUnit(data.bucketSeconds)} ${atBucket(data, p.spikeAt)}`);
+  else if (p.newAt !== undefined) parts.push(`first seen ${bucketLabel(data, p.newAt)}`);
+  const text = parts.join(" · ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function StartHere({
+  data,
+  items,
+  colorOf,
+  onOpen,
+  onInvestigate
+}: {
+  data: PatternsResponse;
+  items: DemoPattern[];
+  colorOf: (p: DemoPattern) => string;
+  onOpen: (p: DemoPattern) => void;
+  onInvestigate?: (p: DemoPattern) => void;
+}) {
+  return (
+    <section className="card starthere">
+      <header>
+        <h2>Start here</h2>
+        <span className="sub">Patterns most likely to be the problem</span>
+      </header>
+      {items.length === 0 ? (
+        <p className="sub sh-empty">Nothing stands out: no errors, spikes or new patterns.</p>
+      ) : (
+        items.map((p) => (
+          <div key={p.id} className="sh-row" role="button" tabIndex={0} onClick={() => onOpen(p)} onKeyDown={(e) => e.key === "Enter" && onOpen(p)}>
+            <i className="dot" style={{ background: colorOf(p) }} />
+            <div className="sh-main">
+              {p.named ? (
+                <b className="ell">{p.name}</b>
+              ) : (
+                <b className="unnamed ell">
+                  <Template text={p.name} />
+                </b>
+              )}
+              <span className={`sh-why ${isError(p) ? "is-err" : ""}`}>
+                {isError(p) ? <OctagonAlert className="ico" /> : p.spikeAt !== undefined ? <TrendingUp className="ico" /> : <Sparkles className="ico" />}
+                {startReason(p, data)}
+              </span>
+            </div>
+            <span className="sh-count tnum">{fmtCount(p.count)} lines</span>
+            {onInvestigate && (
+              <button
+                className="btn sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInvestigate(p);
+                }}
+              >
+                Investigate
+              </button>
+            )}
+            <ChevronRight className="ico cell-chev" />
+          </div>
+        ))
+      )}
+    </section>
+  );
 }
 
 function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => void }) {

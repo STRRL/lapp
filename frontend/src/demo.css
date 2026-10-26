@@ -111,3 +111,17 @@
 /* Filtered rows: count and share both dimmed, in both themes. */
 .dz .prow.filtered .cell-count b, .dz .prow.filtered .cell-count span { color: var(--ink-3); }
 .dz .field .seg { display: inline-flex; }
+
+/* Start here card */
+.dz .starthere { padding: 12px 16px 6px; }
+.dz .starthere header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.dz .sh-row { display: grid; grid-template-columns: 10px minmax(0,1fr) auto auto 16px; align-items: center; gap: 12px; padding: 8px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+.dz .sh-row:first-of-type { border-top: 0; }
+.dz .sh-row:hover { background: var(--surface-hover); }
+.dz .sh-main { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.dz .sh-main b { font-weight: 600; font-size: 14px; }
+.dz .sh-why { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--serious-text); }
+.dz .sh-why.is-err { color: var(--critical-text); }
+.dz .sh-why .ico { width: 12px; height: 12px; }
+.dz .sh-count { font-size: 12px; color: var(--ink-2); }
+.dz .sh-empty { margin: 6px 0 10px; }
