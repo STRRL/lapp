@@ -204,6 +204,7 @@ function ImportPage({ onOpen }: { onOpen: (id: string) => void }) {
         >
           <Upload size={28} />
           {state === "working" ? <p>Finding patterns…</p> : <p>Drop a log file here, or click to choose one</p>}
+          <span className="d-muted d-small">Plain text or NDJSON (one JSON object per line)</span>
           <input ref={inputRef} type="file" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         </div>
         {state === "failed" && <p className="d-error">Couldn't read this file. {error}</p>}
