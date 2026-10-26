@@ -106,7 +106,7 @@ func TestDemoCompareWithPreviousImport(t *testing.T) {
 	if got["payment"] != "new" || got["cache"] != "up" {
 		t.Fatalf("sinceLast = %v", got)
 	}
-	if len(c.Gone) != 1 || !strings.Contains(c.Gone[0].Template, "old job done") {
+	if c.New != 1 || c.Changed != 1 || len(c.Gone) != 1 || !strings.Contains(c.Gone[0].Template, "old job done") {
 		t.Fatalf("gone = %+v", c.Gone)
 	}
 }

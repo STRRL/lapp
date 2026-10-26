@@ -207,7 +207,7 @@ func writeInvestigationContext(dir string, a *analysis, filteredOverride []strin
 	total := resp.Workspace.LineCount
 	fmt.Fprintf(&b, "# lapp investigation context\n\nService: %s\nLogs: %s\nLines: %d\n", resp.Workspace.Service, resp.Workspace.Title, total)
 	if resp.From != nil && resp.To != nil {
-		fmt.Fprintf(&b, "Time range (UTC): %s – %s\nTime slots: %s each\n", fmtTime(*resp.From), fmtTime(*resp.To), bucketUnit(resp.BucketSeconds))
+		fmt.Fprintf(&b, "Time range: %s – %s\nTime slots: %s each\n", fmtTime(*resp.From), fmtTime(*resp.To), bucketUnit(resp.BucketSeconds))
 	}
 	b.WriteString("\nPatterns are listed by line count. Cite them as [P<n>] or [P<n> · <time range>] using the times shown here.\n")
 	b.WriteString("All numbers below are exactly what the lapp page shows. Use only these numbers in your answer.\n")
@@ -239,7 +239,7 @@ func writeInvestigationContext(dir string, a *analysis, filteredOverride []strin
 			b.WriteString("- lines per slot (slots not listed had 0): " + slotCounts(resp, p.Buckets) + "\n")
 		}
 		for _, f := range a.patternDetail(i).Fields {
-			b.WriteString("- " + describeField(f) + "\n")
+			b.WriteString("- " + describeField(f, p.Template) + "\n")
 		}
 		b.WriteString("- samples:\n")
 		for _, line := range p.Samples[:min(3, len(p.Samples))] {
@@ -314,7 +314,7 @@ Answer in Markdown with exactly these sections, in this order:
 
 # <one line naming the problem>
 ## Likely cause
-At most 3 short sentences, plain language. It is a hypothesis; say so if the evidence is thin.
+At most 3 sentences, each 25 words or fewer, plain language. It is a hypothesis; say so if the evidence is thin.
 ## Timeline
 - <time> — <what happened> [P<n>]
 ## Evidence
@@ -328,6 +328,8 @@ Rules:
 - Every Timeline and Evidence bullet cites at least one pattern as [P<n>] or [P<n> · <time range>], using ids and times from context.md. Leave out the time range when the fact covers the whole log.
 - In prose, refer to a pattern by its display name or a few words of its text, never by a bare id like P3; ids only appear inside the [ ] citations.
 - Every number you write must be copied verbatim from context.md. Do not compute new numbers (no ratios like "6×", no differences, no ranges you worked out). If a number you want is not there, describe it in words ("several times higher").
+- Write times exactly as context.md does (e.g. "Dec 4 06:00"); never add a time zone.
+- When you mention a variable part of a pattern, say where it is in the text (e.g. "the slot number after \"scoreboard slot\""), never "field 2".
 - No preamble before the first heading.`, dir)
 }
 
@@ -357,7 +359,8 @@ func (d *demoAPI) loadInvestigation(id string) (investigation, bool) {
 }
 
 // describeField renders one field's metrics as the page shows them.
-func describeField(f demoField) string {
+func describeField(f demoField, template string) string {
+	where := fieldWhere(template, f.Index-1)
 	if f.Kind == "text" {
 		total := f.Other
 		for _, v := range f.Breakdown {
@@ -370,10 +373,10 @@ func describeField(f demoField) string {
 		if f.Other > 0 {
 			parts = append(parts, fmt.Sprintf("other=%d", f.Other))
 		}
-		return fmt.Sprintf("field %d (<*> #%d) values, %d distinct shown of %d lines: %s", f.Index, f.Index, len(f.Breakdown), total, strings.Join(parts, ", "))
+		return fmt.Sprintf("values of %s (top %d of %d lines): %s", where, len(f.Breakdown), total, strings.Join(parts, ", "))
 	}
 	o := f.Overall
-	return fmt.Sprintf("field %d (<*> #%d) numbers%s: median %g, p95 %g, max %g", f.Index, f.Index, unitSuffix(f.Unit), o.Median, o.P95, o.Max)
+	return fmt.Sprintf("numbers in %s%s: median %g, p95 %g, max %g", where, unitSuffix(f.Unit), o.Median, o.P95, o.Max)
 }
 
 func unitSuffix(u string) string {
@@ -438,4 +441,25 @@ func unverifiedNumbers(answer, context string) []string {
 		out = append(out, n)
 	}
 	return out
+}
+
+// fieldWhere names a variable part by its place in the template, e.g.
+// `the <*> after "scoreboard slot"`, so answers never say "field 2".
+func fieldWhere(template string, index int) string {
+	parts := strings.Split(template, "<*>")
+	if index < 0 || index+1 >= len(parts) {
+		return "a variable part"
+	}
+	before := strings.Fields(parts[index])
+	if len(before) > 3 {
+		before = before[len(before)-3:]
+	}
+	if len(before) > 0 {
+		return fmt.Sprintf("the <*> after %q", strings.Join(before, " "))
+	}
+	after := strings.Fields(parts[index+1])
+	if len(after) > 3 {
+		after = after[:3]
+	}
+	return fmt.Sprintf("the <*> before %q", strings.Join(after, " "))
 }

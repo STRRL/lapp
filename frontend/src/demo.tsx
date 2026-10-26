@@ -58,6 +58,20 @@ type DemoPattern = {
   spikeAt?: number;
   newAt?: number;
   samples: string[];
+  sinceLast?: "new" | "up" | "down";
+  ratio?: number;
+  prevCount?: number;
+};
+
+type CompareInfo = {
+  previousId: string;
+  previousTitle: string;
+  previousAt: string;
+  new: number;
+  changed: number;
+  gone: { template: string; name: string; count: number }[];
+  options: { id: string; title: string; at: string }[];
+  byRate: boolean;
 };
 
 type PatternsResponse = {
@@ -72,6 +86,7 @@ type PatternsResponse = {
   named: boolean;
   patterns: DemoPattern[];
   unmatched: { count: number; buckets: number[]; samples: string[] };
+  compare?: CompareInfo;
 };
 
 type FieldStat = { median: number; p95: number; max: number };
@@ -693,14 +708,21 @@ function PatternList({
   const [inv, setInv] = useState<{ pattern?: DemoPattern; question: string; reason?: string; spike?: boolean; key: number; jobId?: string } | null>(null);
   const [invHidden, setInvHidden] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [compareTo, setCompareTo] = useState("");
+  const [compareFilter, setCompareFilter] = useState<"new" | "changed" | null>(null);
+  const [goneOpen, setGoneOpen] = useState(false);
+  const goneRef = useRef<HTMLButtonElement>(null);
+  const loaded = useRef(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const filteredGroupRef = useRef<HTMLButtonElement>(null);
   const { show: toast, node: toastNode } = useToast();
 
   useEffect(() => {
-    getJSON<PatternsResponse>(`/api/demo/patterns?ws=${encodeURIComponent(wsId)}`)
+    getJSON<PatternsResponse>(`/api/demo/patterns?ws=${encodeURIComponent(wsId)}${compareTo ? `&compare=${encodeURIComponent(compareTo)}` : ""}`)
       .then((d) => {
         setData(d);
+        if (loaded.current) return;
+        loaded.current = true;
         setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
         const jobId = new URLSearchParams(window.location.search).get("investigate");
         if (jobId) {
@@ -714,7 +736,7 @@ function PatternList({
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [wsId]);
+  }, [wsId, compareTo]);
 
   // Colors are assigned once by total-line rank and never repaint.
   const rank = useMemo(() => {
@@ -765,6 +787,8 @@ function PatternList({
 
   const hasTrend = !!data && data.bucketSeconds > 0;
   const matches = (p: DemoPattern) => {
+    if (compareFilter === "new" && p.sinceLast !== "new") return false;
+    if (compareFilter === "changed" && p.sinceLast !== "up" && p.sinceLast !== "down") return false;
     if (errorsOnly && !["error", "warn", "fatal"].includes(p.level)) return false;
     if (!query) return true;
     const q = query.toLowerCase();
@@ -864,7 +888,7 @@ function PatternList({
         <VolumeX className="ico" />
         <div>
           <b>
-            lapp filtered {autoNoise.length} {autoNoise.length === 1 ? "pattern" : "patterns"} that look like noise ({fmtCount(autoNoiseLines)} lines,{" "}
+            lapp filtered {autoNoise.length} {autoNoise.length === 1 ? "pattern that looks" : "patterns that look"} like noise ({fmtCount(autoNoiseLines)} lines,{" "}
             {formatPercent(autoNoiseLines, total)}).
           </b>{" "}
           Based on share and repetition, not log level. Save to apply the same rules to <b>{service}</b> logs next time.
@@ -938,6 +962,21 @@ function PatternList({
               <Download className="ico" /> Export {fmtCount(left)} lines
             </a>
           </div>
+          {data.compare && (
+            <CompareRow
+              c={data.compare}
+              filter={compareFilter}
+              onChoose={(id) => {
+                setCompareTo(id);
+                setCompareFilter(null);
+              }}
+              onFilter={(f) => setCompareFilter((cur) => (cur === f ? null : f))}
+              onGone={() => {
+                setGoneOpen(true);
+                window.setTimeout(() => goneRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+              }}
+            />
+          )}
 
           {!data.named && (
             <div className="banner">
@@ -1112,6 +1151,34 @@ function PatternList({
                   ))}
               </>
             )}
+            {data.compare && data.compare.gone.length > 0 && (
+              <>
+                <button ref={goneRef} className="group-h filt grouptoggle" onClick={() => setGoneOpen((v) => !v)} aria-expanded={goneOpen}>
+                  {goneOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Gone since last time · {data.compare.gone.length} patterns
+                </button>
+                {goneOpen &&
+                  data.compare.gone.map((g) => (
+                    <div key={g.template} className="prow gone" role="row">
+                      <span />
+                      <div className="cell-main">
+                        <div className="pname nowrap">
+                          <i className="dot" style={{ background: OTHER }} />
+                          <b className="unnamed ell">
+                            <Template text={g.name} />
+                          </b>
+                        </div>
+                      </div>
+                      <span className="col-level" />
+                      <span />
+                      <div className="cell-count tnum">
+                        <b>0</b>
+                        <span>{fmtCount(g.count)} last time</span>
+                      </div>
+                      <span />
+                    </div>
+                  ))}
+              </>
+            )}
           </section>
         </section>
         {inv && !selected && (
@@ -1173,25 +1240,31 @@ function short(s: string, n: number) {
 }
 
 const isError = (p: DemoPattern) => p.level === "error" || p.level === "fatal";
+const isNew = (p: DemoPattern) => p.newAt !== undefined || p.sinceLast === "new";
 
 // "Start here": rule-based shortlist of the patterns most likely to be the
 // problem — spiking errors, new errors, other spikes, other new (max 5).
 export function startHere(patterns: DemoPattern[]) {
   const spike = (p: DemoPattern) => (p.spikeAt !== undefined ? p.buckets[p.spikeAt] : 0);
+  const vsLast = (p: DemoPattern) => isError(p) && p.spikeAt === undefined && (p.sinceLast === "new" || p.sinceLast === "up");
   const groups = [
     patterns.filter((p) => isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
-    patterns.filter((p) => isError(p) && p.spikeAt === undefined && p.newAt !== undefined).sort((a, b) => b.count - a.count),
+    patterns.filter(vsLast).sort((a, b) => (b.ratio ?? 99) - (a.ratio ?? 99) || b.count - a.count),
+    patterns.filter((p) => isError(p) && p.spikeAt === undefined && !vsLast(p) && isNew(p)).sort((a, b) => b.count - a.count),
     patterns.filter((p) => !isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
-    patterns.filter((p) => !isError(p) && p.spikeAt === undefined && p.newAt !== undefined).sort((a, b) => b.count - a.count)
+    patterns.filter((p) => !isError(p) && p.spikeAt === undefined && isNew(p)).sort((a, b) => b.count - a.count)
   ];
   return groups.flat().slice(0, 5);
 }
 
 function startReason(p: DemoPattern, data: PatternsResponse) {
+  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "new") return "New error since last time";
+  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "up") return `Error up ×${p.ratio} vs last time`;
   const parts: string[] = [];
   if (isError(p)) parts.push("Error");
   if (p.spikeAt !== undefined) parts.push(`spiked to ${p.buckets[p.spikeAt]}${perUnit(data.bucketSeconds)} ${atBucket(data, p.spikeAt)}`);
   else if (p.newAt !== undefined) parts.push(`first seen ${bucketLabel(data, p.newAt)}`);
+  else if (p.sinceLast === "new") parts.push("new since last time");
   const text = parts.join(" · ");
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -1251,6 +1324,56 @@ function StartHere({
         ))
       )}
     </section>
+  );
+}
+
+function CompareRow({
+  c,
+  filter,
+  onChoose,
+  onFilter,
+  onGone
+}: {
+  c: CompareInfo;
+  filter: "new" | "changed" | null;
+  onChoose: (id: string) => void;
+  onFilter: (f: "new" | "changed") => void;
+  onGone: () => void;
+}) {
+  const label = (o: { title: string; at: string }) => `${formatTime(new Date(o.at))} · ${o.title}`;
+  const none = c.new + c.gone.length + c.changed === 0;
+  return (
+    <div className="cmp-row">
+      <label className="sel">
+        Compare with
+        <select value={c.previousId} onChange={(e) => onChoose(e.target.value)}>
+          {c.options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {label(o)}
+            </option>
+          ))}
+          <option value="none">Don't compare</option>
+        </select>
+      </label>
+      {none ? (
+        <span className="sub">No changes since last time: same patterns, similar volumes.</span>
+      ) : (
+        <span className="cmp-facts">
+          Since last time:{" "}
+          <button className={`linkbtn ${filter === "new" ? "on" : ""}`} onClick={() => onFilter("new")} disabled={!c.new}>
+            {c.new} new
+          </button>{" "}
+          ·{" "}
+          <button className="linkbtn" onClick={onGone} disabled={!c.gone.length}>
+            {c.gone.length} gone
+          </button>{" "}
+          ·{" "}
+          <button className={`linkbtn ${filter === "changed" ? "on" : ""}`} onClick={() => onFilter("changed")} disabled={!c.changed}>
+            {c.changed} changed a lot
+          </button>
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -1388,6 +1511,12 @@ function Row({
               First seen {bucketLabel(data, p.newAt)}
             </span>
           )}
+          {!filtered && p.sinceLast === "new" && (
+            <span className="badge b-new">
+              <Sparkles className="ico" />
+              New since last time
+            </span>
+          )}
           {p.suggestion === "noise" && (
             <span className="badge b-noise" title={filtered ? "Filtered automatically. Uncheck to show it again." : undefined}>
               <VolumeX className="ico" />
@@ -1427,6 +1556,11 @@ function Row({
         <div className="sharebar">
           <i style={{ width: share, background: color }} />
         </div>
+        {!filtered && (p.sinceLast === "up" || p.sinceLast === "down") && (
+          <em className={`vs-last ${p.sinceLast}`}>
+            {p.sinceLast === "up" ? "Up" : "Down"} ×{p.ratio} vs last time
+          </em>
+        )}
       </div>
       <div className="cell-chev">
         <ChevronRight className="ico" />

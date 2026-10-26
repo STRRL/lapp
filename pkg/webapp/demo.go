@@ -79,7 +79,8 @@ type demoPattern struct {
 	NewAt       *int     `json:"newAt,omitempty"`
 	Samples     []string `json:"samples"`
 	SinceLast   string   `json:"sinceLast,omitempty"` // new, up, down
-	PrevShare   *float64 `json:"prevShare,omitempty"`
+	Ratio       float64  `json:"ratio,omitempty"`     // lines per hour vs last time
+	PrevCount   *int     `json:"prevCount,omitempty"`
 }
 
 type demoUnmatched struct {
@@ -377,6 +378,12 @@ type analysis struct {
 }
 
 func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
+	return d.analyzeWith(ctx, id, "")
+}
+
+// analyzeWith is analyze with a chosen comparison baseline: "" picks the
+// latest earlier import of the same service, "none" skips comparison.
+func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analysis, error) {
 	if !validID(id) {
 		return nil, errors.New("invalid workspace")
 	}
@@ -513,37 +520,46 @@ func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
 	}
 	a.resp.Patterns = patterns
 	a.resp.Unmatched = unmatched
-	a.resp.Compare = d.compareWithPrevious(id, a.service, run, &a.resp)
+	if compareTo != "none" {
+		a.resp.Compare = d.compareWithPrevious(ctx, id, compareTo, a.service, run, &a.resp)
+	}
 	return a, nil
 }
 
 type gonePattern struct {
-	Template string  `json:"template"`
-	Name     string  `json:"name"`
-	Count    int     `json:"count"`
-	Share    float64 `json:"share"`
+	Template string `json:"template"`
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+}
+
+type compareOption struct {
+	ID    string    `json:"id"`
+	Title string    `json:"title"`
+	At    time.Time `json:"at"`
 }
 
 type demoCompare struct {
-	PreviousID    string        `json:"previousId"`
-	PreviousTitle string        `json:"previousTitle"`
-	PreviousAt    time.Time     `json:"previousAt"`
-	New           int           `json:"new"`
-	Up            int           `json:"up"`
-	Down          int           `json:"down"`
-	Gone          []gonePattern `json:"gone"`
+	PreviousID    string          `json:"previousId"`
+	PreviousTitle string          `json:"previousTitle"`
+	PreviousAt    time.Time       `json:"previousAt"`
+	New           int             `json:"new"`
+	Changed       int             `json:"changed"`
+	Gone          []gonePattern   `json:"gone"`
+	Options       []compareOption `json:"options"`
+	ByRate        bool            `json:"byRate"` // false: compared by share of lines (no timestamps)
 }
 
-// compareWithPrevious finds the latest earlier import of the same service
-// and marks each pattern as new, up or down since then, plus the patterns
-// that disappeared. Patterns are matched by template text.
-func (d *demoAPI) compareWithPrevious(id, service string, run *workspace.DiscoveryRunRecord, resp *demoPatternsResponse) *demoCompare {
+// compareWithPrevious compares this import with an earlier import of the
+// same service (the latest one unless compareTo names one). Patterns are
+// matched by template text; volume is compared in lines per hour (or share
+// of lines when either log has no timestamps) and only ratios of ≥2 or ≤0.5
+// count as a change.
+func (d *demoAPI) compareWithPrevious(ctx context.Context, id, compareTo, service string, run *workspace.DiscoveryRunRecord, resp *demoPatternsResponse) *demoCompare {
 	if run.FinishedAt == nil {
 		return nil
 	}
 	entries, _ := os.ReadDir(d.root)
-	var prev *workspace.DiscoveryRunRecord
-	prevID := ""
+	var options []compareOption
 	for _, e := range entries {
 		if !e.IsDir() || e.Name() == id {
 			continue
@@ -560,49 +576,74 @@ func (d *demoAPI) compareWithPrevious(id, service string, run *workspace.Discove
 		if r == nil || r.FinishedAt == nil || !r.FinishedAt.Before(*run.FinishedAt) {
 			continue
 		}
-		if prev == nil || r.FinishedAt.After(*prev.FinishedAt) {
-			prev, prevID = r, e.Name()
-		}
+		options = append(options, compareOption{ID: e.Name(), Title: d.workspaceInfo(e.Name(), r).Title, At: *r.FinishedAt})
 	}
-	if prev == nil || prev.LineCount == 0 {
+	if len(options) == 0 {
 		return nil
 	}
-	out := &demoCompare{PreviousID: prevID, PreviousTitle: d.workspaceInfo(prevID, prev).Title, PreviousAt: *prev.FinishedAt, Gone: []gonePattern{}}
-	before := map[string]float64{}
-	for _, p := range prev.Patterns {
-		before[p.Template] = float64(p.Count) / float64(prev.LineCount)
+	sort.Slice(options, func(i, j int) bool { return options[i].At.After(options[j].At) })
+	chosen := options[0]
+	for _, o := range options {
+		if o.ID == compareTo {
+			chosen = o
+		}
 	}
-	total := float64(max(resp.Workspace.LineCount, 1))
-	seen := map[string]bool{}
+	prev, err := d.analyzeWith(ctx, chosen.ID, "none")
+	if err != nil {
+		return nil
+	}
+	out := &demoCompare{PreviousID: chosen.ID, PreviousTitle: chosen.Title, PreviousAt: chosen.At, Gone: []gonePattern{}, Options: options}
+
+	hours := func(r demoPatternsResponse) float64 {
+		if r.From == nil || r.To == nil {
+			return 0
+		}
+		return math.Max(r.To.Sub(*r.From).Hours(), 1)
+	}
+	curH, prevH := hours(*resp), hours(prev.resp)
+	out.ByRate = curH > 0 && prevH > 0
+	rate := func(count int, r demoPatternsResponse, h float64) float64 {
+		if out.ByRate {
+			return float64(count) / h
+		}
+		return float64(count) / float64(max(r.Workspace.LineCount, 1))
+	}
+	before := map[string]int{}
+	for _, p := range prev.resp.Patterns {
+		before[p.ID] = p.Count
+	}
 	for i := range resp.Patterns {
 		p := &resp.Patterns[i]
-		seen[p.ID] = true
-		now := float64(p.Count) / total
 		was, ok := before[p.ID]
-		switch {
-		case !ok:
+		if !ok {
 			p.SinceLast = "new"
 			out.New++
-		case now >= 2*was && now-was >= 0.01:
-			p.SinceLast, p.PrevShare = "up", &was
-			out.Up++
-		case was >= 2*now && was-now >= 0.01:
-			p.SinceLast, p.PrevShare = "down", &was
-			out.Down++
+			continue
+		}
+		delete(before, p.ID)
+		if p.Count < 5 && was < 5 {
+			continue
+		}
+		ratio := rate(p.Count, *resp, curH) / math.Max(rate(was, prev.resp, prevH), 1e-9)
+		p.PrevCount = &was
+		switch {
+		case ratio >= 2:
+			p.SinceLast, p.Ratio = "up", round1(ratio)
+			out.Changed++
+		case ratio <= 0.5:
+			p.SinceLast, p.Ratio = "down", round1(ratio)
+			out.Changed++
 		}
 	}
-	for _, p := range prev.Patterns {
-		if !seen[p.Template] {
-			name := p.SemanticID
-			if name == "" || name == p.Template {
-				name = leadingLevel.ReplaceAllString(p.Template, "")
-			}
-			out.Gone = append(out.Gone, gonePattern{Template: p.Template, Name: name, Count: p.Count, Share: before[p.Template]})
+	for _, p := range prev.resp.Patterns {
+		if _, gone := before[p.ID]; gone {
+			out.Gone = append(out.Gone, gonePattern{Template: p.ID, Name: p.Name, Count: p.Count})
 		}
 	}
-	sort.Slice(out.Gone, func(i, j int) bool { return out.Gone[i].Count > out.Gone[j].Count })
 	return out
 }
+
+func round1(x float64) float64 { return math.Round(x*10) / 10 }
 
 func chooseBucket(span time.Duration) int64 {
 	for _, s := range []int64{60, 300, 900, 3600, 6 * 3600, 24 * 3600, 7 * 24 * 3600} {
@@ -744,7 +785,7 @@ func formatPercent(share float64) string {
 }
 
 func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
-	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
+	a, err := d.analyzeWith(r.Context(), r.URL.Query().Get("ws"), r.URL.Query().Get("compare"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

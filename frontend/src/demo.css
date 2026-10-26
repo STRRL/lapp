@@ -157,3 +157,18 @@
 .dz .inv-follow { display: flex; gap: 8px; }
 .dz .inv-follow input { flex: 1; height: 32px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 10px; font: inherit; background: var(--surface); color: var(--ink); }
 .dz .unverified { text-decoration: underline dashed var(--warning); text-underline-offset: 3px; cursor: help; }
+.dz .sh-compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 6px; }
+.dz .sh-gone { width: 100%; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.dz .sh-gone li { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--ink-2); }
+
+/* Compare with last time */
+.dz .cmp-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: -4px; font-size: 13px; color: var(--ink-2); }
+.dz .cmp-row select { height: 28px; }
+.dz .linkbtn { border: 0; background: none; padding: 0 2px; color: var(--accent-text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.dz .linkbtn:disabled { color: var(--muted); text-decoration: none; }
+.dz .linkbtn.on { background: var(--accent-soft); border-radius: 4px; }
+.dz .vs-last { grid-column: 1 / 3; font-style: normal; font-size: 11px; margin-top: 2px; }
+.dz .vs-last.up { color: var(--serious-text); }
+.dz .vs-last.down { color: var(--ink-3); }
+.dz .prow.gone { cursor: default; }
+.dz .prow.gone .cell-main, .dz .prow.gone .cell-count { opacity: .55; }
