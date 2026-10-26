@@ -17,6 +17,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+// Provider is the ImportRun provider name for GCP Cloud Logging.
+const Provider = "gcp"
+
 // adcHint is appended to fetch failures so credential problems point people
 // at Application Default Credentials setup. LAPP never manages provider auth.
 const adcHint = "if this is a credential problem, run `gcloud auth application-default login`"

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 )
 
@@ -144,5 +145,82 @@ func TestSummarizeLog(t *testing.T) {
 	}
 	if !s.Patterns[0].Filtered || s.Patterns[0].Noise == nil {
 		t.Fatalf("health checks should be filtered as noise: %+v", s.Patterns[0])
+	}
+}
+
+func TestDemoVictoriaLogsImportSplitsServices(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	d := newDemoAPI(root, "", "")
+	d.victoriaLogsStreams = func(_ context.Context, req victorialogs.FetchRequest) ([]victorialogs.Stream, error) {
+		if req.URL != "http://logs.example.com:9428" || req.Query != "error" {
+			t.Errorf("streams request = %+v", req)
+		}
+		return []victorialogs.Stream{
+			{ID: "b2", Labels: `{app="api",env="staging"}`, Hits: 10},
+			{ID: "a1", Labels: `{app="api",env="prod"}`, Hits: 20},
+			{ID: "c3", Labels: `{env="prod",service.name="Checkout API"}`, Hits: 30},
+		}, nil
+	}
+	d.fetcher = func(_ context.Context, req workspace.ImportRequest, write workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
+		if req.Provider != victorialogs.Provider {
+			t.Errorf("provider = %q", req.Provider)
+		}
+		for i := 0; i < 20; i++ {
+			line := fmt.Sprintf(`{"_msg":"error talking to db 10.0.0.%d","_time":%q}`, i%5, req.From.Add(time.Duration(i)*time.Minute).Format(time.RFC3339))
+			if err := write(line); err != nil {
+				return workspace.ImportFetchResult{}, err
+			}
+		}
+		return workspace.ImportFetchResult{}, nil
+	}
+	mux := http.NewServeMux()
+	d.register(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/demo/import-victorialogs", strings.NewReader(`{"url":"http://logs.example.com:9428","query":"error","since":"1h"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("import: %d %s", rec.Code, rec.Body)
+	}
+	var started struct{ Workspaces []victoriaLogsStarted }
+	_ = json.Unmarshal(rec.Body.Bytes(), &started)
+	want := []victoriaLogsStarted{{ID: "api", Service: "api"}, {ID: "checkout-api", Service: "checkout-api"}}
+	if fmt.Sprint(started.Workspaces) != fmt.Sprint(want) {
+		t.Fatalf("workspaces = %+v, want %+v", started.Workspaces, want)
+	}
+
+	for _, ws := range started.Workspaces {
+		var st demoStatus
+		for i := 0; i < 100; i++ {
+			rec = httptest.NewRecorder()
+			mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/status?ws="+ws.ID, nil))
+			_ = json.Unmarshal(rec.Body.Bytes(), &st)
+			if st.State == "succeeded" || st.State == "failed" {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if st.State != "succeeded" || st.Source != victorialogs.Provider {
+			t.Fatalf("%s status = %+v", ws.ID, st)
+		}
+	}
+	record := latestImport(filepath.Join(root, "api"))
+	if record == nil || record.Filter != "_stream_id:in(a1,b2) (error)" || record.URL != "http://logs.example.com:9428" {
+		t.Fatalf("api record = %+v", record)
+	}
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/patterns?ws=api", nil))
+	var resp demoPatternsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Workspace.Service != "api" || resp.Workspace.Title != "VictoriaLogs · logs.example.com:9428 · last 1h" {
+		t.Fatalf("workspace = %+v", resp.Workspace)
+	}
+}
+
+func TestPlanVictoriaLogsServicesFallsBackToStreamHash(t *testing.T) {
+	plan := planVictoriaLogsServices([]victorialogs.Stream{{ID: "x", Labels: `{env="prod"}`, Hits: 1}}, "*")
+	if len(plan) != 1 || !strings.HasPrefix(plan[0].Service, "stream-") || len(plan[0].Service) != len("stream-")+8 || plan[0].Query != "_stream_id:in(x)" {
+		t.Fatalf("plan = %+v", plan)
 	}
 }

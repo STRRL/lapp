@@ -16,12 +16,16 @@ import (
 var errImportLimitReached = stderrors.New("import limit reached")
 
 // ImportRequest is what the fetcher needs to pull entries from a provider.
+// Project is the provider-side scope (a GCP project, or an optional
+// VictoriaLogs tenant); URL addresses providers reached by URL.
 type ImportRequest struct {
-	Project string
-	Filter  string
-	From    time.Time
-	To      time.Time
-	Limit   int
+	Provider string
+	URL      string
+	Project  string
+	Filter   string
+	From     time.Time
+	To       time.Time
+	Limit    int
 }
 
 // ImportFetchResult reports facts about one completed provider fetch.
@@ -45,6 +49,7 @@ type ImportConfig struct {
 	Dir      string
 	RunID    string
 	Provider string
+	URL      string
 	Project  string
 	Filter   string
 	From     time.Time
@@ -154,11 +159,13 @@ func fetchImport(
 	defer output.cleanup()
 
 	fetched, err := config.Fetcher(ctx, ImportRequest{
-		Project: config.Project,
-		Filter:  config.Filter,
-		From:    record.From,
-		To:      record.To,
-		Limit:   config.Limit,
+		Provider: config.Provider,
+		URL:      config.URL,
+		Project:  config.Project,
+		Filter:   config.Filter,
+		From:     record.From,
+		To:       record.To,
+		Limit:    config.Limit,
 	}, output.writeLine)
 	if err != nil && !stderrors.Is(err, errImportLimitReached) {
 		if output.writeErr != nil {
@@ -251,6 +258,7 @@ func claimImportRun(config ImportConfig, runID string) (ImportRunRecord, error) 
 	record := ImportRunRecord{
 		ID:        runID,
 		Provider:  config.Provider,
+		URL:       config.URL,
 		Project:   config.Project,
 		Filter:    config.Filter,
 		From:      config.From.UTC(),
@@ -276,6 +284,7 @@ func claimImportRun(config ImportConfig, runID string) (ImportRunRecord, error) 
 func sameImportRequest(left, right ImportRunRecord) bool {
 	return left.ID == right.ID &&
 		left.Provider == right.Provider &&
+		left.URL == right.URL &&
 		left.Project == right.Project &&
 		left.Filter == right.Filter &&
 		left.From.Equal(right.From) &&

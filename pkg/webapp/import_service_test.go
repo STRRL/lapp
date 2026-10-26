@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"connectrpc.com/connect"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
 	"github.com/strrl/lapp/pkg/semantic"
+	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -90,6 +92,50 @@ func TestCreateImportRunRejectsInvalidRequestWithoutRecord(t *testing.T) {
 				From:    from,
 				To:      to,
 				Limit:   -1,
+			},
+			code: connect.CodeInvalidArgument,
+		},
+		{
+			name: "unknown provider",
+			req: &webv1.CreateImportRunRequest{
+				Parent:   workspaceName,
+				Provider: "splunk",
+				Project:  "acme-prod",
+				From:     from,
+				To:       to,
+			},
+			code: connect.CodeInvalidArgument,
+		},
+		{
+			name: "victorialogs missing url",
+			req: &webv1.CreateImportRunRequest{
+				Parent:   workspaceName,
+				Provider: victorialogs.Provider,
+				From:     from,
+				To:       to,
+			},
+			code: connect.CodeInvalidArgument,
+		},
+		{
+			name: "victorialogs url with credentials",
+			req: &webv1.CreateImportRunRequest{
+				Parent:   workspaceName,
+				Provider: victorialogs.Provider,
+				Url:      "http://user:secret@logs.example.com:9428",
+				From:     from,
+				To:       to,
+			},
+			code: connect.CodeInvalidArgument,
+		},
+		{
+			name: "victorialogs invalid tenant",
+			req: &webv1.CreateImportRunRequest{
+				Parent:   workspaceName,
+				Provider: victorialogs.Provider,
+				Url:      "http://logs.example.com:9428",
+				Project:  "acme",
+				From:     from,
+				To:       to,
 			},
 			code: connect.CodeInvalidArgument,
 		},
@@ -212,6 +258,33 @@ func TestWorkspaceServiceImportRunAsyncSuccess(t *testing.T) {
 	}
 	if result.Name != runName {
 		t.Fatalf("operation response run = %q, want %q", result.Name, runName)
+	}
+}
+
+func TestWorkspaceServiceImportRunVictoriaLogs(t *testing.T) {
+	line := `{"_msg":"failed request","_time":"2026-07-25T00:00:01Z","_stream":"{app=\"api\"}"}`
+	service, workspaceName := newImportTestService(t, func(_ context.Context, req workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
+		if req.Provider != victorialogs.Provider || req.URL != "http://logs.example.com:9428" || req.Project != "12:34" || req.Filter != "error" {
+			t.Errorf("fetch request = %+v", req)
+		}
+		return workspace.ImportFetchResult{}, writeLine(line)
+	})
+	req := validImportRequest(workspaceName)
+	req.Provider = victorialogs.Provider
+	req.Url = "http://logs.example.com:9428"
+	req.Project = "12:34"
+	req.Filter = "error"
+
+	response, err := service.CreateImportRun(context.Background(), connect.NewRequest(req))
+	if err != nil {
+		t.Fatalf("CreateImportRun: %v", err)
+	}
+	run := waitForImportRunState(t, service, importRunFromOperation(t, response.Msg).Name, webv1.ImportRunState_IMPORT_RUN_STATE_SUCCEEDED)
+	if run.Provider != victorialogs.Provider || run.Url != req.Url || run.EntryCount != 1 {
+		t.Fatalf("unexpected run: %+v", run)
+	}
+	if !strings.HasPrefix(run.LogFileName, victorialogs.Provider+"-") {
+		t.Fatalf("log file name = %q", run.LogFileName)
 	}
 }
 

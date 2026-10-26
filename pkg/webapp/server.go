@@ -14,6 +14,7 @@ import (
 	longrunningpbconnect "github.com/strrl/lapp/gen/go/google/longrunning/longrunningpbconnect"
 	"github.com/strrl/lapp/gen/go/lapp/web/v1/webv1connect"
 	"github.com/strrl/lapp/pkg/gcplog"
+	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
@@ -28,27 +29,37 @@ type ServerConfig struct {
 	APIKey      string
 	Model       string
 	OpenBrowser bool
+	// VictoriaLogs holds credentials read from the environment at the CLI
+	// edge; the browser never sends them.
+	VictoriaLogs victorialogs.Auth
 }
 
 func NewHandler(config ServerConfig) (http.Handler, error) {
+	victoriaLogs := &victorialogs.Client{Auth: config.VictoriaLogs}
+	victoriaLogsFetch := victoriaLogsFetcher(victoriaLogs)
 	service, err := NewWorkspaceService(ServiceConfig{
 		Root:   config.Root,
 		APIKey: config.APIKey,
 		Model:  config.Model,
 		ImportFetcher: func(ctx context.Context, req workspace.ImportRequest, writeLine workspace.ImportLineWriter) (workspace.ImportFetchResult, error) {
-			fetched, err := gcplog.Fetch(ctx, gcplog.FetchRequest{
-				Project: req.Project,
-				Filter:  req.Filter,
-				From:    req.From,
-				To:      req.To,
-				Limit:   req.Limit,
-			}, writeLine)
-			if err != nil {
-				return workspace.ImportFetchResult{}, err
+			switch req.Provider {
+			case gcplog.Provider:
+				fetched, err := gcplog.Fetch(ctx, gcplog.FetchRequest{
+					Project: req.Project,
+					Filter:  req.Filter,
+					From:    req.From,
+					To:      req.To,
+					Limit:   req.Limit,
+				}, writeLine)
+				if err != nil {
+					return workspace.ImportFetchResult{}, err
+				}
+				return workspace.ImportFetchResult{Truncated: fetched.Truncated}, nil
+			case victorialogs.Provider:
+				return victoriaLogsFetch(ctx, req, writeLine)
+			default:
+				return workspace.ImportFetchResult{}, errors.Errorf("unknown import provider %q", req.Provider)
 			}
-			return workspace.ImportFetchResult{
-				Truncated: fetched.Truncated,
-			}, nil
 		},
 	})
 	if err != nil {
@@ -62,6 +73,7 @@ func NewHandler(config ServerConfig) (http.Handler, error) {
 	mux.Handle(path, otelhttp.NewHandler(handler, "connect.Operations"))
 	demo := newDemoAPI(service.root, config.APIKey, config.Model)
 	demo.fetcher = service.importFetcher
+	demo.victoriaLogsStreams = victoriaLogs.Streams
 	demo.register(mux)
 	staticHandler, err := staticFileHandler(config.StaticDir)
 	if err != nil {

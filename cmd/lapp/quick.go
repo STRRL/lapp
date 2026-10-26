@@ -91,11 +91,16 @@ func openInput(args []string) (string, io.Reader, func(), error) {
 
 // serveWeb starts the local web app and optionally opens path in a browser.
 func serveWeb(ctx context.Context, addr, path string, open bool) error {
+	vlAuth, err := victoriaLogsAuthFromEnv()
+	if err != nil {
+		return err
+	}
 	handler, err := webapp.NewHandler(webapp.ServerConfig{
-		Root:      webRoot,
-		StaticDir: webStaticDir,
-		APIKey:    os.Getenv("OPENROUTER_API_KEY"),
-		Model:     webModel,
+		Root:         webRoot,
+		StaticDir:    webStaticDir,
+		APIKey:       os.Getenv("OPENROUTER_API_KEY"),
+		Model:        webModel,
+		VictoriaLogs: vlAuth,
 	})
 	if err != nil {
 		return err

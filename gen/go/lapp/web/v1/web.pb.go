@@ -407,22 +407,25 @@ func (x *LogFile) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type ImportRun struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	ImportRunId   string                 `protobuf:"bytes,2,opt,name=import_run_id,json=importRunId,proto3" json:"import_run_id,omitempty"`
-	Provider      string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
-	Project       string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"`
-	Filter        string                 `protobuf:"bytes,5,opt,name=filter,proto3" json:"filter,omitempty"`
-	From          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=from,proto3" json:"from,omitempty"`
-	To            *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=to,proto3" json:"to,omitempty"`
-	Limit         int32                  `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
-	State         ImportRunState         `protobuf:"varint,9,opt,name=state,proto3,enum=lapp.web.v1.ImportRunState" json:"state,omitempty"`
-	EntryCount    int32                  `protobuf:"varint,10,opt,name=entry_count,json=entryCount,proto3" json:"entry_count,omitempty"`
-	Truncated     bool                   `protobuf:"varint,11,opt,name=truncated,proto3" json:"truncated,omitempty"`
-	LogFileName   string                 `protobuf:"bytes,12,opt,name=log_file_name,json=logFileName,proto3" json:"log_file_name,omitempty"`
-	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
-	Error         *ImportRunError        `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	ImportRunId string                 `protobuf:"bytes,2,opt,name=import_run_id,json=importRunId,proto3" json:"import_run_id,omitempty"`
+	Provider    string                 `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+	Project     string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"`
+	Filter      string                 `protobuf:"bytes,5,opt,name=filter,proto3" json:"filter,omitempty"`
+	From        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=from,proto3" json:"from,omitempty"`
+	To          *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=to,proto3" json:"to,omitempty"`
+	Limit       int32                  `protobuf:"varint,8,opt,name=limit,proto3" json:"limit,omitempty"`
+	State       ImportRunState         `protobuf:"varint,9,opt,name=state,proto3,enum=lapp.web.v1.ImportRunState" json:"state,omitempty"`
+	EntryCount  int32                  `protobuf:"varint,10,opt,name=entry_count,json=entryCount,proto3" json:"entry_count,omitempty"`
+	Truncated   bool                   `protobuf:"varint,11,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	LogFileName string                 `protobuf:"bytes,12,opt,name=log_file_name,json=logFileName,proto3" json:"log_file_name,omitempty"`
+	StartedAt   *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	FinishedAt  *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Error       *ImportRunError        `protobuf:"bytes,15,opt,name=error,proto3" json:"error,omitempty"`
+	// Base URL of the provider instance, without credentials. Set for
+	// providers addressed by URL, such as VictoriaLogs.
+	Url           string `protobuf:"bytes,16,opt,name=url,proto3" json:"url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -560,6 +563,13 @@ func (x *ImportRun) GetError() *ImportRunError {
 		return x.Error
 	}
 	return nil
+}
+
+func (x *ImportRun) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
 }
 
 type ImportRunMetadata struct {
@@ -1931,13 +1941,21 @@ func (*DeleteLogFileResponse) Descriptor() ([]byte, []int) {
 }
 
 type CreateImportRunRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Parent        string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	Project       string                 `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	Filter        string                 `protobuf:"bytes,3,opt,name=filter,proto3" json:"filter,omitempty"`
-	From          *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=from,proto3" json:"from,omitempty"`
-	To            *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=to,proto3" json:"to,omitempty"`
-	Limit         int32                  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Parent string                 `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	// GCP project id, or for VictoriaLogs the optional tenant as
+	// "<AccountID>:<ProjectID>".
+	Project string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
+	// Cloud Logging filter, or a LogsQL filter for VictoriaLogs.
+	Filter string                 `protobuf:"bytes,3,opt,name=filter,proto3" json:"filter,omitempty"`
+	From   *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=from,proto3" json:"from,omitempty"`
+	To     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=to,proto3" json:"to,omitempty"`
+	Limit  int32                  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	// "gcp" (default when empty) or "victorialogs".
+	Provider string `protobuf:"bytes,7,opt,name=provider,proto3" json:"provider,omitempty"`
+	// VictoriaLogs base URL, without credentials. Credentials come from the
+	// server environment, never from the request.
+	Url           string `protobuf:"bytes,8,opt,name=url,proto3" json:"url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2012,6 +2030,20 @@ func (x *CreateImportRunRequest) GetLimit() int32 {
 		return x.Limit
 	}
 	return 0
+}
+
+func (x *CreateImportRunRequest) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *CreateImportRunRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
 }
 
 type GetImportRunRequest struct {
@@ -2231,6 +2263,8 @@ type RecentImportQuery struct {
 	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
 	Filter        string                 `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
 	LastUsedAt    *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_used_at,json=lastUsedAt,proto3" json:"last_used_at,omitempty"`
+	Provider      string                 `protobuf:"bytes,4,opt,name=provider,proto3" json:"provider,omitempty"`
+	Url           string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2284,6 +2318,20 @@ func (x *RecentImportQuery) GetLastUsedAt() *timestamppb.Timestamp {
 		return x.LastUsedAt
 	}
 	return nil
+}
+
+func (x *RecentImportQuery) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *RecentImportQuery) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
 }
 
 type ListRecentImportQueriesResponse struct {
@@ -2849,7 +2897,7 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x129\n" +
 	"\n" +
-	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xc4\x04\n" +
+	"updated_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xd6\x04\n" +
 	"\tImportRun\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
 	"\rimport_run_id\x18\x02 \x01(\tR\vimportRunId\x12\x1a\n" +
@@ -2869,7 +2917,8 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"started_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x121\n" +
-	"\x05error\x18\x0f \x01(\v2\x1b.lapp.web.v1.ImportRunErrorR\x05error\"J\n" +
+	"\x05error\x18\x0f \x01(\v2\x1b.lapp.web.v1.ImportRunErrorR\x05error\x12\x10\n" +
+	"\x03url\x18\x10 \x01(\tR\x03url\"J\n" +
 	"\x11ImportRunMetadata\x125\n" +
 	"\n" +
 	"import_run\x18\x01 \x01(\v2\x16.lapp.web.v1.ImportRunR\timportRun\">\n" +
@@ -2967,14 +3016,16 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\blog_file\x18\x01 \x01(\v2\x14.lapp.web.v1.LogFileR\alogFile\"*\n" +
 	"\x14DeleteLogFileRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x17\n" +
-	"\x15DeleteLogFileResponse\"\xd4\x01\n" +
+	"\x15DeleteLogFileResponse\"\x82\x02\n" +
 	"\x16CreateImportRunRequest\x12\x16\n" +
 	"\x06parent\x18\x01 \x01(\tR\x06parent\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x16\n" +
 	"\x06filter\x18\x03 \x01(\tR\x06filter\x12.\n" +
 	"\x04from\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x04from\x12*\n" +
 	"\x02to\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02to\x12\x14\n" +
-	"\x05limit\x18\x06 \x01(\x05R\x05limit\")\n" +
+	"\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x1a\n" +
+	"\bprovider\x18\a \x01(\tR\bprovider\x12\x10\n" +
+	"\x03url\x18\b \x01(\tR\x03url\")\n" +
 	"\x13GetImportRunRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"M\n" +
 	"\x14GetImportRunResponse\x125\n" +
@@ -2985,12 +3036,14 @@ const file_lapp_web_v1_web_proto_rawDesc = "" +
 	"\x16ListImportRunsResponse\x127\n" +
 	"\vimport_runs\x18\x01 \x03(\v2\x16.lapp.web.v1.ImportRunR\n" +
 	"importRuns\" \n" +
-	"\x1eListRecentImportQueriesRequest\"\x83\x01\n" +
+	"\x1eListRecentImportQueriesRequest\"\xb1\x01\n" +
 	"\x11RecentImportQuery\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x16\n" +
 	"\x06filter\x18\x02 \x01(\tR\x06filter\x12<\n" +
 	"\flast_used_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"lastUsedAt\"h\n" +
+	"lastUsedAt\x12\x1a\n" +
+	"\bprovider\x18\x04 \x01(\tR\bprovider\x12\x10\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\"h\n" +
 	"\x1fListRecentImportQueriesResponse\x12E\n" +
 	"\x0erecent_queries\x18\x01 \x03(\v2\x1e.lapp.web.v1.RecentImportQueryR\rrecentQueries\"I\n" +
 	"\x19CreateDiscoveryRunRequest\x12\x16\n" +

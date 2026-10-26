@@ -2,7 +2,9 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { AlertTriangle, CloudDownload, History } from "lucide-react";
 import { useState } from "react";
 import { ImportRun, ImportRunState } from "./gen/lapp/web/v1/web_pb";
-import { useAppStore } from "./store";
+import { ImportProvider, useAppStore } from "./store";
+
+const PROVIDER_LABELS: Record<ImportProvider, string> = { gcp: "GCP", victorialogs: "VictoriaLogs" };
 
 export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
   const importRuns = useAppStore((state) => state.importRuns);
@@ -10,6 +12,8 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
   const busy = useAppStore((state) => state.busy);
   const runAction = useAppStore((state) => state.runAction);
   const startImport = useAppStore((state) => state.startImport);
+  const [provider, setProvider] = useState<ImportProvider>("gcp");
+  const [url, setUrl] = useState("");
   const [project, setProject] = useState("");
   const [filter, setFilter] = useState("");
   const [range, setRange] = useState(() => rangeForHours(1));
@@ -17,6 +21,8 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
   const [limit, setLimit] = useState("100000");
   const latestRun = importRuns[0];
   const disabled = busy || hasActiveRun;
+  const victoriaLogs = provider === "victorialogs";
+  const ready = victoriaLogs ? url.trim() !== "" : project.trim() !== "";
 
   const useQuickRange = (hours: number) => {
     setSelectedHours(hours);
@@ -27,7 +33,10 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
     const from = new Date(range.from);
     const to = new Date(range.to);
     const parsedLimit = Number(limit);
-    if (!project.trim()) {
+    if (victoriaLogs && !url.trim()) {
+      throw new Error("URL is required.");
+    }
+    if (!victoriaLogs && !project.trim()) {
       throw new Error("Project is required.");
     }
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
@@ -41,6 +50,8 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
     }
 
     await startImport({
+      provider,
+      url: victoriaLogs ? url.trim() : "",
       project: project.trim(),
       filter,
       from,
@@ -61,11 +72,23 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
         >
           <header className="panel-heading">
             <div>
-              <h2>Import GCP logs</h2>
-              <p>The server uses local Application Default Credentials.</p>
+              <h2>Import {PROVIDER_LABELS[provider]} logs</h2>
+              <p>
+                {victoriaLogs
+                  ? "The server reads VictoriaLogs credentials from its environment."
+                  : "The server uses local Application Default Credentials."}
+              </p>
             </div>
             <CloudDownload size={22} />
           </header>
+
+          <label>
+            <span>Provider</span>
+            <select value={provider} disabled={disabled} onChange={(event) => setProvider(event.target.value as ImportProvider)}>
+              <option value="gcp">GCP Cloud Logging</option>
+              <option value="victorialogs">VictoriaLogs</option>
+            </select>
+          </label>
 
           <label>
             <span>Recent query</span>
@@ -75,25 +98,42 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
               onChange={(event) => {
                 const query = recentImportQueries[Number(event.target.value)];
                 if (!query) return;
+                setProvider(query.provider === "victorialogs" ? "victorialogs" : "gcp");
+                setUrl(query.url);
                 setProject(query.project);
                 setFilter(query.filter);
               }}
             >
               <option value="">Choose a past query</option>
               {recentImportQueries.map((query, index) => (
-                <option key={`${query.project}\u0000${query.filter}`} value={index}>{recentQueryLabel(query.project, query.filter)}</option>
+                <option key={`${query.provider}\u0000${query.url}\u0000${query.project}\u0000${query.filter}`} value={index}>
+                  {recentQueryLabel(query.url || query.project, query.filter)}
+                </option>
               ))}
             </select>
           </label>
 
-          <div className="form-grid">
+          {victoriaLogs && (
             <label>
-              <span>Project</span>
+              <span>URL</span>
               <input
-                value={project}
+                value={url}
                 required
                 disabled={disabled}
-                placeholder="my-gcp-project"
+                placeholder="http://localhost:9428"
+                onChange={(event) => setUrl(event.target.value)}
+              />
+            </label>
+          )}
+
+          <div className="form-grid">
+            <label>
+              <span>{victoriaLogs ? "Tenant (optional)" : "Project"}</span>
+              <input
+                value={project}
+                required={!victoriaLogs}
+                disabled={disabled}
+                placeholder={victoriaLogs ? "AccountID:ProjectID" : "my-gcp-project"}
                 onChange={(event) => setProject(event.target.value)}
               />
             </label>
@@ -112,11 +152,11 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
           </div>
 
           <label>
-            <span>Filter</span>
+            <span>{victoriaLogs ? "LogsQL filter" : "Filter"}</span>
             <input
               value={filter}
               disabled={disabled}
-              placeholder='severity >= ERROR'
+              placeholder={victoriaLogs ? "error OR warn" : "severity >= ERROR"}
               onChange={(event) => setFilter(event.target.value)}
             />
           </label>
@@ -164,7 +204,7 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
           </fieldset>
 
           <div className="form-actions">
-            <button type="submit" disabled={disabled || !project.trim()}>
+            <button type="submit" disabled={disabled || !ready}>
               <CloudDownload size={17} />
               Start Import
             </button>
@@ -187,8 +227,8 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
               </div>
               <p className="import-message">{importRunMessage(latestRun)}</p>
               <dl>
-                <dt>Project</dt>
-                <dd>{latestRun.project}</dd>
+                <dt>{latestRun.url ? "Source" : "Project"}</dt>
+                <dd>{runSource(latestRun)}</dd>
                 <dt>Range</dt>
                 <dd>{formatRange(latestRun)}</dd>
                 <dt>Limit</dt>
@@ -220,7 +260,7 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
               <thead>
                 <tr>
                   <th>Started</th>
-                  <th>Project and filter</th>
+                  <th>Source and filter</th>
                   <th>Range</th>
                   <th>State</th>
                   <th>Entries</th>
@@ -232,7 +272,7 @@ export function ImportPanel({ hasActiveRun }: { hasActiveRun: boolean }) {
                   <tr key={run.name}>
                     <td>{formatTimestamp(run.startedAt)}</td>
                     <td>
-                      <strong>{run.project}</strong>
+                      <strong>{runSource(run)}</strong>
                       <code className="filter-value">{run.filter || "All logs"}</code>
                     </td>
                     <td>{formatRange(run)}</td>
@@ -271,7 +311,7 @@ function importRunMessage(run: ImportRun) {
     case ImportRunState.QUEUED:
       return "Waiting to start.";
     case ImportRunState.RUNNING:
-      return "Reading matching log entries from GCP.";
+      return `Reading matching log entries from ${run.provider === "victorialogs" ? "VictoriaLogs" : "GCP"}.`;
     case ImportRunState.SUCCEEDED:
       return `${run.entryCount.toLocaleString()} entries written to ${run.logFileName}. Start discovery when ready.`;
     case ImportRunState.FAILED:
@@ -297,6 +337,11 @@ function importStateClass(state: ImportRunState) {
     default:
       return "";
   }
+}
+
+function runSource(run: ImportRun) {
+  if (!run.url) return run.project;
+  return run.project ? `${run.url} · tenant ${run.project}` : run.url;
 }
 
 function recentQueryLabel(project: string, filter: string) {

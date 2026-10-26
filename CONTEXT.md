@@ -24,8 +24,12 @@ One execution that pulls logs from an external provider using a query and time r
 _Avoid_: Sync, connection, integration, LogImport
 
 **Provider**:
-An external logging service LAPP can import from, such as GCP Cloud Logging or Vercel. LAPP uses credentials already present on the machine and never manages provider authentication itself.
+An external logging service LAPP can import from, such as GCP Cloud Logging, VictoriaLogs, or Vercel. LAPP uses credentials already present on the machine and never manages provider authentication itself.
 _Avoid_: Source, backend
+
+**Service**:
+The application a workspace's logs come from. Saved noise rules belong to a Service and apply to every later workspace of the same Service. A VictoriaLogs import maps each log stream to a Service by its labels and lands each Service in its own workspace.
+_Avoid_: App, source
 
 **Extraction**:
 The text line pulled out of a structured log entry for pattern discovery. Discovery reads the extraction; investigation material keeps the full structured entry.
