@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
+	"github.com/google/uuid"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/workspace"
 )
@@ -48,29 +49,31 @@ func newDemoAPI(root, apiKey, model string) *demoAPI {
 }
 
 type demoWorkspace struct {
-	ID           string    `json:"id"`
-	Title        string    `json:"title"`
-	Service      string    `json:"service"`
-	LineCount    int       `json:"lineCount"`
-	PatternCount int       `json:"patternCount"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ID            string    `json:"id"`
+	Title         string    `json:"title"`
+	Service       string    `json:"service"`
+	LineCount     int       `json:"lineCount"`
+	PatternCount  int       `json:"patternCount"`
+	FilteredLines int       `json:"filteredLines"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 type demoPattern struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	Named      bool     `json:"named"`
-	Template   string   `json:"template"`
-	Count      int      `json:"count"`
-	Level      string   `json:"level"`
-	Buckets    []int    `json:"buckets"`
-	Suggestion string   `json:"suggestion"` // "noise", "maybe" or ""
-	Reason     string   `json:"reason"`
-	KeptReason string   `json:"keptReason,omitempty"`
-	Filtered   bool     `json:"filtered"`
-	SpikeAt    *int     `json:"spikeAt,omitempty"`
-	NewAt      *int     `json:"newAt,omitempty"`
-	Samples    []string `json:"samples"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Named       bool     `json:"named"`
+	Description string   `json:"description,omitempty"`
+	Template    string   `json:"template"`
+	Count       int      `json:"count"`
+	Level       string   `json:"level"`
+	Buckets     []int    `json:"buckets"`
+	Suggestion  string   `json:"suggestion"` // "noise", "maybe" or ""
+	Reason      string   `json:"reason"`
+	KeptReason  string   `json:"keptReason,omitempty"`
+	Filtered    bool     `json:"filtered"`
+	SpikeAt     *int     `json:"spikeAt,omitempty"`
+	NewAt       *int     `json:"newAt,omitempty"`
+	Samples     []string `json:"samples"`
 }
 
 type demoUnmatched struct {
@@ -87,6 +90,7 @@ type demoPatternsResponse struct {
 	BucketStart   *time.Time    `json:"bucketStart,omitempty"`
 	BucketSeconds int64         `json:"bucketSeconds"`
 	RulesSaved    bool          `json:"rulesSaved"`
+	RulesApplied  int           `json:"rulesApplied"`
 	Named         bool          `json:"named"`
 	Patterns      []demoPattern `json:"patterns"`
 	Unmatched     demoUnmatched `json:"unmatched"`
@@ -102,12 +106,15 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/demo/import", d.handleImport)
 	mux.HandleFunc("GET /api/demo/patterns", d.handlePatterns)
 	mux.HandleFunc("POST /api/demo/rules", d.handleRules)
+	mux.HandleFunc("GET /api/demo/status", d.handleStatus)
+	mux.HandleFunc("GET /api/demo/service-rules", d.handleServiceRules)
+	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
 	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
 	mux.HandleFunc("GET /api/demo/pattern", d.handlePatternDetail)
 	mux.HandleFunc("GET /api/demo/export", d.handleExport)
 }
 
-func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, _ *http.Request) {
+func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(d.root)
 	if err != nil && !os.IsNotExist(err) {
 		writeError(w, http.StatusInternalServerError, err)
@@ -127,7 +134,17 @@ func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, _ *http.Request) {
 		if run == nil {
 			continue
 		}
-		out = append(out, d.workspaceInfo(e.Name(), run))
+		info := d.workspaceInfo(e.Name(), run)
+		if len(out) < 20 {
+			if a, err := d.analyze(r.Context(), e.Name()); err == nil {
+				for _, p := range a.resp.Patterns {
+					if p.Filtered {
+						info.FilteredLines += p.Count
+					}
+				}
+			}
+		}
+		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
 	writeJSON(w, out)
@@ -145,37 +162,71 @@ func (d *demoAPI) workspaceInfo(id string, run *workspace.DiscoveryRunRecord) de
 	return info
 }
 
-// handleImport takes a raw log file body, lands it in a new workspace and
-// runs discovery synchronously, so one request gets you to the pattern list.
+// handleImport lands a raw log file body in a new workspace and starts
+// finding patterns in the background; poll /api/demo/status for progress.
 func (d *demoAPI) handleImport(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
-	defer cancel()
-	id, err := d.importLog(ctx, r.URL.Query().Get("name"), http.MaxBytesReader(w, r.Body, maxImportBytes))
+	q := r.URL.Query()
+	id, dir, service, err := d.landNew(q.Get("name"), q.Get("service"), http.MaxBytesReader(w, r.Body, maxImportBytes))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeJSON(w, map[string]string{"id": id})
+	runID, err := uuid.NewV7()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.apiKey, Model: d.model}); err != nil {
+			slog.Error("import failed", "workspace", id, "error", err)
+		}
+	}()
+	writeJSON(w, map[string]string{"id": id, "service": service})
 }
 
+// importLog lands a log and finds its patterns before returning (CLI path).
 func (d *demoAPI) importLog(ctx context.Context, name string, body io.Reader) (string, error) {
-	name = filepath.Base(name)
-	if name == "" || name == "." || name == "/" {
-		name = "stdin.log"
-	}
-	service := serviceFromFileName(name)
-	id, dir, err := d.newWorkspaceDir(service)
+	id, dir, _, err := d.landNew(name, "", body)
 	if err != nil {
 		return "", err
 	}
-	if err := d.landLog(ctx, dir, name, service, body); err != nil {
-		_ = os.RemoveAll(dir)
+	if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model}); err != nil {
 		return "", err
 	}
 	return id, nil
 }
 
+func (d *demoAPI) landNew(name, service string, body io.Reader) (id, dir, svc string, err error) {
+	name = filepath.Base(name)
+	if name == "" || name == "." || name == "/" {
+		name = "stdin.log"
+	}
+	svc = serviceFromFileName(name)
+	if strings.TrimSpace(service) != "" {
+		svc = cleanServiceName(service)
+	}
+	id, dir, err = d.newWorkspaceDir(svc)
+	if err != nil {
+		return "", "", "", err
+	}
+	if err := writeLog(dir, name, svc, body); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", "", "", err
+	}
+	return id, dir, svc, nil
+}
+
 func (d *demoAPI) landLog(ctx context.Context, dir, name, service string, body io.Reader) error {
+	if err := writeLog(dir, name, service, body); err != nil {
+		return err
+	}
+	_, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model})
+	return err
+}
+
+func writeLog(dir, name, service string, body io.Reader) error {
 	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
 		return err
 	}
@@ -190,11 +241,72 @@ func (d *demoAPI) landLog(ctx context.Context, dir, name, service string, body i
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(service), 0o644); err != nil {
-		return err
+	return os.WriteFile(filepath.Join(dir, "service"), []byte(service), 0o644)
+}
+
+type demoStatus struct {
+	State   string `json:"state"` // queued, running, succeeded, failed
+	Step    string `json:"step"`
+	Error   string `json:"error,omitempty"`
+	Named   bool   `json:"named"`
+	Lines   int    `json:"lines"`
+	Batches string `json:"batches,omitempty"`
+}
+
+func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	if !validID(id) {
+		writeError(w, http.StatusBadRequest, errors.New("invalid workspace"))
+		return
 	}
-	_, err = workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model})
-	return err
+	st := demoStatus{State: "queued", Named: d.apiKey != ""}
+	records, _ := workspace.ListDiscoveryRunRecords(filepath.Join(d.root, id))
+	if run := workspace.LatestDiscoveryRun(records); run != nil {
+		st.State = strings.ToLower(string(run.State))
+		st.Step = string(run.CurrentStep)
+		st.Lines = run.LineCount
+		if run.Error != nil {
+			st.Error = run.Error.Message
+		}
+		if p := run.Progress; p != nil && p.LabelBatch != nil {
+			st.Batches = fmt.Sprintf("batch %d of %d", p.LabelBatch.BatchNumber, p.LabelBatch.BatchCount)
+		}
+	}
+	writeJSON(w, st)
+}
+
+func (d *demoAPI) handleServiceRules(w http.ResponseWriter, r *http.Request) {
+	rules, ok := d.loadRules(cleanServiceName(r.URL.Query().Get("service")))
+	n := 0
+	if ok {
+		n = len(rules.Filtered)
+	}
+	writeJSON(w, map[string]int{"count": n})
+}
+
+// handleRenameService changes which service a workspace's noise rules are
+// saved under (e.g. naming a piped "stdin" import).
+func (d *demoAPI) handleRenameService(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	name := cleanServiceName(r.URL.Query().Get("name"))
+	if !validID(id) || strings.TrimSpace(r.URL.Query().Get("name")) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("invalid workspace or name"))
+		return
+	}
+	dir := filepath.Join(d.root, id)
+	if _, err := os.Stat(dir); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(name), 0o644); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]string{"service": name})
+}
+
+func validID(id string) bool {
+	return id != "" && !strings.ContainsAny(id, `/\`) && !strings.HasPrefix(id, ".")
 }
 
 func (d *demoAPI) newWorkspaceDir(service string) (string, string, error) {
@@ -221,7 +333,7 @@ type analysis struct {
 }
 
 func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
-	if id == "" || strings.ContainsAny(id, `/\`) || strings.HasPrefix(id, ".") {
+	if !validID(id) {
 		return nil, errors.New("invalid workspace")
 	}
 	dir := filepath.Join(d.root, id)
@@ -293,9 +405,15 @@ func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
 			name = leadingLevel.ReplaceAllString(p.Template, "")
 		}
 		patterns[i] = demoPattern{
-			ID:       p.Template,
-			Name:     name,
-			Named:    named,
+			ID:    p.Template,
+			Name:  name,
+			Named: named,
+			Description: func() string {
+				if named {
+					return p.Description
+				}
+				return ""
+			}(),
 			Template: p.Template,
 			Count:    counts[i],
 			Level:    detectLevel(p.Template),
@@ -333,6 +451,9 @@ func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
 		p.Filtered = p.Suggestion == "noise"
 		if rulesSaved {
 			p.Filtered = contains(rules.Filtered, p.ID) || (p.Filtered && !contains(rules.Shown, p.ID))
+			if contains(rules.Filtered, p.ID) {
+				a.resp.RulesApplied++
+			}
 		}
 	}
 	sort.SliceStable(patterns, func(i, j int) bool { return patterns[i].Count > patterns[j].Count })
@@ -383,7 +504,7 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	case present == bucketCount:
 		parts = append(parts, "every "+unit)
 	default:
-		parts = append(parts, fmt.Sprintf("in %d of %d %ss", present, bucketCount, unit))
+		parts = append(parts, fmt.Sprintf("in %d of %d %s", present, bucketCount, pluralUnit(unit)))
 	}
 	switch {
 	case isErrorLike(p.Template):
@@ -394,6 +515,14 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		p.Suggestion = "noise"
 	}
 	p.Reason = strings.Join(parts, " · ")
+}
+
+func pluralUnit(unit string) string {
+	if f := strings.Fields(unit); len(f) == 2 {
+		// "5 minutes" -> "5-minute slots"
+		return f[0] + "-" + strings.TrimSuffix(f[1], "s") + " slots"
+	}
+	return unit + "s"
 }
 
 func bucketUnit(seconds int64) string {
@@ -522,6 +651,11 @@ func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"service": a.service})
 }
 
+type demoLine struct {
+	N    int    `json:"n"`
+	Text string `json:"text"`
+}
+
 func (d *demoAPI) handleLines(w http.ResponseWriter, r *http.Request) {
 	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
 	if err != nil {
@@ -529,11 +663,11 @@ func (d *demoAPI) handleLines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	want := r.URL.Query().Get("pattern")
-	out := []string{}
+	out := []demoLine{}
 	for i, tl := range a.lines {
 		o := a.owner[i]
 		if (want == "" && o < 0) || (o >= 0 && a.resp.Patterns[o].ID == want) {
-			out = append(out, tl.Content)
+			out = append(out, demoLine{N: tl.LineNum, Text: tl.Content})
 			if len(out) >= maxDetailLines {
 				break
 			}
@@ -542,8 +676,6 @@ func (d *demoAPI) handleLines(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, out)
 }
 
-// handleExport writes the original lines minus the filtered patterns. The
-// filtered set comes from the query (current page state) when present.
 func (d *demoAPI) handleExport(w http.ResponseWriter, r *http.Request) {
 	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
 	if err != nil {
@@ -557,7 +689,7 @@ func (d *demoAPI) handleExport(w http.ResponseWriter, r *http.Request) {
 			override = []string{}
 		}
 	}
-	name := strings.TrimSuffix(a.resp.Workspace.Title, filepath.Ext(a.resp.Workspace.Title)) + ".clean.log"
+	name := strings.TrimSuffix(a.resp.Workspace.Title, filepath.Ext(a.resp.Workspace.Title)) + ".filtered.log"
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
 	_ = a.writeRemaining(w, override)
@@ -626,6 +758,16 @@ func serviceFromFileName(name string) string {
 		return "logs"
 	}
 	return parts[0]
+}
+
+// cleanServiceName keeps a user-chosen service name whole ("checkout-api"),
+// only normalizing case and separators.
+func cleanServiceName(name string) string {
+	n := strings.Trim(serviceChars.ReplaceAllString(strings.ToLower(strings.TrimSpace(name)), "-"), "-")
+	if n == "" {
+		return "logs"
+	}
+	return n
 }
 
 func readService(dir, fallback string) string {
@@ -700,6 +842,8 @@ func FilterLog(ctx context.Context, root, service, name string, body io.Reader, 
 	d := newDemoAPI(root, "", "")
 	if service == "" {
 		service = serviceFromFileName(filepath.Base(name))
+	} else {
+		service = cleanServiceName(service)
 	}
 	dir := filepath.Join(scratch, "ws")
 	if err := d.landLog(ctx, dir, filepath.Base(name), service, body); err != nil {
@@ -816,47 +960,15 @@ func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		f := demoField{Index: k + 1}
-		nums := make([]float64, 0, len(vals))
-		units := map[string]int{}
+		counts := map[string]int{}
 		for _, v := range vals {
-			m := numberValue.FindStringSubmatch(v)
-			if m == nil {
-				break
-			}
-			var x float64
-			fmt.Sscan(strings.TrimSuffix(v, m[1]), &x)
-			nums = append(nums, x)
-			units[m[1]]++
+			counts[v]++
 		}
-		if len(nums) == len(vals) && !allSame(nums) {
-			f.Kind = "number"
-			for u := range units {
-				f.Unit = u
+		if len(counts) <= 20 {
+			if len(counts) == 1 {
+				continue
 			}
-			f.Overall = summarize(nums)
-			if nb > 0 && a.resp.BucketStart != nil {
-				per := make([][]float64, nb)
-				for j, x := range nums {
-					if ts := stamps[j]; ts != nil {
-						b := int(ts.Unix()-a.resp.BucketStart.Unix()) / int(a.resp.BucketSeconds)
-						if b >= 0 && b < nb {
-							per[b] = append(per[b], x)
-						}
-					}
-				}
-				f.Buckets = make([]*fieldStat, nb)
-				for b, xs := range per {
-					if len(xs) > 0 {
-						f.Buckets[b] = summarize(xs)
-					}
-				}
-			}
-		} else {
 			f.Kind = "text"
-			counts := map[string]int{}
-			for _, v := range vals {
-				counts[v]++
-			}
 			for v, c := range counts {
 				f.Breakdown = append(f.Breakdown, valueCount{v, c})
 			}
@@ -872,19 +984,55 @@ func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
 				}
 				f.Breakdown = f.Breakdown[:8]
 			}
+			out.Fields = append(out.Fields, f)
+			continue
+		}
+		nums := make([]float64, 0, len(vals))
+		numStamps := make([]*time.Time, 0, len(vals))
+		units := map[string]int{}
+		for j, v := range vals {
+			m := numberValue.FindStringSubmatch(v)
+			if m == nil {
+				continue
+			}
+			var x float64
+			fmt.Sscan(strings.TrimSuffix(v, m[1]), &x)
+			nums = append(nums, x)
+			numStamps = append(numStamps, stamps[j])
+			units[m[1]]++
+		}
+		if float64(len(nums)) < 0.9*float64(len(vals)) {
+			// Many distinct non-numeric values (ids, hosts): nothing useful to chart.
+			continue
+		}
+		f.Kind = "number"
+		// Only show a unit read from the values themselves (123ms, 4.2s); never guess.
+		if len(units) == 1 {
+			for u := range units {
+				f.Unit = u
+			}
+		}
+		f.Overall = summarize(nums)
+		if nb > 0 && a.resp.BucketStart != nil {
+			per := make([][]float64, nb)
+			for j, x := range nums {
+				if ts := numStamps[j]; ts != nil {
+					b := int(ts.Unix()-a.resp.BucketStart.Unix()) / int(a.resp.BucketSeconds)
+					if b >= 0 && b < nb {
+						per[b] = append(per[b], x)
+					}
+				}
+			}
+			f.Buckets = make([]*fieldStat, nb)
+			for b, xs := range per {
+				if len(xs) > 0 {
+					f.Buckets[b] = summarize(xs)
+				}
+			}
 		}
 		out.Fields = append(out.Fields, f)
 	}
 	writeJSON(w, out)
-}
-
-func allSame(xs []float64) bool {
-	for _, x := range xs {
-		if x != xs[0] {
-			return false
-		}
-	}
-	return true
 }
 
 func summarize(xs []float64) *fieldStat {

@@ -1,7 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, OctagonAlert, ChevronRight, Clock, Copy, Download, Plus, Search, Sparkles, TrendingUp, Upload, VolumeX, X } from "lucide-react";
-import "./demo-tokens.css";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  CloudDownload,
+  Copy,
+  Download,
+  Eye,
+  File as FileIcon,
+  Info,
+  KeyRound,
+  LoaderCircle,
+  OctagonAlert,
+  Pencil,
+  Plus,
+  Search,
+  Shield,
+  Sparkles,
+  Terminal,
+  TrendingUp,
+  TriangleAlert,
+  Upload,
+  VolumeX,
+  X
+} from "lucide-react";
+import "./design.css";
 import "./demo.css";
+
+// ---------- API types ----------
 
 type DemoWorkspace = {
   id: string;
@@ -9,6 +36,7 @@ type DemoWorkspace = {
   service: string;
   lineCount: number;
   patternCount: number;
+  filteredLines: number;
   updatedAt: string;
 };
 
@@ -16,6 +44,7 @@ type DemoPattern = {
   id: string;
   name: string;
   named: boolean;
+  description?: string;
   template: string;
   count: number;
   level: string;
@@ -37,649 +66,11 @@ type PatternsResponse = {
   bucketStart?: string;
   bucketSeconds: number;
   rulesSaved: boolean;
+  rulesApplied: number;
   named: boolean;
   patterns: DemoPattern[];
   unmatched: { count: number; buckets: number[]; samples: string[] };
 };
-
-// Series colors come from the design tokens (--s1…--s8, checked for
-// color-blind separation); rank 9+ and filtered patterns are gray.
-const cssVar = (name: string, fallback: string) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"].map((c, i) => cssVar(`--s${i + 1}`, c));
-const GRAY = cssVar("--s-other", "#b5b3ac");
-
-// formatPercent is the single place percentages are rounded: 1 decimal, half up.
-export function formatPercent(part: number, total: number) {
-  if (total === 0) return "0.0%";
-  return `${(Math.round((part / total) * 1000) / 10).toFixed(1)}%`;
-}
-
-function formatCount(n: number) {
-  return n.toLocaleString("en-US");
-}
-
-function bucketLabel(data: PatternsResponse, index: number) {
-  if (!data.bucketStart) return "";
-  const t = new Date(new Date(data.bucketStart).getTime() + index * data.bucketSeconds * 1000);
-  return data.bucketSeconds >= 86400 ? formatDate(t) : formatTime(t);
-}
-
-function atBucket(data: PatternsResponse, index: number) {
-  return `${data.bucketSeconds >= 86400 ? "on" : "at"} ${bucketLabel(data, index)}`;
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function formatDate(t: Date) {
-  return `${MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
-}
-
-// "Dec 4 06:00" — never "12-04", which reads as a day-month pair.
-function formatTime(t: Date) {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${formatDate(t)} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`;
-}
-
-function unitLabel(seconds: number) {
-  switch (seconds) {
-    case 60:
-      return "minute";
-    case 300:
-      return "5 minutes";
-    case 900:
-      return "15 minutes";
-    case 3600:
-      return "hour";
-    case 21600:
-      return "6 hours";
-    case 86400:
-      return "day";
-    case 604800:
-      return "week";
-    default:
-      return "month";
-  }
-}
-
-function perUnit(seconds: number) {
-  const unit = unitLabel(seconds);
-  return /^\d/.test(unit) ? `per ${unit}` : `/${unit}`;
-}
-
-async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  const body = await res.json();
-  if (!res.ok) throw new Error(body?.error ?? res.statusText);
-  return body as T;
-}
-
-export function DemoApp() {
-  const [wsId, setWsId] = useState(() => new URLSearchParams(window.location.search).get("ws") ?? "");
-  useEffect(() => {
-    const onPop = () => setWsId(new URLSearchParams(window.location.search).get("ws") ?? "");
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-  const open = useCallback((id: string) => {
-    const url = id ? `?ws=${encodeURIComponent(id)}` : window.location.pathname;
-    window.history.pushState(null, "", url);
-    setWsId(id);
-  }, []);
-  return wsId ? <PatternList wsId={wsId} onOpen={open} /> : <ImportPage onOpen={open} />;
-}
-
-function TopBar({ crumb, onOpen }: { crumb?: React.ReactNode; onOpen: (id: string) => void }) {
-  const [recentOpen, setRecentOpen] = useState(false);
-  const [recent, setRecent] = useState<DemoWorkspace[]>([]);
-  useEffect(() => {
-    if (recentOpen) getJSON<DemoWorkspace[]>("/api/demo/workspaces").then(setRecent).catch(() => setRecent([]));
-  }, [recentOpen]);
-  return (
-    <header className="d-topbar">
-      <button className="d-brand" onClick={() => onOpen("")}>
-        <span className="d-logo">L</span> lapp
-      </button>
-      {crumb}
-      <div className="d-topbar-right">
-        <div className="d-recent">
-          <button className="d-ghost" onClick={() => setRecentOpen((v) => !v)}>
-            <Clock size={16} /> Recent
-          </button>
-          {recentOpen && (
-            <div className="d-menu" onMouseLeave={() => setRecentOpen(false)}>
-              {recent.length === 0 && <div className="d-menu-empty">No imports yet</div>}
-              {recent.map((w) => (
-                <button key={w.id} className="d-menu-item" onClick={() => { setRecentOpen(false); onOpen(w.id); }}>
-                  <strong>{w.service}</strong> <span>{w.title}</span> <em>{formatCount(w.lineCount)} lines</em>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button className="d-outline" onClick={() => onOpen("")}>
-          <Plus size={16} /> Import logs
-        </button>
-      </div>
-    </header>
-  );
-}
-
-function ImportPage({ onOpen }: { onOpen: (id: string) => void }) {
-  const [state, setState] = useState<"idle" | "working" | "failed">("idle");
-  const [error, setError] = useState("");
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const upload = async (file: File) => {
-    setState("working");
-    try {
-      const res = await getJSON<{ id: string }>(`/api/demo/import?name=${encodeURIComponent(file.name)}`, {
-        method: "POST",
-        body: file
-      });
-      onOpen(res.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setState("failed");
-    }
-  };
-
-  return (
-    <div className="d-page">
-      <TopBar onOpen={onOpen} />
-      <main className="d-import">
-        <h1>Import logs</h1>
-        <div
-          className={`d-drop ${dragging ? "is-dragging" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            const f = e.dataTransfer.files[0];
-            if (f) upload(f);
-          }}
-        >
-          <Upload size={28} />
-          {state === "working" ? <p>Finding patterns…</p> : <p>Drop a log file here, or click to choose one</p>}
-          <span className="d-muted d-small">Plain text or NDJSON (one JSON object per line)</span>
-          <input ref={inputRef} type="file" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-        </div>
-        {state === "failed" && <p className="d-error">Couldn't read this file. {error}</p>}
-        <p className="d-privacy">
-          To name patterns, lapp sends a few sample lines from each pattern to OpenRouter. Everything else stays on this machine.
-        </p>
-        <p className="d-hint">
-          Or from a terminal: <code>lapp app.log</code> or <code>kubectl logs pod/api | lapp --name api.log</code>
-        </p>
-      </main>
-    </div>
-  );
-}
-
-function PatternList({ wsId, onOpen }: { wsId: string; onOpen: (id: string) => void }) {
-  const [data, setData] = useState<PatternsResponse | null>(null);
-  const [error, setError] = useState("");
-  const [filtered, setFiltered] = useState<Set<string>>(new Set());
-  const [query, setQuery] = useState("");
-  const [errorsOnly, setErrorsOnly] = useState(false);
-  const [sort, setSort] = useState<"lines" | "spiking" | "new">("lines");
-  const [showFiltered, setShowFiltered] = useState(true);
-  const [detail, setDetail] = useState<DemoPattern | "unmatched" | null>(null);
-  const [savedNote, setSavedNote] = useState(false);
-  const [bannerOpen, setBannerOpen] = useState(true);
-
-  useEffect(() => {
-    setData(null);
-    getJSON<PatternsResponse>(`/api/demo/patterns?ws=${encodeURIComponent(wsId)}`)
-      .then((d) => {
-        setData(d);
-        setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
-        setBannerOpen(!d.rulesSaved);
-        // ?p=<template> (or ?p=unmatched) opens a pattern's detail directly.
-        const want = new URLSearchParams(window.location.search).get("p");
-        if (want === "unmatched") setDetail("unmatched");
-        else if (want) setDetail(d.patterns.find((x) => x.id === want) ?? null);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [wsId]);
-
-  // Colors follow rank by total lines and never change when filtering.
-  const colors = useMemo(() => {
-    const m = new Map<string, string>();
-    data?.patterns.forEach((p, i) => m.set(p.id, i < PALETTE.length ? PALETTE[i] : GRAY));
-    return m;
-  }, [data]);
-
-  if (error) {
-    return (
-      <div className="d-page">
-        <TopBar onOpen={onOpen} />
-        <p className="d-error d-pad">{error}</p>
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div className="d-page">
-        <TopBar onOpen={onOpen} />
-        <p className="d-pad d-muted">Loading patterns…</p>
-      </div>
-    );
-  }
-
-  const total = data.workspace.lineCount;
-  const filteredLines = data.patterns.filter((p) => filtered.has(p.id)).reduce((s, p) => s + p.count, 0);
-  const left = total - filteredLines;
-  const visible = data.patterns.filter((p) => !filtered.has(p.id));
-  const hidden = data.patterns.filter((p) => filtered.has(p.id));
-  const autoNoise = data.patterns.filter((p) => p.suggestion === "noise");
-  const autoNoiseLines = autoNoise.reduce((s, p) => s + p.count, 0);
-  const hasTrend = data.bucketSeconds > 0;
-  const unit = unitLabel(data.bucketSeconds);
-
-  const matches = (p: DemoPattern) => {
-    if (errorsOnly && !["error", "warn", "fatal"].includes(p.level)) return false;
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return p.name.toLowerCase().includes(q) || p.template.toLowerCase().includes(q);
-  };
-  const sorter = (a: DemoPattern, b: DemoPattern) => {
-    if (sort === "spiking") return Number(b.spikeAt !== undefined) - Number(a.spikeAt !== undefined) || b.count - a.count;
-    if (sort === "new") return (b.newAt ?? -1) - (a.newAt ?? -1) || b.count - a.count;
-    return b.count - a.count;
-  };
-
-  const toggle = (id: string) => {
-    setSavedNote(false);
-    setFiltered((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const save = async () => {
-    await getJSON(`/api/demo/rules?ws=${encodeURIComponent(wsId)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filtered: [...filtered] })
-    });
-    setSavedNote(true);
-    setBannerOpen(false);
-  };
-
-  const exportHref =
-    `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
-    (filtered.size === 0 ? "&filtered=" : [...filtered].map((id) => `&filtered=${encodeURIComponent(id)}`).join(""));
-  const fileName = data.fileNames[0] ?? data.workspace.title;
-
-  return (
-    <div className="d-page">
-      <TopBar
-        onOpen={onOpen}
-        crumb={
-          <div className="d-crumb">
-            <span className="d-slash">/</span>
-            <strong>{data.workspace.service}</strong>
-            <span className="d-muted">
-              {fileName} · {formatCount(total)} lines
-              {data.from && data.to ? ` · ${formatTime(new Date(data.from))} – ${formatTime(new Date(data.to))}` : ""}
-            </span>
-          </div>
-        }
-      />
-      <main className="d-main">
-        <section className="d-summary">
-          <div>
-            <div className="d-summary-line">
-              <span className="d-big">{formatPercent(filteredLines, total)} filtered</span>
-              <span className="d-muted">
-                <b>{formatCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{formatCount(data.unmatched.count)}</b> unmatched lines
-              </span>
-            </div>
-            <div className="d-progress">
-              <div style={{ width: formatPercent(filteredLines, total) }} />
-            </div>
-          </div>
-          <div className="d-summary-actions">
-            <button className="d-chip" onClick={() => navigator.clipboard?.writeText(`lapp filter ${fileName} > clean.log`)} title="Copy">
-              <span className="d-mono">&gt;_ lapp filter {fileName} &gt; clean.log</span> <Copy size={14} />
-            </button>
-            <a className="d-primary" href={exportHref}>
-              <Download size={16} /> Export {formatCount(left)} lines
-            </a>
-          </div>
-        </section>
-        {!data.named && <div className="d-keynote">Patterns are shown as raw text. Set OPENROUTER_API_KEY to get readable names.</div>}
-        {savedNote && <div className="d-note">Noise rules saved for {data.workspace.service}. They'll apply next time.</div>}
-
-        <section className="d-card d-chart-card">
-          <div className="d-card-head">
-            <div>
-              <strong>Remaining lines over time</strong>{" "}
-              <span className="d-muted">{hasTrend ? `Per ${unit} · filtered patterns not shown` : ""}</span>
-            </div>
-            <div className="d-legend">
-              {visible.slice(0, 6).map((p) => (
-                <span key={p.id}>
-                  <i style={{ background: colors.get(p.id) }} />
-                  {shortName(p)}
-                </span>
-              ))}
-            </div>
-          </div>
-          {hasTrend ? (
-            <StackedChart data={data} patterns={visible} colors={colors} />
-          ) : (
-            <p className="d-muted d-pad">Trend unavailable — no timestamps found in these lines</p>
-          )}
-        </section>
-
-        {bannerOpen && autoNoise.length > 0 && (
-          <section className="d-banner">
-            <VolumeX size={18} />
-            <span>
-              lapp filtered {autoNoise.length} patterns that look like noise ({formatCount(autoNoiseLines)} lines,{" "}
-              {formatPercent(autoNoiseLines, total)}). Based on share and repetition, not log level. Save to apply the same rules to{" "}
-              <b>{data.workspace.service}</b> logs next time.
-            </span>
-            <button className="d-primary" onClick={save}>
-              <Check size={16} /> Save noise rules
-            </button>
-            <button className="d-ghost" onClick={() => { setFiltered(new Set()); setSavedNote(false); }}>
-              Unfilter all
-            </button>
-          </section>
-        )}
-
-        <section className="d-toolbar">
-          <label className="d-search">
-            <Search size={16} />
-            <input placeholder="Search names or templates" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </label>
-          <div className="d-seg">
-            <button className={!errorsOnly ? "is-on" : ""} onClick={() => setErrorsOnly(false)}>All</button>
-            <button className={errorsOnly ? "is-on" : ""} onClick={() => setErrorsOnly(true)}>Errors and warnings only</button>
-          </div>
-          <div className="d-sort">
-            <span className="d-muted">Sort</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
-              <option value="lines">Most lines</option>
-              <option value="spiking">Spiking</option>
-              <option value="new">New</option>
-            </select>
-            {!bannerOpen && (
-              <button className="d-outline" onClick={save}>
-                Save noise rules
-              </button>
-            )}
-          </div>
-        </section>
-
-        <section className="d-card d-table">
-          <div className="d-row d-head">
-            <span>Filter</span>
-            <span>Pattern</span>
-            <span>Level</span>
-            <span>{hasTrend ? `Trend (${unit === "hour" ? "hourly" : `per ${unit}`})` : "Trend"}</span>
-            <span>Lines · Share</span>
-          </div>
-          <div className="d-group">
-            To review · {visible.length} patterns · {formatCount(left)} lines
-          </div>
-          {visible.length === 0 && (
-            <div className="d-empty">
-              Everything here is filtered as noise.{" "}
-              <button className="d-link" onClick={() => setShowFiltered(true)}>Show filtered patterns</button>
-            </div>
-          )}
-          {visible.filter(matches).sort(sorter).map((p) => (
-            <PatternRow key={p.id} p={p} data={data} total={total} color={colors.get(p.id)!} filtered={false} onToggle={toggle} onOpen={() => setDetail(p)} />
-          ))}
-          <div className="d-row d-unmatched" onClick={() => setDetail("unmatched")}>
-            <span />
-            <span>
-              <span className="d-name"><i style={{ background: "#8b95a1" }} /> Unmatched lines</span>
-              <span className="d-muted d-small">Lines that fit no pattern are listed here and are never filtered.</span>
-            </span>
-            <span />
-            <span>{hasTrend && <Sparkline buckets={data.unmatched.buckets} color="#8b95a1" />}</span>
-            <span className="d-count"><b>{formatCount(data.unmatched.count)}</b></span>
-          </div>
-          {hidden.length > 0 && (
-            <>
-              <button className="d-group d-group-btn" onClick={() => setShowFiltered((v) => !v)}>
-                {showFiltered ? <ChevronDown size={16} /> : <ChevronRight size={16} />} Filtered · {hidden.length} patterns ·{" "}
-                {formatCount(filteredLines)} lines
-              </button>
-              {showFiltered &&
-                hidden.filter(matches).sort(sorter).map((p) => (
-                  <PatternRow key={p.id} p={p} data={data} total={total} color={GRAY} filtered onToggle={toggle} onOpen={() => setDetail(p)} />
-                ))}
-            </>
-          )}
-        </section>
-      </main>
-      {detail && (
-        <Detail
-          wsId={wsId}
-          data={data}
-          target={detail}
-          color={detail === "unmatched" ? "#8b95a1" : colors.get(detail.id)!}
-          filtered={detail !== "unmatched" && filtered.has(detail.id)}
-          onToggle={toggle}
-          onClose={() => setDetail(null)}
-        />
-      )}
-    </div>
-  );
-}
-
-function shortName(p: DemoPattern) {
-  return p.name.length > 32 ? `${p.name.slice(0, 30)}…` : p.name;
-}
-
-function Template({ text }: { text: string }) {
-  const parts = text.split("<*>");
-  return (
-    <span className="d-mono d-template">
-      {parts.map((part, i) => (
-        <React.Fragment key={i}>
-          {part}
-          {i < parts.length - 1 && <mark>&lt;*&gt;</mark>}
-        </React.Fragment>
-      ))}
-    </span>
-  );
-}
-
-function PatternRow({
-  p,
-  data,
-  total,
-  color,
-  filtered,
-  onToggle,
-  onOpen
-}: {
-  p: DemoPattern;
-  data: PatternsResponse;
-  total: number;
-  color: string;
-  filtered: boolean;
-  onToggle: (id: string) => void;
-  onOpen: () => void;
-}) {
-  const share = formatPercent(p.count, total);
-  return (
-    <div className={`d-row ${filtered ? "is-filtered" : ""}`} onClick={onOpen}>
-      <span onClick={(e) => e.stopPropagation()}>
-        <input
-          type="checkbox"
-          checked={filtered}
-          title={filtered ? "Show this pattern" : "Filter this pattern"}
-          onChange={() => onToggle(p.id)}
-        />
-      </span>
-      <span className="d-pattern-cell d-fade">
-        <span className="d-name">
-          <i style={{ background: color }} />
-          {p.named ? (
-            <b>{p.name}</b>
-          ) : (
-            <b className="d-mono d-unnamed" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={p.name} />
-            </b>
-          )}
-          {!filtered && p.spikeAt !== undefined && (
-            <span className="d-badge d-spike">
-              <TrendingUp size={13} /> Spiked to {p.buckets[p.spikeAt]}{perUnit(data.bucketSeconds)} {atBucket(data, p.spikeAt)}
-            </span>
-          )}
-          {!filtered && p.newAt !== undefined && (
-            <span className="d-badge d-new">
-              <Sparkles size={13} /> First seen {bucketLabel(data, p.newAt)}
-            </span>
-          )}
-          {p.suggestion === "noise" && (
-            <span className="d-badge d-noise">
-              <VolumeX size={13} /> Likely noise
-            </span>
-          )}
-          {p.suggestion === "maybe" && !filtered && (
-            <span className="d-badge d-maybe" title="Not filtered. Decide for yourself.">
-              Maybe noise
-            </span>
-          )}
-        </span>
-        {p.named && <Template text={p.template} />}
-        {p.suggestion === "noise" && <span className="d-why-line">Why it looks like noise: {p.reason}</span>}
-        {p.suggestion === "maybe" && !filtered && <span className="d-why-line">Why it's not filtered: {p.keptReason}</span>}
-      </span>
-      <span className="d-fade">
-        {p.level ? (
-          <span className={`d-level d-level-${p.level}`}>
-            {["error", "fatal"].includes(p.level) && <OctagonAlert size={12} />}
-            {p.level}
-          </span>
-        ) : (
-          <span className="d-muted">—</span>
-        )}
-      </span>
-      <span>{data.bucketSeconds > 0 && <Sparkline buckets={p.buckets} color={color} mark={filtered ? undefined : p.spikeAt} />}</span>
-      <span className="d-count d-fade">
-        <span>
-          <b>{formatCount(p.count)}</b>
-          <em>{share}</em>
-        </span>
-        <span className="d-bar">
-          <span style={{ width: share, background: color }} />
-        </span>
-      </span>
-    </div>
-  );
-}
-
-function Sparkline({ buckets, color, mark }: { buckets: number[]; color: string; mark?: number }) {
-  const w = 200;
-  const h = 36;
-  const maxV = Math.max(1, ...buckets);
-  const bw = w / Math.max(buckets.length, 1);
-  return (
-    <svg className="d-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      {buckets.map((v, i) =>
-        v > 0 ? <rect key={i} x={i * bw + bw * 0.15} width={bw * 0.7} y={h - (v / maxV) * (h - 4)} height={(v / maxV) * (h - 4)} fill={color} /> : null
-      )}
-      {mark !== undefined && <circle cx={mark * bw + bw / 2} cy={h - (buckets[mark] / maxV) * (h - 4)} r={3} fill="#e5484d" />}
-      <line x1={0} x2={w} y1={h - 0.5} y2={h - 0.5} stroke="#dfe3e8" />
-    </svg>
-  );
-}
-
-function StackedChart({ data, patterns, colors }: { data: PatternsResponse; patterns: DemoPattern[]; colors: Map<string, string> }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(1000);
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(Math.max(320, el.clientWidth)));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const n = data.unmatched.buckets.length;
-  const series = [...patterns.map((p) => ({ id: p.id, name: p.name, color: colors.get(p.id)!, buckets: p.buckets })), { id: "~unmatched", name: "Unmatched lines", color: "#8b95a1", buckets: data.unmatched.buckets }];
-  const totals = Array.from({ length: n }, (_, i) => series.reduce((s, x) => s + x.buckets[i], 0));
-  const maxV = niceMax(Math.max(1, ...totals));
-  const W = width;
-  const H = 180;
-  const padL = 36;
-  const bw = (W - padL) / Math.max(n, 1);
-  const ticks = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - padL) / 110))));
-  return (
-    <div className="d-chart" ref={boxRef}>
-      <svg viewBox={`0 0 ${W} ${H + 24}`} width={W} height={H + 24} onMouseLeave={() => setHover(null)}>
-        {[0, 0.5, 1].map((f) => (
-          <g key={f}>
-            <line x1={padL} x2={W} y1={H - f * H} y2={H - f * H} stroke="#e8ebef" />
-            <text x={padL - 6} y={H - f * H + (f === 1 ? 12 : 4)} textAnchor="end" className="d-axis">
-              {Math.round(maxV * f)}
-            </text>
-          </g>
-        ))}
-        {totals.map((_, i) => {
-          let y = H;
-          return (
-            <g key={i} onMouseEnter={() => setHover(i)}>
-              <rect x={padL + i * bw} y={0} width={bw} height={H} fill={hover === i ? "#eef1f4" : "transparent"} />
-              {series.map((s) => {
-                const v = s.buckets[i];
-                if (!v) return null;
-                const hh = (v / maxV) * H;
-                y -= hh;
-                return <rect key={s.id} x={padL + i * bw + bw * 0.1} width={bw * 0.8} y={y} height={hh} fill={s.color} />;
-              })}
-              {i % ticks === 0 && (
-                <text x={padL + i * bw} y={H + 18} className="d-axis">
-                  {bucketLabel(data, i)}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      {hover !== null && (
-        <div className="d-tooltip" style={{ left: `${((padL + (hover + 1) * bw) / W) * 100}%` }}>
-          <div className="d-muted">
-            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).split(" ").pop()}`}
-          </div>
-          {series
-            .filter((s) => s.buckets[hover] > 0)
-            .sort((a, b) => b.buckets[hover] - a.buckets[hover])
-            .slice(0, 8)
-            .map((s) => (
-              <div key={s.id} className="d-tip-row">
-                <i style={{ background: s.color }} />
-                <span>{s.name.length > 40 ? `${s.name.slice(0, 38)}…` : s.name}</span>
-                <b>{s.buckets[hover]}</b>
-              </div>
-            ))}
-          <div className="d-tip-total">Total {totals[hover]} lines</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function niceMax(v: number) {
-  const p = Math.pow(10, Math.floor(Math.log10(v)));
-  for (const m of [1, 2, 5, 10]) if (m * p >= v) return m * p;
-  return 10 * p;
-}
 
 type FieldStat = { median: number; p95: number; max: number };
 type DemoField = {
@@ -692,15 +83,1193 @@ type DemoField = {
   other?: number;
 };
 type PatternDetail = { firstSeen?: string; lastSeen?: string; fields: DemoField[] };
+type DemoLine = { n: number; text: string };
+type ImportStatus = { state: string; step: string; error?: string; named: boolean; lines: number; batches?: string };
 
-function Detail({
+async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const body = await res.json();
+  if (!res.ok) throw new Error(body?.error ?? res.statusText);
+  return body as T;
+}
+
+// ---------- formatting ----------
+
+// formatPercent is the single place percentages are rounded: 1 decimal, half up.
+export function formatPercent(part: number, total: number) {
+  if (total === 0) return "0.0%";
+  return `${(Math.round((part / total) * 1000) / 10).toFixed(1)}%`;
+}
+
+const fmtCount = (n: number) => n.toLocaleString("en-US");
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const pad = (n: number) => String(n).padStart(2, "0");
+const formatDate = (t: Date) => `${MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
+// "Dec 4 06:00" — never "12-04", which reads as a day-month pair.
+const formatTime = (t: Date) => `${formatDate(t)} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`;
+
+function bucketTime(data: PatternsResponse, i: number) {
+  return new Date(new Date(data.bucketStart!).getTime() + i * data.bucketSeconds * 1000);
+}
+function bucketLabel(data: PatternsResponse, i: number) {
+  if (!data.bucketStart) return "";
+  const t = bucketTime(data, i);
+  return data.bucketSeconds >= 86400 ? formatDate(t) : formatTime(t);
+}
+function atBucket(data: PatternsResponse, i: number) {
+  return `${data.bucketSeconds >= 86400 ? "on" : "at"} ${bucketLabel(data, i)}`;
+}
+function unitName(seconds: number) {
+  const names: Record<number, string> = { 60: "minute", 300: "5 min", 900: "15 min", 3600: "hour", 21600: "6 hours", 86400: "day", 604800: "week" };
+  return names[seconds] ?? "month";
+}
+function perUnit(seconds: number) {
+  const u = unitName(seconds);
+  return /^\d/.test(u) ? ` per ${u}` : `/${u}`;
+}
+function timeAgo(iso: string) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+function niceMax(v: number) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+function fmtNum(x: number) {
+  if (Math.abs(x) >= 1e6) return `${+(x / 1e6).toFixed(1)}M`;
+  if (Math.abs(x) >= 1e4) return `${+(x / 1e3).toFixed(1)}k`;
+  return Number.isInteger(x) ? String(x) : String(+x.toFixed(2));
+}
+function median(xs: number[]) {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.floor((s.length - 1) / 2)];
+}
+// Same rule as the server: first token of the file name ("Apache_2k.log" → "apache").
+function serviceFromFileName(name: string) {
+  const stem = name.toLowerCase().replace(/\.[^.]*$/, "");
+  return stem.split(/[^a-z0-9]+/).filter(Boolean)[0] ?? "logs";
+}
+
+// Series colors are design tokens --s1…--s8; rank 9+ and filtered use --s-other.
+const seriesColor = (rank: number) => (rank < 8 ? `var(--s${rank + 1})` : "var(--s-other)");
+const OTHER = "var(--s-other)";
+
+function useToast() {
+  const [toast, setToast] = useState<string | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const show = useCallback((text: string) => {
+    setToast(text);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setToast(null), 4000);
+  }, []);
+  const node = toast ? (
+    <div className="toast toast-fixed" role="status">
+      <Check size={16} /> {toast}
+    </div>
+  ) : null;
+  return { show, node };
+}
+
+function copyText(text: string, toast: (t: string) => void) {
+  navigator.clipboard?.writeText(text).then(() => toast("Copied"), () => undefined);
+}
+
+// ---------- shell ----------
+
+export function DemoApp() {
+  const read = () => new URLSearchParams(window.location.search);
+  const [params, setParams] = useState(read);
+  useEffect(() => {
+    const onPop = () => setParams(read());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  const navigate = useCallback((query: Record<string, string>, replace = false) => {
+    const qs = new URLSearchParams(query).toString();
+    const url = qs ? `?${qs}` : window.location.pathname;
+    if (replace) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+    setParams(read());
+  }, []);
+  const ws = params.get("ws") ?? "";
+  return (
+    <div className="dz">
+      {ws ? (
+        <PatternList key={ws} wsId={ws} patternParam={params.get("pattern")} navigate={navigate} />
+      ) : (
+        <ImportPage navigate={navigate} />
+      )}
+    </div>
+  );
+}
+
+function TopBar({ crumb, navigate, full = true }: { crumb?: React.ReactNode; navigate: (q: Record<string, string>) => void; full?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [recent, setRecent] = useState<DemoWorkspace[]>([]);
+  useEffect(() => {
+    if (open) getJSON<DemoWorkspace[]>("/api/demo/workspaces").then(setRecent).catch(() => setRecent([]));
+  }, [open]);
+  return (
+    <header className="topbar">
+      <button className="wordmark linklike" onClick={() => navigate({})}>
+        <i />
+        lapp
+      </button>
+      {crumb}
+      <div style={{ flex: 1 }} />
+      {full && (
+        <>
+          <div className="menu-anchor">
+            <button className="btn ghost sm" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+              <Clock className="ico" /> Recent
+            </button>
+            {open && (
+              <div className="menu" onMouseLeave={() => setOpen(false)}>
+                {recent.length === 0 && <div className="menu-empty">No imports yet</div>}
+                {recent.map((w) => (
+                  <button key={w.id} className="menu-item" onClick={() => { setOpen(false); navigate({ ws: w.id }); }}>
+                    <b>{w.service}</b>
+                    <span className="mono ell">{w.title}</span>
+                    <em className="tnum">{timeAgo(w.updatedAt)}</em>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button className="btn sm" onClick={() => navigate({})}>
+            <Plus className="ico" /> Import logs
+          </button>
+        </>
+      )}
+    </header>
+  );
+}
+
+// Click-to-rename service name in the top bar; saved rules follow the new name.
+function ServiceName({ wsId, value, onRenamed }: { wsId: string; value: string; onRenamed: (s: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const commit = async () => {
+    setEditing(false);
+    const name = draft.trim();
+    if (!name || name === value) return setDraft(value);
+    try {
+      const res = await getJSON<{ service: string }>(`/api/demo/service?ws=${encodeURIComponent(wsId)}&name=${encodeURIComponent(name)}`, { method: "POST" });
+      onRenamed(res.service);
+      setDraft(res.service);
+    } catch {
+      setDraft(value);
+    }
+  };
+  if (editing) {
+    return (
+      <input
+        className="svc-input"
+        autoFocus
+        value={draft}
+        aria-label="Service name"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+      />
+    );
+  }
+  const unnamed = value === "stdin";
+  return (
+    <button
+      className={`svc-name ${unnamed ? "is-stdin" : ""}`}
+      onClick={() => setEditing(true)}
+      title={unnamed ? "Give this service a name to reuse its noise rules next time" : "Rename service"}
+    >
+      <b>{value}</b>
+      <Pencil className="ico pen" />
+    </button>
+  );
+}
+
+// ---------- import page ----------
+
+const STEPS = [
+  { key: "read", label: "Reading file", steps: ["READING_LOGS", "MERGING_ENTRIES"] },
+  { key: "find", label: "Finding patterns", steps: ["DISCOVERING_PATTERNS"] },
+  { key: "name", label: "Naming patterns", steps: ["LABELING_PATTERNS"] },
+  { key: "noise", label: "Marking noise", steps: ["WRITING_RESULTS"] }
+];
+
+function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replace?: boolean) => void }) {
+  const [tab, setTab] = useState<"file" | "gcp">("file");
+  const [file, setFile] = useState<File | null>(null);
+  const [service, setService] = useState("");
+  const [savedRules, setSavedRules] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [recent, setRecent] = useState<DemoWorkspace[] | null>(null);
+  const [job, setJob] = useState<{ id: string; name: string } | null>(null);
+  const [status, setStatus] = useState<ImportStatus | null>(null);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { show, node: toast } = useToast();
+
+  useEffect(() => {
+    getJSON<DemoWorkspace[]>("/api/demo/workspaces").then(setRecent).catch(() => setRecent([]));
+  }, []);
+  useEffect(() => {
+    if (!service) {
+      setSavedRules(0);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      getJSON<{ count: number }>(`/api/demo/service-rules?service=${encodeURIComponent(service)}`)
+        .then((r) => setSavedRules(r.count))
+        .catch(() => setSavedRules(0));
+    }, 150);
+    return () => window.clearTimeout(t);
+  }, [service]);
+
+  // Poll the import until patterns are ready, then open the list.
+  useEffect(() => {
+    if (!job) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const st = await getJSON<ImportStatus>(`/api/demo/status?ws=${encodeURIComponent(job.id)}`);
+        if (stop) return;
+        setStatus(st);
+        if (st.state === "succeeded") return navigate({ ws: job.id });
+        if (st.state === "failed") return;
+      } catch (e) {
+        if (!stop) setStatus({ state: "failed", step: "", error: String(e), named: false, lines: 0 });
+        return;
+      }
+      window.setTimeout(tick, 400);
+    };
+    tick();
+    return () => {
+      stop = true;
+    };
+  }, [job, navigate]);
+
+  const choose = (f: File | undefined) => {
+    if (!f) return;
+    setFile(f);
+    setService(serviceFromFileName(f.name));
+    setError("");
+  };
+
+  const start = async () => {
+    if (!file) return;
+    setError("");
+    try {
+      const res = await getJSON<{ id: string }>(
+        `/api/demo/import?name=${encodeURIComponent(file.name)}&service=${encodeURIComponent(service)}`,
+        { method: "POST", body: file }
+      );
+      setStatus(null);
+      setJob({ id: res.id, name: file.name });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  if (job) {
+    return (
+      <>
+        <TopBar navigate={navigate} full={false} />
+        <Processing
+          name={job.name}
+          status={status}
+          onRetry={() => {
+            setJob(null);
+            setFile(null);
+            setStatus(null);
+          }}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <TopBar navigate={navigate} full={false} />
+      <main className="imp">
+        <h1>Import logs</h1>
+        <div className="tabs big" role="tablist">
+          <button className={tab === "file" ? "on" : ""} onClick={() => setTab("file")} role="tab" aria-selected={tab === "file"}>
+            <FileIcon className="ico" /> Log file
+          </button>
+          <button className={tab === "gcp" ? "on" : ""} onClick={() => setTab("gcp")} role="tab" aria-selected={tab === "gcp"}>
+            <CloudDownload className="ico" /> Import from GCP
+          </button>
+        </div>
+
+        {tab === "gcp" ? (
+          <div className="card form">
+            <p className="lead-plain">For this demo, GCP imports still run on the previous screen.</p>
+            <div>
+              <a className="btn primary" href="/classic">
+                <CloudDownload className="ico" /> Open GCP import
+              </a>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button
+              className={`drop ${dragging ? "is-drag" : ""}`}
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                choose(e.dataTransfer.files[0]);
+              }}
+            >
+              <span className="drop-ic">
+                <Upload className="ico" />
+              </span>
+              {file ? (
+                <>
+                  <b>{file.name}</b>
+                  <span className="tnum">{fmtCount(file.size)} bytes · click to choose another file</span>
+                </>
+              ) : (
+                <>
+                  <b>Drop a log file here, or click to choose one</b>
+                  <span>Plain text or NDJSON (one JSON object per line) · your file is never changed</span>
+                </>
+              )}
+              <input ref={inputRef} type="file" hidden onChange={(e) => choose(e.target.files?.[0])} />
+            </button>
+
+            <div className="field">
+              <label htmlFor="svc">
+                Service <span>Saved noise rules for this service apply automatically</span>
+              </label>
+              <div className="combo">
+                <input id="svc" value={service} placeholder="e.g. api" onChange={(e) => setService(e.target.value)} />
+                {savedRules > 0 && (
+                  <span className="hintr">
+                    <Check className="ico" /> {savedRules} noise {savedRules === 1 ? "rule" : "rules"} saved
+                  </span>
+                )}
+              </div>
+            </div>
+            {error && <p className="err">Couldn't read this file. {error}</p>}
+            <div className="actions">
+              <button className="btn primary" disabled={!file} onClick={start}>
+                Import
+              </button>
+            </div>
+          </>
+        )}
+
+        <div className="privacy">
+          <Shield className="ico" />
+          <span>To name patterns, lapp sends a few sample lines from each pattern to OpenRouter. Everything else stays on this machine.</span>
+        </div>
+        <div className="clihint">
+          <span className="sub">Or from a terminal</span>
+          {["lapp app.log", "kubectl logs pod/api | lapp --name api.log"].map((c) => (
+            <button key={c} className="chip mono" onClick={() => copyText(c, show)} title="Copy">
+              {c}
+            </button>
+          ))}
+        </div>
+
+        <section className="recent">
+          <h3>Recent</h3>
+          {recent && recent.length === 0 && (
+            <p className="sub">
+              Drop in a log file to find its patterns. Or run <code>lapp app.log</code> from your terminal.
+            </p>
+          )}
+          {recent?.map((w) => (
+            <button key={w.id} className="rrow" onClick={() => navigate({ ws: w.id })}>
+              <b className="ell">{w.service}</b>
+              <span className="mono ell">{w.title}</span>
+              <span className="tnum">
+                {fmtCount(w.lineCount)} lines · {w.patternCount} patterns · {formatPercent(w.filteredLines, w.lineCount)} filtered
+              </span>
+              <span className="tnum">{timeAgo(w.updatedAt)}</span>
+              <ChevronRight className="ico" />
+            </button>
+          ))}
+        </section>
+      </main>
+      {toast}
+    </>
+  );
+}
+
+function Processing({ name, status, onRetry }: { name: string; status: ImportStatus | null; onRetry: () => void }) {
+  const current = STEPS.findIndex((s) => s.steps.includes(status?.step || "READING_LOGS"));
+  const failed = status?.state === "failed";
+  const done = status?.state === "succeeded";
+  const idx = done ? STEPS.length : Math.max(0, current);
+  return (
+    <main className="imp">
+      <h1>{name}</h1>
+      <p className="lead">The pattern list opens as soon as this finishes.</p>
+      <div className="card steps">
+        {STEPS.map((s, i) => {
+          const skipped = s.key === "name" && status !== null && !status.named;
+          const state = failed && i === idx ? "fail" : i < idx ? "done" : i === idx ? "run" : "todo";
+          let detail = "";
+          if (s.key === "read" && status?.lines) detail = `${fmtCount(status.lines)} lines`;
+          if (skipped && i <= idx) detail = "Skipped — no OpenRouter key";
+          if (s.key === "name" && state === "run" && status?.batches) detail = status.batches;
+          return (
+            <div key={s.key} className={`step ${state}`}>
+              <span className="sic">
+                {state === "done" && <Check className="ico" />}
+                {state === "run" && <LoaderCircle className="ico spin" />}
+                {state === "fail" && <X className="ico" />}
+              </span>
+              <b>{state === "fail" ? "Couldn't read this file." : `${s.label}${state === "run" ? "…" : ""}`}</b>
+              <span className="tnum">{state === "fail" ? status?.error : detail}</span>
+            </div>
+          );
+        })}
+        <div className="pbar">
+          <i style={{ width: `${(idx / STEPS.length) * 100}%` }} />
+        </div>
+        {failed && (
+          <div className="actions left">
+            <button className="btn primary" onClick={onRetry}>
+              Choose another file
+            </button>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+// ---------- pattern list ----------
+
+function PatternList({
+  wsId,
+  patternParam,
+  navigate
+}: {
+  wsId: string;
+  patternParam: string | null;
+  navigate: (q: Record<string, string>, replace?: boolean) => void;
+}) {
+  const [data, setData] = useState<PatternsResponse | null>(null);
+  const [error, setError] = useState("");
+  const [filtered, setFiltered] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
+  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [sort, setSort] = useState<"lines" | "spiking" | "new">("lines");
+  const [showFiltered, setShowFiltered] = useState<boolean | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const filteredGroupRef = useRef<HTMLButtonElement>(null);
+  const { show: toast, node: toastNode } = useToast();
+
+  useEffect(() => {
+    getJSON<PatternsResponse>(`/api/demo/patterns?ws=${encodeURIComponent(wsId)}`)
+      .then((d) => {
+        setData(d);
+        setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [wsId]);
+
+  // Colors are assigned once by total-line rank and never repaint.
+  const rank = useMemo(() => {
+    const m = new Map<string, number>();
+    data?.patterns.forEach((p, i) => m.set(p.id, i));
+    return m;
+  }, [data]);
+
+  const selected: DemoPattern | "unmatched" | null = useMemo(() => {
+    if (!data || !patternParam) return null;
+    if (patternParam === "unmatched") return "unmatched";
+    return data.patterns.find((p) => p.id === patternParam) ?? null;
+  }, [data, patternParam]);
+
+  const select = useCallback((id: string | null) => navigate(id ? { ws: wsId, pattern: id } : { ws: wsId }, true), [navigate, wsId]);
+
+  const toggle = useCallback((id: string) => {
+    setFiltered((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const hasTrend = !!data && data.bucketSeconds > 0;
+  const matches = (p: DemoPattern) => {
+    if (errorsOnly && !["error", "warn", "fatal"].includes(p.level)) return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return p.name.toLowerCase().includes(q) || p.template.toLowerCase().includes(q);
+  };
+  const sorter = (a: DemoPattern, b: DemoPattern) => {
+    if (sort === "spiking") {
+      const sa = a.spikeAt !== undefined ? a.buckets[a.spikeAt] : -1;
+      const sb = b.spikeAt !== undefined ? b.buckets[b.spikeAt] : -1;
+      return sb - sa || b.count - a.count;
+    }
+    if (sort === "new") return (b.newAt ?? -1) - (a.newAt ?? -1) || b.count - a.count;
+    return b.count - a.count;
+  };
+  const visible = data ? data.patterns.filter((p) => !filtered.has(p.id)) : [];
+  const hidden = data ? data.patterns.filter((p) => filtered.has(p.id)) : [];
+  const visibleRows = visible.filter(matches).sort(sorter);
+  const hiddenRows = hidden.filter(matches).sort(sorter);
+  const filteredOpen = showFiltered ?? hidden.length <= 5;
+  const order = [...visibleRows, ...(filteredOpen ? hiddenRows : [])];
+
+  // Keyboard: "/" focuses search, Esc closes detail, ↑/↓ move between patterns.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement;
+      if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      } else if (e.key === "Escape" && selected && !typing) {
+        select(null);
+      } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && selected && selected !== "unmatched" && !typing) {
+        e.preventDefault();
+        const i = order.findIndex((p) => p.id === selected.id);
+        const next = order[i + (e.key === "ArrowDown" ? 1 : -1)];
+        if (next) select(next.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  if (error) {
+    return (
+      <>
+        <TopBar navigate={navigate} />
+        <p className="err pad">{error}</p>
+      </>
+    );
+  }
+  if (!data) return <ListSkeleton navigate={navigate} />;
+
+  const total = data.workspace.lineCount;
+  const filteredLines = hidden.reduce((s, p) => s + p.count, 0);
+  const left = total - filteredLines;
+  const autoNoise = data.patterns.filter((p) => p.suggestion === "noise" && filtered.has(p.id));
+  const autoNoiseLines = autoNoise.reduce((s, p) => s + p.count, 0);
+  const fileName = data.fileNames[0] ?? data.workspace.title;
+  const service = data.workspace.service;
+  const colorOf = (p: DemoPattern) => (filtered.has(p.id) ? OTHER : seriesColor(rank.get(p.id) ?? 99));
+
+  const save = async () => {
+    await getJSON(`/api/demo/rules?ws=${encodeURIComponent(wsId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filtered: [...filtered] })
+    });
+    setBannerDismissed(true);
+    toast(`Noise rules saved for ${service}. They'll apply next time.`);
+  };
+  const unfilterAll = () => {
+    setFiltered(new Set());
+    setBannerDismissed(true);
+  };
+
+  const exportHref =
+    `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
+    (filtered.size === 0 ? "&filtered=" : [...filtered].map((id) => `&filtered=${encodeURIComponent(id)}`).join(""));
+
+  let banner: React.ReactNode = null;
+  if (!bannerDismissed && data.rulesSaved && data.rulesApplied > 0) {
+    banner = (
+      <div className="callout">
+        <VolumeX className="ico" />
+        <div>
+          Applied {data.rulesApplied} saved noise {data.rulesApplied === 1 ? "rule" : "rules"} for <b>{service}</b>.
+        </div>
+        <button className="btn sm ghost" onClick={unfilterAll}>
+          Unfilter all
+        </button>
+      </div>
+    );
+  } else if (!bannerDismissed && !data.rulesSaved && autoNoise.length > 0) {
+    banner = (
+      <div className="callout">
+        <VolumeX className="ico" />
+        <div>
+          <b>
+            lapp filtered {autoNoise.length} {autoNoise.length === 1 ? "pattern" : "patterns"} that look like noise ({fmtCount(autoNoiseLines)} lines,{" "}
+            {formatPercent(autoNoiseLines, total)}).
+          </b>{" "}
+          Based on share and repetition, not log level. Save to apply the same rules to <b>{service}</b> logs next time.
+        </div>
+        <button className="btn sm primary" onClick={save}>
+          <Check className="ico" /> Save noise rules
+        </button>
+        <button className="btn sm ghost" onClick={unfilterAll}>
+          Unfilter all
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <TopBar
+        navigate={navigate}
+        crumb={
+          <>
+            <span className="sep">/</span>
+            <div className="crumb">
+              <ServiceName
+                wsId={wsId}
+                value={service}
+                onRenamed={(s) => {
+                  setData({ ...data, workspace: { ...data.workspace, service: s } });
+                  toast(`Noise rules will be saved for ${s}.`);
+                }}
+              />
+              <span className="tnum">
+                {fileName} · {fmtCount(total)} lines
+                {data.from && data.to ? ` · ${formatTime(new Date(data.from))} – ${formatTime(new Date(data.to))}` : ""}
+              </span>
+            </div>
+          </>
+        }
+      />
+      <main className={`lp ${selected ? "with-drawer" : ""}`}>
+        <section className="lp-main">
+          <div className="summary">
+            <div className="meter">
+              <div className="meter-num tnum">
+                <b>{formatPercent(filteredLines, total)} filtered</b>
+                <span>
+                  <b>{fmtCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{fmtCount(data.unmatched.count)}</b> unmatched lines
+                </span>
+              </div>
+              <div className="meter-bar" role="img" aria-label={`${formatPercent(filteredLines, total)} filtered`}>
+                <i style={{ width: formatPercent(left, total) }} />
+              </div>
+            </div>
+            <div style={{ flex: 1 }} />
+            <button className="cli mono hide-narrow" title="Copy command" onClick={() => copyText(`lapp filter ${fileName} > clean.log`, toast)}>
+              <Terminal className="ico" />
+              <span>lapp filter {fileName} &gt; clean.log</span>
+              <Copy className="ico" />
+            </button>
+            <a className="btn primary" href={exportHref}>
+              <Download className="ico" /> Export {fmtCount(left)} lines
+            </a>
+          </div>
+
+          {!data.named && (
+            <div className="banner">
+              <KeyRound className="ico" />
+              <div>Patterns are shown as raw text. Set OPENROUTER_API_KEY to get readable names.</div>
+            </div>
+          )}
+
+          <section className="card overview">
+            <header>
+              <h2>Remaining lines over time</h2>
+              <span className="sub tnum">{hasTrend ? `Per ${unitName(data.bucketSeconds)} · filtered patterns not shown` : ""}</span>
+              <div style={{ flex: 1 }} />
+              {hasTrend && (
+                <div className="legend">
+                  {visible.slice(0, 8).map((p) => (
+                    <span key={p.id}>
+                      <i style={{ background: colorOf(p) }} />
+                      {short(p.name, p.named ? 32 : 22)}
+                    </span>
+                  ))}
+                  {visible.length > 8 && (
+                    <span>
+                      <i style={{ background: OTHER }} />
+                      Other
+                    </span>
+                  )}
+                </div>
+              )}
+            </header>
+            {hasTrend ? (
+              <Overview data={data} patterns={visible} colorOf={colorOf} />
+            ) : (
+              <div className="notime-chart">
+                <span className="sub">
+                  <Clock className="ico" /> Trend unavailable — no timestamps found in these lines
+                </span>
+              </div>
+            )}
+          </section>
+
+          {banner}
+
+          <div className="toolbar">
+            <label className="search">
+              <Search className="ico" />
+              <input ref={searchRef} placeholder="Search names or templates" aria-label="Search patterns" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </label>
+            <div className="seg" role="tablist">
+              <button className={!errorsOnly ? "on" : ""} onClick={() => setErrorsOnly(false)}>
+                All
+              </button>
+              <button className={errorsOnly ? "on" : ""} onClick={() => setErrorsOnly(true)}>
+                Errors and warnings only
+              </button>
+            </div>
+            <div style={{ flex: 1 }} />
+            {!banner && (
+              <button className="btn sm" onClick={save}>
+                Save noise rules
+              </button>
+            )}
+            <label className="sel">
+              Sort
+              <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+                <option value="lines">Most lines</option>
+                <option value="spiking" disabled={!hasTrend}>
+                  Spiking
+                </option>
+                <option value="new" disabled={!hasTrend}>
+                  New
+                </option>
+              </select>
+            </label>
+          </div>
+
+          <section className="table card" role="table">
+            <div className="thead" role="row">
+              <span>Filter</span>
+              <span>Pattern</span>
+              <span className="col-level">Level</span>
+              <span>{hasTrend ? `Trend (${unitName(data.bucketSeconds) === "hour" ? "hourly" : `per ${unitName(data.bucketSeconds)}`})` : "Trend"}</span>
+              <span>Lines · Share</span>
+              <span />
+            </div>
+            <div className="group-h">
+              To review · {visible.length} patterns · {fmtCount(left)} lines
+            </div>
+            {visible.length === 0 && (
+              <div className="emptyall">
+                <VolumeX className="ico" />
+                Everything here is filtered as noise.
+                <button
+                  className="btn sm"
+                  onClick={() => {
+                    setShowFiltered(true);
+                    window.setTimeout(() => filteredGroupRef.current?.scrollIntoView({ behavior: "smooth" }), 0);
+                  }}
+                >
+                  Show filtered patterns
+                </button>
+              </div>
+            )}
+            {query && visibleRows.length + hiddenRows.length === 0 && (
+              <div className="noresult">
+                No patterns match "{query}".
+                <button className="btn sm ghost" onClick={() => setQuery("")}>
+                  Clear search
+                </button>
+              </div>
+            )}
+            {visibleRows.map((p) => (
+              <Row
+                key={p.id}
+                p={p}
+                data={data}
+                total={total}
+                color={colorOf(p)}
+                filtered={false}
+                selected={selected !== "unmatched" && selected?.id === p.id}
+                onToggle={toggle}
+                onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
+              />
+            ))}
+            <div
+              className={`prow unmatched ${selected === "unmatched" ? "selected" : ""}`}
+              role="row"
+              tabIndex={0}
+              onClick={() => select(selected === "unmatched" ? null : "unmatched")}
+              onKeyDown={(e) => e.key === "Enter" && select("unmatched")}
+            >
+              <span />
+              <div className="cell-main">
+                <div className="pname">
+                  <i className="dot" style={{ background: "var(--muted)" }} />
+                  <b>Unmatched lines</b>
+                </div>
+                <div className="ptpl">Lines that fit no pattern are listed here and are never filtered.</div>
+              </div>
+              <span className="col-level" />
+              <div className="cell-trend">
+                {hasTrend && data.unmatched.count > 0 && <Spark buckets={data.unmatched.buckets} color="var(--muted)" label="Unmatched lines" unit={data.bucketSeconds} />}
+              </div>
+              <div className="cell-count tnum">
+                <b>{fmtCount(data.unmatched.count)}</b>
+                <span>{formatPercent(data.unmatched.count, total)}</span>
+              </div>
+              <span className="cell-chev">{data.unmatched.count > 0 && <ChevronRight className="ico" />}</span>
+            </div>
+            {hidden.length > 0 && (
+              <>
+                <button ref={filteredGroupRef} className="group-h filt grouptoggle" onClick={() => setShowFiltered(!filteredOpen)} aria-expanded={filteredOpen}>
+                  {filteredOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Filtered · {hidden.length} patterns · {fmtCount(filteredLines)} lines
+                </button>
+                {filteredOpen &&
+                  hiddenRows.map((p) => (
+                    <Row
+                      key={p.id}
+                      p={p}
+                      data={data}
+                      total={total}
+                      color={OTHER}
+                      filtered
+                      selected={selected !== "unmatched" && selected?.id === p.id}
+                      onToggle={toggle}
+                      onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
+                    />
+                  ))}
+              </>
+            )}
+          </section>
+        </section>
+        {selected && (
+          <>
+            <div className="scrim" onClick={() => select(null)} />
+            <Drawer
+              key={selected === "unmatched" ? "unmatched" : selected.id}
+              wsId={wsId}
+              data={data}
+              target={selected}
+              color={selected === "unmatched" ? "var(--muted)" : colorOf(selected)}
+              filtered={selected !== "unmatched" && filtered.has(selected.id)}
+              onToggle={toggle}
+              onShowOnly={(p) => setQuery(p.named ? p.name : p.template)}
+              onClose={() => select(null)}
+              toast={toast}
+            />
+          </>
+        )}
+      </main>
+      {toastNode}
+    </>
+  );
+}
+
+function short(s: string, n: number) {
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
+function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => void }) {
+  return (
+    <>
+      <TopBar navigate={navigate} />
+      <main className="lp">
+        <section className="lp-main skel" aria-busy="true">
+          <span className="sk" style={{ width: 320, height: 22 }} />
+          <div className="card overview" style={{ height: 180 }} />
+          <div className="card table">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="prow">
+                <span />
+                <div className="cell-main">
+                  <span className="sk" style={{ width: "40%" }} />
+                  <span className="sk" style={{ width: "70%", marginTop: 8 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </>
+  );
+}
+
+function Template({ text, active }: { text: string; active?: number }) {
+  const parts = text.split("<*>");
+  return (
+    <>
+      {parts.map((part, i) => (
+        <React.Fragment key={i}>
+          {part}
+          {i < parts.length - 1 && <span className={`ph ${active === i ? "ph-on" : ""}`}>&lt;*&gt;</span>}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
+function LevelBadge({ level }: { level: string }) {
+  if (!level) return <span className="notime">—</span>;
+  if (level === "error" || level === "fatal")
+    return (
+      <span className="badge b-err">
+        <OctagonAlert className="ico" />
+        {level}
+      </span>
+    );
+  if (level === "warn")
+    return (
+      <span className="badge b-warn">
+        <TriangleAlert className="ico" />
+        warn
+      </span>
+    );
+  return <span className="badge b-info">{level}</span>;
+}
+
+function Row({
+  p,
+  data,
+  total,
+  color,
+  filtered,
+  selected,
+  onToggle,
+  onOpen
+}: {
+  p: DemoPattern;
+  data: PatternsResponse;
+  total: number;
+  color: string;
+  filtered: boolean;
+  selected: boolean;
+  onToggle: (id: string) => void;
+  onOpen: () => void;
+}) {
+  const share = formatPercent(p.count, total);
+  const hasTrend = data.bucketSeconds > 0;
+  return (
+    <div
+      className={`prow ${filtered ? "filtered" : ""} ${selected ? "selected" : ""}`}
+      role="row"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter") onOpen();
+        if (e.key === " ") {
+          e.preventDefault();
+          onToggle(p.id);
+        }
+      }}
+    >
+      <label className="cell-check" title={filtered ? "Show this pattern" : "Filter this pattern"} onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={filtered} aria-label={`Filter ${p.name}`} onChange={() => onToggle(p.id)} />
+        <span className="cb">
+          <Check className="ico" />
+        </span>
+      </label>
+      <div className="cell-main">
+        {!p.named && (
+          <div className="pname nowrap">
+            <i className="dot" style={{ background: color }} />
+            <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
+              <Template text={p.name} />
+            </b>
+          </div>
+        )}
+        <div className={`pname ${p.named ? "" : "badges-only"}`}>
+          {p.named && (
+            <>
+              <i className="dot" style={{ background: color }} />
+              <b>{p.name}</b>
+            </>
+          )}
+          <span className="level-inline">
+            <LevelBadge level={p.level} />
+          </span>
+          {!filtered && p.spikeAt !== undefined && (
+            <span className="badge b-spike">
+              <TrendingUp className="ico" />
+              Spiked to {p.buckets[p.spikeAt]}
+              {perUnit(data.bucketSeconds)} {atBucket(data, p.spikeAt)}
+            </span>
+          )}
+          {!filtered && p.newAt !== undefined && (
+            <span className="badge b-new">
+              <Sparkles className="ico" />
+              First seen {bucketLabel(data, p.newAt)}
+            </span>
+          )}
+          {p.suggestion === "noise" && (
+            <span className="badge b-noise" title={filtered ? "Filtered automatically. Uncheck to show it again." : undefined}>
+              <VolumeX className="ico" />
+              Likely noise
+            </span>
+          )}
+          {p.suggestion === "maybe" && !filtered && (
+            <span className="badge b-maybe" title="Not filtered. Decide for yourself.">
+              <Info className="ico" />
+              Maybe noise
+            </span>
+          )}
+        </div>
+        {p.named && (
+          <div className="ptpl mono">
+            <Template text={p.template} />
+          </div>
+        )}
+        {p.suggestion === "noise" && <div className="why">Why it looks like noise: {p.reason}</div>}
+        {p.suggestion === "maybe" && !filtered && <div className="why">Why it's not filtered: {p.keptReason}</div>}
+      </div>
+      <div className="cell-level col-level">
+        <LevelBadge level={p.level} />
+      </div>
+      <div className="cell-trend">
+        {hasTrend ? (
+          <Spark buckets={p.buckets} color={color} mark={filtered ? undefined : p.spikeAt} label={p.name} unit={data.bucketSeconds} />
+        ) : (
+          <span className="notime" title="Trend unavailable — no timestamps found in these lines">
+            —
+          </span>
+        )}
+      </div>
+      <div className="cell-count tnum">
+        <b>{fmtCount(p.count)}</b>
+        <span>{share}</span>
+        <div className="sharebar">
+          <i style={{ width: share, background: color }} />
+        </div>
+      </div>
+      <div className="cell-chev">
+        <ChevronRight className="ico" />
+      </div>
+    </div>
+  );
+}
+
+function Spark({ buckets, color, mark, label, unit }: { buckets: number[]; color: string; mark?: number; label: string; unit: number }) {
+  const W = 168;
+  const H = 34;
+  const maxV = Math.max(1, ...buckets);
+  const bw = W / Math.max(buckets.length, 1);
+  return (
+    <svg width={W} height={H} className="spark" role="img" aria-label={`${label} lines per ${unitName(unit)}, peak ${maxV}`}>
+      <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="var(--line)" />
+      {buckets.map((v, i) =>
+        v > 0 ? <rect key={i} x={i * bw + 0.5} width={Math.max(1, bw - 1.5)} y={H - 1 - (v / maxV) * (H - 6)} height={(v / maxV) * (H - 6)} rx={1} fill={color} /> : null
+      )}
+      {mark !== undefined && <circle cx={mark * bw + bw / 2} cy={3} r={2.5} fill="var(--serious)" />}
+    </svg>
+  );
+}
+
+function useWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(Math.max(240, el.clientWidth)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
+
+function Overview({ data, patterns, colorOf }: { data: PatternsResponse; patterns: DemoPattern[]; colorOf: (p: DemoPattern) => string }) {
+  const [ref, W] = useWidth<HTMLDivElement>(1000);
+  const [hover, setHover] = useState<number | null>(null);
+  const n = data.unmatched.buckets.length;
+  // Stacked in list order, largest at the bottom; unmatched lines on top.
+  const series = [
+    ...patterns.map((p) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets })),
+    { id: "~unmatched", name: "Unmatched lines", color: "var(--muted)", buckets: data.unmatched.buckets }
+  ];
+  const totals = Array.from({ length: n }, (_, i) => series.reduce((s, x) => s + x.buckets[i], 0));
+  const maxV = niceMax(Math.max(1, ...totals));
+  const H = 132;
+  const top = 6;
+  const padL = 36;
+  const bw = (W - padL) / Math.max(n, 1);
+  const every = Math.max(1, Math.ceil(n / Math.max(1, Math.floor((W - padL) / 120))));
+  const y = (v: number) => top + H - (v / maxV) * H;
+  return (
+    <div className="chart-wrap" ref={ref} onMouseLeave={() => setHover(null)}>
+      <svg width={W} height={H + top + 22} role="img" aria-label="Remaining lines over time, stacked by pattern">
+        {[0, 0.5, 1].map((f) => (
+          <g key={f}>
+            <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
+            <text x={padL - 8} y={y(maxV * f) + 4} textAnchor="end" className="axis">
+              {fmtNum(maxV * f)}
+            </text>
+          </g>
+        ))}
+        {totals.map((_, i) => {
+          let acc = 0;
+          const x = padL + i * bw;
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)}>
+              <rect x={x} y={top} width={bw} height={H} fill={hover === i ? "var(--ring)" : "transparent"} />
+              {series.map((s) => {
+                const v = s.buckets[i];
+                if (!v) return null;
+                const y0 = y(acc);
+                acc += v;
+                const h = Math.max(0.5, y0 - y(acc) - (acc > v ? 1 : 0));
+                return <rect key={s.id} x={x + 1} width={Math.max(1, bw - 2)} y={y(acc)} height={h} rx={1.5} fill={s.color} />;
+              })}
+              {i % every === 0 && (
+                <text x={x} y={H + top + 16} className="axis">
+                  {bucketLabel(data, i)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && totals[hover] > 0 && (
+        <div className="tooltip tnum" style={{ left: Math.min(padL + (hover + 1) * bw + 8, W - 240), top: 8 }}>
+          <div className="tt-h">
+            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).split(" ").pop()}`}
+          </div>
+          {series
+            .filter((s) => s.buckets[hover] > 0)
+            .sort((a, b) => b.buckets[hover] - a.buckets[hover])
+            .slice(0, 10)
+            .map((s) => (
+              <div key={s.id} className="tt-row">
+                <i style={{ background: s.color }} />
+                <span>{short(s.name, 38)}</span>
+                <b>{s.buckets[hover]}</b>
+              </div>
+            ))}
+          <div className="tt-f">Total {totals[hover]} lines</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- detail panel ----------
+
+function Drawer({
   wsId,
   data,
   target,
   color,
   filtered,
   onToggle,
-  onClose
+  onShowOnly,
+  onClose,
+  toast
 }: {
   wsId: string;
   data: PatternsResponse;
@@ -708,175 +1277,366 @@ function Detail({
   color: string;
   filtered: boolean;
   onToggle: (id: string) => void;
+  onShowOnly: (p: DemoPattern) => void;
   onClose: () => void;
+  toast: (t: string) => void;
 }) {
-  const [lines, setLines] = useState<string[] | null>(null);
+  const [lines, setLines] = useState<DemoLine[] | null>(null);
   const [shown, setShown] = useState(200);
   const [detail, setDetail] = useState<PatternDetail | null>(null);
   const isUnmatched = target === "unmatched";
+  const q = isUnmatched ? "" : `&pattern=${encodeURIComponent(target.id)}`;
   useEffect(() => {
-    const q = isUnmatched ? "" : `&pattern=${encodeURIComponent(target.id)}`;
-    getJSON<string[]>(`/api/demo/lines?ws=${encodeURIComponent(wsId)}${q}`).then(setLines).catch(() => setLines([]));
-    if (!isUnmatched) {
-      getJSON<PatternDetail>(`/api/demo/pattern?ws=${encodeURIComponent(wsId)}${q}`).then(setDetail).catch(() => setDetail({ fields: [] }));
-    }
-  }, [wsId, target, isUnmatched]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const buckets = isUnmatched ? data.unmatched.buckets : target.buckets;
-  const count = isUnmatched ? data.unmatched.count : target.count;
+    getJSON<DemoLine[]>(`/api/demo/lines?ws=${encodeURIComponent(wsId)}${q}`).then(setLines).catch(() => setLines([]));
+    if (!isUnmatched) getJSON<PatternDetail>(`/api/demo/pattern?ws=${encodeURIComponent(wsId)}${q}`).then(setDetail).catch(() => setDetail({ fields: [] }));
+  }, [wsId, q, isUnmatched]);
   const total = data.workspace.lineCount;
+  const count = isUnmatched ? data.unmatched.count : target.count;
+  const buckets = isUnmatched ? data.unmatched.buckets : target.buckets;
+
   return (
-    <div className="d-drawer-backdrop" onClick={onClose}>
-      <aside className="d-drawer" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <button className="d-ghost d-back" onClick={onClose}>
-            ← All patterns
-          </button>
-          <button className="d-ghost" onClick={onClose} title="Close">
-            <X size={18} />
-          </button>
-        </header>
-        <h2>
-          <i style={{ background: color }} />
-          {isUnmatched ? "Unmatched lines" : target.named ? target.name : <Template text={target.name} />}
-        </h2>
-        {!isUnmatched && target.named && <Template text={target.template} />}
-        <div className="d-stats">
-          {formatCount(count)} lines · {formatPercent(count, total)} of all lines
-          {detail?.firstSeen && ` · First seen ${formatTime(new Date(detail.firstSeen))}`}
-          {detail?.lastSeen && ` · Last seen ${formatTime(new Date(detail.lastSeen))}`}
+    <aside className="drawer" aria-label="Pattern detail">
+      <header>
+        <div>
+          <div className="pname">
+            <i className="dot" style={{ background: color }} />
+            {isUnmatched ? (
+              <b className="dtitle">Unmatched lines</b>
+            ) : target.named ? (
+              <b className="dtitle">{target.name}</b>
+            ) : (
+              <b className="dtitle unnamed">
+                <Template text={target.name} />
+              </b>
+            )}
+            {!isUnmatched && <LevelBadge level={target.level} />}
+          </div>
+          {!isUnmatched && target.named && target.description && <p className="desc">{target.description}</p>}
         </div>
-        {!isUnmatched && (
-          <label className="d-filter-check">
-            <input type="checkbox" checked={filtered} onChange={() => onToggle(target.id)} /> Filter this pattern
-          </label>
-        )}
-        {!isUnmatched && target.suggestion === "noise" && <div className="d-why">Why it looks like noise: {target.reason}</div>}
-        {!isUnmatched && target.suggestion === "maybe" && <div className="d-why">Why it's not filtered: {target.keptReason}</div>}
+        <button className="btn ghost sm" aria-label="Close" onClick={onClose}>
+          <X className="ico" />
+        </button>
+      </header>
+      {!isUnmatched && (
+        <div className="ptpl mono boxed">
+          <Template text={target.template} />
+        </div>
+      )}
+      <div className="dstats tnum">
+        <div>
+          <b>{fmtCount(count)}</b>
+          <span>lines</span>
+        </div>
+        <div>
+          <b>{formatPercent(count, total)}</b>
+          <span>of all lines</span>
+        </div>
+        <div>
+          <b>{detail?.firstSeen ? formatTime(new Date(detail.firstSeen)) : "—"}</b>
+          <span>First seen</span>
+        </div>
+        <div>
+          <b>{detail?.lastSeen ? formatTime(new Date(detail.lastSeen)) : "—"}</b>
+          <span>Last seen</span>
+        </div>
+      </div>
+      {!isUnmatched && (
+        <>
+          <div className="dactions">
+            <label className="chk">
+              <input type="checkbox" checked={filtered} onChange={() => onToggle(target.id)} />
+              <span className="cb">
+                <Check className="ico" />
+              </span>
+              Filter this pattern
+            </label>
+            <button className="btn sm" onClick={() => onShowOnly(target)}>
+              <Eye className="ico" /> Show only this
+            </button>
+            <button className="btn sm ghost" onClick={() => copyText(target.template, toast)}>
+              <Copy className="ico" /> Copy template
+            </button>
+          </div>
+          {target.suggestion === "noise" && <div className="why">Why it looks like noise: {target.reason}</div>}
+          {target.suggestion === "maybe" && <div className="why">Why it's not filtered: {target.keptReason}</div>}
+        </>
+      )}
 
-        <h3>Over time</h3>
+      <section className="dsec">
         {data.bucketSeconds > 0 ? (
-          <BarChart data={data} values={buckets} color={color} />
+          <OverTime data={data} buckets={buckets} color={color} spikeAt={isUnmatched ? undefined : target.spikeAt} />
         ) : (
-          <p className="d-muted">Trend unavailable — no timestamps found in these lines</p>
-        )}
-
-        {!isUnmatched && (
           <>
-            <h3>Fields</h3>
-            {detail === null && <p className="d-muted">Loading…</p>}
-            {detail && detail.fields.length === 0 && <p className="d-muted">No variable fields in this pattern.</p>}
-            {detail?.fields.map((f) => (
-              <FieldChart key={f.index} field={f} data={data} color={color} />
-            ))}
+            <h3>Over time</h3>
+            <p className="sub">Trend unavailable — no timestamps found in these lines</p>
           </>
         )}
+      </section>
 
-        <h3>Lines ({formatCount(count)})</h3>
-        <pre className="d-lines">{lines === null ? "Loading…" : lines.slice(0, shown).join("\n")}</pre>
-        {lines && lines.length > shown && (
-          <button className="d-outline d-more" onClick={() => setShown((n) => n + 200)}>
-            Load more
-          </button>
+      {!isUnmatched && (
+        <section className="dsec">
+          <h3>Fields</h3>
+          {detail === null && <p className="sub">Loading…</p>}
+          {detail && detail.fields.length === 0 && <p className="sub">No variable fields in this pattern.</p>}
+          {detail?.fields.map((f) => (
+            <FieldBlock key={f.index} field={f} data={data} color={color} template={target.template} />
+          ))}
+        </section>
+      )}
+
+      <section className="dsec">
+        <h3>Lines ({fmtCount(count)})</h3>
+        <div className="raw mono">
+          {lines === null && <div className="rawl sub">Loading…</div>}
+          {lines?.slice(0, shown).map((l) => (
+            <div key={l.n} className="rawl">
+              <span className="ln">{l.n}</span>
+              <span className="rawtext">{l.text}</span>
+              <button className="cp" title="Copy line" onClick={() => copyText(l.text, toast)}>
+                <Copy className="ico" />
+              </button>
+            </div>
+          ))}
+        </div>
+        {lines && (
+          <div className="rawfoot">
+            {lines.length > shown && (
+              <button className="btn sm" onClick={() => setShown((n) => n + 200)}>
+                Load more
+              </button>
+            )}
+            <span className="sub tnum">
+              Showing {fmtCount(Math.min(shown, lines.length))} of {fmtCount(count)}
+            </span>
+          </div>
         )}
-      </aside>
-    </div>
+      </section>
+    </aside>
   );
 }
 
-function BarChart({ data, values, color }: { data: PatternsResponse; values: number[]; color: string }) {
+function OverTime({ data, buckets, color, spikeAt }: { data: PatternsResponse; buckets: number[]; color: string; spikeAt?: number }) {
+  const [ref, W] = useWidth<HTMLDivElement>(530);
   const [hover, setHover] = useState<number | null>(null);
-  const W = 700;
-  const H = 120;
-  const maxV = Math.max(1, ...values);
-  const bw = W / Math.max(values.length, 1);
+  const H = 150;
+  const top = 18;
+  const padL = 32;
+  const maxV = niceMax(Math.max(1, ...buckets));
+  const med = median(buckets.filter((v) => v > 0));
+  const bw = (W - padL) / Math.max(buckets.length, 1);
+  const y = (v: number) => top + H - (v / maxV) * H;
+  const every = Math.max(1, Math.ceil(buckets.length / Math.max(1, Math.floor((W - padL) / 110))));
   return (
-    <div className="d-detail-chart" onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        {values.map((v, i) => (
-          <g key={i} onMouseEnter={() => setHover(i)}>
-            <rect x={i * bw} y={0} width={bw} height={H} fill={hover === i ? "#eef1f4" : "transparent"} />
-            {v > 0 && <rect x={i * bw + bw * 0.15} width={bw * 0.7} y={H - (v / maxV) * (H - 4)} height={(v / maxV) * (H - 4)} fill={color} />}
-          </g>
-        ))}
-      </svg>
-      <div className="d-axis-row">
-        <span>{bucketLabel(data, 0)}</span>
-        <span className="d-muted">{hover !== null ? `${bucketLabel(data, hover)}: ${values[hover]} lines` : ""}</span>
-        <span>{bucketLabel(data, values.length - 1)}</span>
+    <div ref={ref}>
+      <h3>
+        Over time{" "}
+        <span className="sub">
+          · dashed line = median, {fmtNum(med)} {med === 1 ? "line" : "lines"}
+          {perUnit(data.bucketSeconds)}
+        </span>
+      </h3>
+      <div className="chart-wrap" onMouseLeave={() => setHover(null)}>
+        <svg width={W} height={H + top + 22} role="img" aria-label={`Lines per ${unitName(data.bucketSeconds)}`}>
+          {[0, 0.5, 1].map((f) => (
+            <g key={f}>
+              <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
+              <text x={padL - 6} y={y(maxV * f) + 4} textAnchor="end" className="axis">
+                {fmtNum(maxV * f)}
+              </text>
+            </g>
+          ))}
+          {buckets.map((v, i) => (
+            <g key={i} onMouseEnter={() => setHover(i)}>
+              <rect x={padL + i * bw} y={top} width={bw} height={H} fill={hover === i ? "var(--ring)" : "transparent"} />
+              {v > 0 && <rect x={padL + i * bw + 1} width={Math.max(1, bw - 2)} y={y(v)} height={y(0) - y(v)} rx={1.5} fill={color} />}
+              {i % every === 0 && (
+                <text x={padL + i * bw} y={H + top + 16} className="axis">
+                  {bucketLabel(data, i)}
+                </text>
+              )}
+            </g>
+          ))}
+          {med > 0 && <line x1={padL} x2={W} y1={y(med)} y2={y(med)} stroke="var(--ink-3)" strokeDasharray="4 3" pointerEvents="none" />}
+          {spikeAt !== undefined && (
+            <>
+              <circle cx={padL + spikeAt * bw + bw / 2} cy={y(buckets[spikeAt]) - 6} r={3} fill="var(--serious)" />
+              <text x={Math.min(padL + spikeAt * bw + bw / 2 + 8, W - 230)} y={Math.max(12, y(buckets[spikeAt]) - 2)} className="axis lbl">
+                Spiked to {buckets[spikeAt]}
+                {perUnit(data.bucketSeconds)} {atBucket(data, spikeAt)}
+              </text>
+            </>
+          )}
+        </svg>
+        {hover !== null && (
+          <div className="tooltip tnum" style={{ left: Math.min(padL + (hover + 1) * bw + 6, W - 200), top: 8, minWidth: 0 }}>
+            {bucketLabel(data, hover)}: {buckets[hover]} lines
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function formatNumber(x: number) {
-  if (Math.abs(x) >= 1e6) return `${(x / 1e6).toFixed(1)}M`;
-  if (Math.abs(x) >= 1e4) return `${(x / 1e3).toFixed(1)}k`;
-  return Number.isInteger(x) ? String(x) : x.toFixed(2);
+// Template excerpt around the field's <*>: ~24 characters each side, "…" at cut ends.
+function FieldContext({ template, index }: { template: string; index: number }) {
+  const parts = template.split("<*>");
+  const before = parts.slice(0, index + 1).join("<*>");
+  const after = parts.slice(index + 1).join("<*>");
+  const b = before.length > 24 ? `…${before.slice(-24)}` : before;
+  const a = after.length > 24 ? `${after.slice(0, 24)}…` : after;
+  const offset = (b.match(/<\*>/g) ?? []).length;
+  return (
+    <div className="ptpl mono fieldctx">
+      <Template text={`${b}<*>${a}`} active={offset} />
+    </div>
+  );
 }
 
-function FieldChart({ field, data, color }: { field: DemoField; data: PatternsResponse; color: string }) {
+function FieldBlock({ field, data, color, template }: { field: DemoField; data: PatternsResponse; color: string; template: string }) {
+  const ctx = <FieldContext template={template} index={field.index - 1} />;
   if (field.kind === "text") {
-    const rows = field.breakdown ?? [];
-    const sum = rows.reduce((s, r) => s + r.count, 0) + (field.other ?? 0);
-    const allDifferent = rows.length > 0 && rows[0].count === 1;
+    const rows = [...(field.breakdown ?? []), ...(field.other ? [{ value: "Other", count: field.other }] : [])];
+    const sum = rows.reduce((s, r) => s + r.count, 0);
+    const maxC = Math.max(1, ...rows.map((r) => r.count));
     return (
-      <div className="d-field">
-        <div className="d-field-title">Field {field.index} — Breakdown by value</div>
-        {allDifferent ? (
-          <p className="d-muted d-small">Every value is different ({formatCount(sum)} values), e.g. <span className="d-mono">{rows[0].value}</span></p>
-        ) : (
-          <div className="d-breakdown">
-            {[...rows, ...(field.other ? [{ value: "Other", count: field.other }] : [])].map((r) => (
-              <div key={r.value} className="d-bd-row">
-                <span className="d-mono">{r.value}</span>
-                <span className="d-bar"><span style={{ width: formatPercent(r.count, sum), background: r.value === "Other" ? GRAY : color }} /></span>
-                <em>{formatCount(r.count)}</em>
+      <div className="fieldblk">
+        <div className="fieldh">
+          Field {field.index} <span className="sub">— Breakdown by value</span>
+        </div>
+        {ctx}
+        <div className="enum">
+          {rows.map((r) => (
+            <div key={r.value} className="ebar">
+              <span className="mono ell" title={r.value}>
+                {r.value}
+              </span>
+              <div>
+                <i style={{ width: `${(r.count / maxC) * 100}%`, background: r.value === "Other" && field.other ? OTHER : color }} />
               </div>
-            ))}
-          </div>
-        )}
+              <b className="tnum">{fmtCount(r.count)}</b>
+              <em className="tnum">{formatPercent(r.count, sum)}</em>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
-  const o = field.overall!;
+  return <NumberField field={field} data={data} color={color} ctx={ctx} />;
+}
+
+function NumberField({ field, data, color, ctx }: { field: DemoField; data: PatternsResponse; color: string; ctx: React.ReactNode }) {
+  const [ref, W] = useWidth<HTMLDivElement>(530);
+  const [hover, setHover] = useState<number | null>(null);
   const buckets = field.buckets ?? [];
-  const W = 700;
-  const H = 120;
-  const maxV = Math.max(1e-9, ...buckets.map((b) => b?.max ?? 0));
-  const bw = W / Math.max(buckets.length, 1);
-  const line = (key: keyof FieldStat) =>
+  const u = field.unit ?? "";
+  const H = 130;
+  const top = 8;
+  const padL = 48;
+  const padR = 48;
+  const maxV = niceMax(Math.max(1e-9, ...buckets.map((b) => b?.max ?? 0)));
+  const bw = (W - padL - padR) / Math.max(buckets.length, 1);
+  const y = (v: number) => top + H - (v / maxV) * H;
+  const xs = (i: number) => padL + i * bw + bw / 2;
+  const line = (k: keyof FieldStat) =>
     buckets
-      .map((b, i) => (b ? `${i * bw + bw / 2},${H - (b[key] / maxV) * (H - 6)}` : null))
+      .map((b, i) => (b ? `${xs(i)},${y(b[k])}` : null))
       .filter(Boolean)
       .join(" ");
-  const u = field.unit ?? "";
+  let lastI = -1;
+  buckets.forEach((b, i) => {
+    if (b) lastI = i;
+  });
+  const last = lastI >= 0 ? buckets[lastI] : null;
+  const every = Math.max(1, Math.ceil(buckets.length / Math.max(1, Math.floor((W - padL) / 110))));
+  const o = field.overall!;
+  const hb = hover !== null ? buckets[hover] : null;
   return (
-    <div className="d-field">
-      <div className="d-field-title">
-        Field {field.index} (numbers) <span className="d-muted">· Median {formatNumber(o.median)}{u} · p95 {formatNumber(o.p95)}{u} · Max {formatNumber(o.max)}{u}</span>
+    <div className="fieldblk" ref={ref}>
+      <div className="fieldh">
+        Field {field.index} (numbers){" "}
+        <span className="sub">
+          — per {unitName(data.bucketSeconds)}
+          {u ? ` · ${u}` : ""} · Median {fmtNum(o.median)}
+          {u} · p95 {fmtNum(o.p95)}
+          {u} · Max {fmtNum(o.max)}
+          {u}
+        </span>
       </div>
+      {ctx}
       {buckets.length > 0 && (
         <>
-          <svg className="d-field-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-            <polyline points={line("max")} fill="none" stroke="#c7cdd4" strokeWidth={1.5} />
-            <polyline points={line("p95")} fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="4 3" />
-            <polyline points={line("median")} fill="none" stroke={color} strokeWidth={2} />
-          </svg>
-          <div className="d-axis-row">
-            <span>{bucketLabel(data, 0)}</span>
-            <span className="d-legend">
-              <span><i style={{ background: color }} />Median</span>
-              <span><i style={{ background: color, opacity: 0.5 }} />p95</span>
-              <span><i style={{ background: "#c7cdd4" }} />Max</span>
+          <div className="legend">
+            <span>
+              <i className="ln-solid" style={{ borderColor: color }} />
+              Median
             </span>
-            <span>{bucketLabel(data, buckets.length - 1)}</span>
+            <span>
+              <i className="ln-mid" style={{ borderColor: color }} />
+              p95
+            </span>
+            <span>
+              <i className="ln-dash" style={{ borderColor: color }} />
+              Max
+            </span>
           </div>
-          <p className="d-muted d-small">p95 means 95% of values are at or below this line.</p>
+          <div className="chart-wrap" onMouseLeave={() => setHover(null)}>
+            <svg width={W} height={H + top + 22} role="img" aria-label={`Field ${field.index}: median, p95 and max per ${unitName(data.bucketSeconds)}`}>
+              {[0, 0.5, 1].map((f) => (
+                <g key={f}>
+                  <line x1={padL} x2={W - padR} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
+                  <text x={padL - 6} y={y(maxV * f) + 4} textAnchor="end" className="axis">
+                    {fmtNum(maxV * f)}
+                    {u}
+                  </text>
+                </g>
+              ))}
+              <polyline points={line("max")} fill="none" stroke={color} strokeWidth={2} strokeDasharray="5 4" opacity={0.4} />
+              <polyline points={line("p95")} fill="none" stroke={color} strokeWidth={2} opacity={0.55} />
+              <polyline points={line("median")} fill="none" stroke={color} strokeWidth={2} />
+              {last && (
+                <>
+                  <text x={xs(lastI) + 6} y={y(last.median) + 4} className="axis lbl">
+                    Median
+                  </text>
+                  <text x={xs(lastI) + 6} y={y(last.p95) - 2} className="axis">
+                    p95
+                  </text>
+                  <text x={xs(lastI) + 6} y={y(last.max) - 2} className="axis">
+                    Max
+                  </text>
+                </>
+              )}
+              {buckets.map((_, i) => (
+                <g key={i} onMouseEnter={() => setHover(i)}>
+                  <rect x={padL + i * bw} y={top} width={bw} height={H} fill="transparent" />
+                  {i % every === 0 && (
+                    <text x={padL + i * bw} y={H + top + 16} className="axis">
+                      {bucketLabel(data, i)}
+                    </text>
+                  )}
+                </g>
+              ))}
+              {hover !== null && <line x1={xs(hover)} x2={xs(hover)} y1={top} y2={top + H} stroke="var(--line-strong)" pointerEvents="none" />}
+            </svg>
+            {hb && hover !== null && (
+              <div className="tooltip tnum" style={{ left: Math.min(xs(hover) + 8, W - 200), top: 8, minWidth: 0 }}>
+                <div className="tt-h">{bucketLabel(data, hover)}</div>
+                <div>
+                  Median {fmtNum(hb.median)}
+                  {u}
+                </div>
+                <div>
+                  p95 {fmtNum(hb.p95)}
+                  {u}
+                </div>
+                <div>
+                  Max {fmtNum(hb.max)}
+                  {u}
+                </div>
+              </div>
+            )}
+          </div>
+          <p className="hint">p95 means 95% of values are at or below this line.</p>
         </>
       )}
     </div>
