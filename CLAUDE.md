@@ -110,6 +110,13 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 - Compile-time interface guards: `var _ MyInterface = (*MyImpl)(nil)`
 - Always use `make build` to verify compilation, never bare `go build` (it drops a binary in the project root)
 
+## Real-data acceptance
+
+Unit tests on hand-made data have missed real problems: very long lines, file names, header lines, and multi-line entries in actual exports. So every new log source or input format (an import provider, an export format such as Grafana CSV or JSON, plain-text variants) is accepted only after an end-to-end run on a real sample:
+
+- Run import → time range → volume chart → patterns → noise suggestions on a real export, redacted where needed, and post the results as a PR comment (not in the description, which stays short): expected vs actual entry count, time range, pattern count.
+- Never commit real samples to this repository, even redacted. Keep them local. Test fixtures in the repo are hand-made with the same structure (headers, line endings, quoting, multi-line bodies, timestamp formats).
+
 ## Standard patterns
 
 | Concern | Use |
