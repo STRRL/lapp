@@ -102,8 +102,8 @@ func Strip(line string) Result {
 
 // StartShape returns the shape of the timestamp a line starts with: the
 // line up to the end of its leading timestamp (including any epoch prefix,
-// bracket, or quote), with each run of digits written as "9" and each run of
-// letters as "a". It is empty when the line does not start with a recognized
+// bracket, or quote), without fractional seconds or zone suffix, with each
+// run of digits written as "9" and each run of letters as "a". It is empty when the line does not start with a recognized
 // header. Lines of one log format share a shape, so a file's entry starts
 // can be told apart from continuation lines that start with another format.
 func StartShape(line string) string {
@@ -112,10 +112,21 @@ func StartShape(line string) string {
 		if m == nil {
 			continue
 		}
-		return collapseShape(line[:m[2*f.re.SubexpIndex("ts")+1]])
+		tsStart, tsEnd := m[2*f.re.SubexpIndex("ts")], m[2*f.re.SubexpIndex("ts")+1]
+		ts := shapeFraction.ReplaceAllString(line[tsStart:tsEnd], "")
+		ts = shapeZone.ReplaceAllString(ts, "")
+		return collapseShape(line[:tsStart] + ts)
 	}
 	return ""
 }
+
+// shapeFraction and shapeZone drop the parts of a timestamp whose presence
+// varies between lines of one format (fractional seconds, zone suffix), so
+// "05:41:47Z" and "05:41:47.158+00:00" share a shape.
+var (
+	shapeFraction = regexp.MustCompile(`[.,]\d+`)
+	shapeZone     = regexp.MustCompile(`(?:Z|[+-]\d{2}(?::?\d{2})?)$`)
+)
 
 func collapseShape(prefix string) string {
 	var b strings.Builder

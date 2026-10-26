@@ -1,0 +1,6 @@
+2026-10-26T05:41:47.158Z ERROR request failed
+  at handler.serve (server.go:42)
+2026-10-26T05:41:48.250Z INFO request served
+2026-10-26T05:41:49Z INFO request served
+2026-10-26T05:41:50.001+00:00 WARN slow request
+  took 1.2 s

@@ -43,9 +43,9 @@ func TestMaskInline(t *testing.T) {
 
 func TestStartShape(t *testing.T) {
 	cases := []struct{ line, shape string }{
-		{"1792993307158\t2026-10-26T05:41:47.158Z\tcolumn \"x\" does not exist", "9\t9-9-9a9:9:9.9a"},
-		{"1792993300000\t2026-10-26T05:41:40.000Z\tcheckpoint complete", "9\t9-9-9a9:9:9.9a"},
-		{"2026-10-26 05:20:11.123+00 LOG:  checkpoint starting", "9-9-9 9:9:9.9+9"},
+		{"1792993307158\t2026-10-26T05:41:47.158Z\tcolumn \"x\" does not exist", "9\t9-9-9a9:9:9"},
+		{"1792993300000\t2026-10-26T05:41:40.000Z\tcheckpoint complete", "9\t9-9-9a9:9:9"},
+		{"2026-10-26 05:20:11.123+00 LOG:  checkpoint starting", "9-9-9 9:9:9"},
 		{"Oct 26 05:41:47 web01 sshd[2101]: Accepted publickey", "a 9 9:9:9"},
 		{"\tFilter: (created_at > '2026-10-26 05:20:11.123+00'::timestamp with time zone)", ""},
 		{"Filter: (created_at > '2026-10-26 05:20:11.123+00'::timestamp with time zone)", ""},
@@ -53,6 +53,25 @@ func TestStartShape(t *testing.T) {
 	for _, c := range cases {
 		if got := StartShape(c.line); got != c.shape {
 			t.Errorf("StartShape(%q) = %q, want %q", c.line, got, c.shape)
+		}
+	}
+}
+
+// TestStartShapeIgnoresPrecisionAndZone checks that lines of one RFC 3339
+// format share a shape whether or not they carry fractional seconds or a
+// zone suffix.
+func TestStartShapeIgnoresPrecisionAndZone(t *testing.T) {
+	lines := []string{
+		"2026-10-26T05:41:47.158Z INFO a",
+		"2026-10-26T05:41:48.1Z INFO b",
+		"2026-10-26T05:41:49.123456789+00:00 INFO c",
+		"2026-10-26T05:41:50Z INFO d",
+		"2026-10-26T05:41:51 INFO e",
+	}
+	want := StartShape(lines[0])
+	for _, line := range lines[1:] {
+		if got := StartShape(line); got != want {
+			t.Errorf("StartShape(%q) = %q, want %q", line, got, want)
 		}
 	}
 }

@@ -27,6 +27,8 @@ func TestTagFileLinesSplitsEntries(t *testing.T) {
 		{fixture: "grafana-text-export.log", entries: 4, wantSplitMode: SplitModeMerged, wantTimestamps: true},
 		// Postgres auto_explain plans with indented continuation lines.
 		{fixture: "postgres-plans.log", entries: 3, wantSplitMode: SplitModeMerged, wantTimestamps: true},
+		// RFC 3339 with and without fractional seconds is one format.
+		{fixture: "mixed-precision.log", entries: 4, wantSplitMode: SplitModeMerged, wantTimestamps: true},
 		{fixture: "syslog.log", entries: 4, wantSplitMode: SplitModeMerged, wantTimestamps: true},
 		{fixture: "untimestamped.log", entries: 6, wantSplitMode: SplitModePerLine},
 	}
