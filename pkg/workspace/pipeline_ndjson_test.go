@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-errors/errors"
 	"github.com/strrl/lapp/pkg/semantic"
 )
 
@@ -94,4 +95,24 @@ func findPatternForFile(patterns []PatternInfo, fileName string) *PatternInfo {
 		}
 	}
 	return nil
+}
+
+func TestDiscoverJSONArrayExportFailsAsFormatUnrecognized(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "logs"))
+	mustWrite(t, filepath.Join(dir, "logs", "explore.json"),
+		`[{"line":"db timeout","timestamp":"1761350400000000000","labels":{"app":"api"}},{"line":"db timeout","timestamp":"1761350401000000000","labels":{"app":"api"}}]`+"\n")
+
+	runID := "01900000-0000-7000-8000-000000000003"
+	_, err := Discover(context.Background(), DiscoveryConfig{Dir: dir, RunID: runID, Labeler: unnamedLabeler})
+	if !errors.Is(err, ErrFormatUnrecognized) {
+		t.Fatalf("Discover error = %v, want ErrFormatUnrecognized", err)
+	}
+	record, err := ReadDiscoveryRunRecord(dir, runID)
+	if err != nil {
+		t.Fatalf("ReadDiscoveryRunRecord: %v", err)
+	}
+	if record.State != DiscoveryRunStateFailed || record.Error == nil || record.Error.Code != "FORMAT_UNRECOGNIZED" {
+		t.Fatalf("unexpected record: state=%s error=%+v", record.State, record.Error)
+	}
 }

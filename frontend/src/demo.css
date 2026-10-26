@@ -37,6 +37,9 @@
 .dz .rrow:hover { background: var(--surface-hover); }
 .dz .lead-plain { margin: 0; color: var(--ink-2); }
 .dz .imp .actions.left { justify-content: flex-start; padding: 0 14px 12px 46px; }
+.dz .step-fail { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 14px 10px 46px; }
+.dz .step-fail p { margin: 0; overflow-wrap: anywhere; }
+.dz .step-fail .linklike { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
 
 /* Pattern list */
 .dz .lp { position: relative; }

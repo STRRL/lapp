@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -51,7 +52,14 @@ type DiscoveryResult struct {
 	PatternCount   int
 	UnmatchedCount int
 	RunID          string
+	// TruncatedLineCount counts lines cut at logsource.MaxLineBytes.
+	TruncatedLineCount int
 }
+
+// ErrFormatUnrecognized marks a log file that is neither plain text nor
+// NDJSON, such as one JSON array export or a binary file. Failed runs carry
+// it as the FORMAT_UNRECOGNIZED error code.
+var ErrFormatUnrecognized = errors.New("format not recognized: expected plain text or NDJSON (one JSON object per line)")
 
 type labelProgressEvent string
 
@@ -101,7 +109,7 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 		return DiscoveryResult{}, err
 	}
 
-	tagged, content, fileCount, err := mergeAllLogs(ctx, config.Dir)
+	tagged, content, fileCount, truncatedLines, err := mergeAllLogs(ctx, config.Dir)
 	if err != nil {
 		failDiscoveryRun(config.Dir, &record, err)
 		span.RecordError(err)
@@ -110,8 +118,12 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 	}
 
 	slog.Info("Processing logs", "files", fileCount, "lines", len(tagged))
+	if truncatedLines > 0 {
+		slog.Warn(TruncatedLinesMessage(truncatedLines), "run", runID)
+	}
 	record.LogFileCount = fileCount
 	record.LineCount = len(tagged)
+	record.TruncatedLineCount = truncatedLines
 	setDiscoveryStep(&record, DiscoveryStepMergingEntries)
 	slog.Info("DiscoveryRun step", "run", runID, "step", record.CurrentStep, "files", fileCount, "lines", len(tagged))
 	if err := WriteDiscoveryRunRecord(config.Dir, record); err != nil {
@@ -186,6 +198,8 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 		PatternCount:   len(builder.Patterns()),
 		UnmatchedCount: len(builder.Unmatched()),
 		RunID:          runID,
+
+		TruncatedLineCount: truncatedLines,
 	}
 	span.SetAttributes(
 		attribute.Int("workspace.files", result.FileCount),
@@ -272,7 +286,7 @@ func failDiscoveryRun(workspaceDir string, record *DiscoveryRunRecord, cause err
 	record.State = DiscoveryRunStateFailed
 	record.FinishedAt = &finishedAt
 	record.Error = &DiscoveryRunError{
-		Code:    discoveryErrorCode(record.CurrentStep),
+		Code:    discoveryErrorCode(record.CurrentStep, cause),
 		Message: cause.Error(),
 		Step:    record.CurrentStep,
 	}
@@ -281,7 +295,10 @@ func failDiscoveryRun(workspaceDir string, record *DiscoveryRunRecord, cause err
 	_ = WriteDiscoveryRunRecord(workspaceDir, *record)
 }
 
-func discoveryErrorCode(step DiscoveryStep) string {
+func discoveryErrorCode(step DiscoveryStep, cause error) string {
+	if errors.Is(cause, ErrFormatUnrecognized) {
+		return "FORMAT_UNRECOGNIZED"
+	}
 	switch step {
 	case DiscoveryStepReadingLogs:
 		return "READ_LOGS_FAILED"
@@ -298,10 +315,19 @@ func discoveryErrorCode(step DiscoveryStep) string {
 	}
 }
 
-func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content []string, fileCount int, err error) {
-	allLogs, err := ReadAllLogs(dir)
+// TruncatedLinesMessage is the warning shown when lines were cut at
+// logsource.MaxLineBytes; the web app renders the same sentence.
+func TruncatedLinesMessage(n int) string {
+	if n == 1 {
+		return "1 line was too long and was cut at 16 MB."
+	}
+	return fmt.Sprintf("%d lines were too long and were cut at 16 MB.", n)
+}
+
+func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content []string, fileCount, truncatedLines int, err error) {
+	allLogs, truncatedLines, err := ReadAllLogs(dir)
 	if err != nil {
-		return nil, nil, 0, errors.Errorf("read all logs: %w", err)
+		return nil, nil, 0, 0, errors.Errorf("read all logs: %w", err)
 	}
 
 	fileNames := make([]string, 0, len(allLogs))
@@ -315,22 +341,25 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 	for _, fileName := range fileNames {
 		fileTagged, err := tagFileLines(ctx, fileName, allLogs[fileName])
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, 0, 0, err
 		}
 		for _, tl := range fileTagged {
 			allTagged = append(allTagged, tl)
 			allContent = append(allContent, tl.DrainLine())
 		}
 	}
-	return allTagged, allContent, len(allLogs), nil
+	return allTagged, allContent, len(allLogs), truncatedLines, nil
 }
 
 // tagFileLines converts one log file into tagged entries. NDJSON files keep
 // the raw JSON line as Content and carry an extracted text line for pattern
 // mining; plain text files go through multiline merging unchanged.
 func tagFileLines(ctx context.Context, fileName string, lines []string) ([]TaggedLine, error) {
-	if ndjson.DetectFormat(lines) == ndjson.FormatNDJSON {
+	switch ndjson.DetectFormat(lines) {
+	case ndjson.FormatNDJSON:
 		return tagNDJSONLines(fileName, lines), nil
+	case ndjson.FormatUnrecognized:
+		return nil, errors.Errorf("read %s: %w", fileName, ErrFormatUnrecognized)
 	}
 	detector, err := multiline.NewDetector(multiline.DetectorConfig{})
 	if err != nil {
@@ -708,14 +737,14 @@ func buildLabelInputs(ctx context.Context, templates []pattern.DrainCluster, lin
 // LoadTaggedLines reads every log file in a workspace and returns the
 // entries exactly as discovery sees them (merged, header-stripped).
 func LoadTaggedLines(ctx context.Context, dir string) ([]TaggedLine, error) {
-	tagged, _, _, err := mergeAllLogs(ctx, dir)
+	tagged, _, _, _, err := mergeAllLogs(ctx, dir)
 	return tagged, err
 }
 
 // LabelPreview returns the pattern inputs that discovery would send to the
 // LLM for naming, batched exactly as Discover batches them.
 func LabelPreview(ctx context.Context, dir string) ([][]semantic.PatternInput, error) {
-	_, content, _, err := mergeAllLogs(ctx, dir)
+	_, content, _, _, err := mergeAllLogs(ctx, dir)
 	if err != nil {
 		return nil, err
 	}

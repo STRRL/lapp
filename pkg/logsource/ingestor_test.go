@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -60,5 +61,33 @@ func TestIngestFileNotFound(t *testing.T) {
 	_, err := Ingest(context.Background(), "/nonexistent/path/to/file.log")
 	if err == nil {
 		t.Fatal("expected error for nonexistent file, got nil")
+	}
+}
+
+func TestScanLinesLongLines(t *testing.T) {
+	long := strings.Repeat("a", 200<<10)
+	huge := strings.Repeat("b", MaxLineBytes+1<<20)
+	input := "first\r\n" + long + "\n" + huge + "\nlast"
+
+	type line struct {
+		size      int
+		truncated bool
+	}
+	var got []line
+	err := ScanLines(strings.NewReader(input), func(l string, truncated bool) error {
+		got = append(got, line{len(l), truncated})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ScanLines: %v", err)
+	}
+	want := []line{{5, false}, {len(long), false}, {MaxLineBytes, true}, {4, false}}
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines %v, want %v", len(got), got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d = %+v, want %+v", i+1, got[i], want[i])
+		}
 	}
 }

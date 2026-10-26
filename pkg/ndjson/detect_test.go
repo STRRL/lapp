@@ -44,7 +44,7 @@ func parseDetectFixtureName(t *testing.T, path string) (string, Format) {
 		t.Fatalf("detect fixture %s must be named <case>.expect-<format>.log", path)
 	}
 	format := Format(expected)
-	if format != FormatText && format != FormatNDJSON {
+	if format != FormatText && format != FormatNDJSON && format != FormatUnrecognized {
 		t.Fatalf("detect fixture %s has unknown expected format %q", path, expected)
 	}
 	return name, format

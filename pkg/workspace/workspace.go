@@ -1,11 +1,12 @@
 package workspace
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/strrl/lapp/pkg/logsource"
 )
 
 // TaggedLine represents a log line with its source file and line number.
@@ -66,47 +67,53 @@ func ListLogFiles(dir string) ([]string, error) {
 	return names, nil
 }
 
-// ReadAllLogs reads all log files in <dir>/logs/ and returns a map of filename to lines.
-func ReadAllLogs(dir string) (map[string][]string, error) {
+// ReadAllLogs reads all log files in <dir>/logs/ and returns a map of filename
+// to lines, plus how many lines were cut at logsource.MaxLineBytes.
+func ReadAllLogs(dir string) (map[string][]string, int, error) {
 	logsDir := filepath.Join(dir, "logs")
 	entries, err := os.ReadDir(logsDir)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	result := make(map[string][]string)
+	truncatedLines := 0
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
-		lines, err := readFileLines(filepath.Join(logsDir, e.Name()))
+		lines, truncated, err := readFileLines(filepath.Join(logsDir, e.Name()))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		result[e.Name()] = lines
+		truncatedLines += truncated
 	}
-	return result, nil
+	return result, truncatedLines, nil
 }
 
-func readFileLines(path string) ([]string, error) {
+func readFileLines(path string) ([]string, int, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() { _ = f.Close() }()
 
 	var lines []string
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	truncatedLines := 0
+	err = logsource.ScanLines(f, func(line string, truncated bool) error {
+		lines = append(lines, line)
+		if truncated {
+			truncatedLines++
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Trim trailing empty lines
 	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
 		lines = lines[:len(lines)-1]
 	}
-	return lines, nil
+	return lines, truncatedLines, nil
 }
