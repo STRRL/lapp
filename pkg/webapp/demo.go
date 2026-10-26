@@ -843,7 +843,13 @@ var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|excep
 // is_exception in SQL or code are field names, not errors.
 var errorTypeNames = regexp.MustCompile(`\b[A-Z][A-Za-z0-9]*(?:Error|Exception)\b`)
 
+// isErrorLike checks only the first line: in a multi-line entry (a query
+// plan, a SQL statement) the rest is payload, and comments in it ("cannot",
+// "could not") say nothing about whether the entry is an error.
 func isErrorLike(s string) bool {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
 	return errorWords.MatchString(s) || errorTypeNames.MatchString(s)
 }
 

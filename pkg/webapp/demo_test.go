@@ -471,6 +471,8 @@ func TestIsErrorLike(t *testing.T) {
 		{"TypeError: cannot read properties of undefined", true},
 		{"statement: CREATE MATERIALIZED VIEW app_index AS SELECT has_error, is_exception FROM t -- this invalidates the cache", false},
 		{"health check ok in 3 ms", false},
+		{"statement: CREATE MATERIALIZED VIEW app_index AS\n-- A real edge exists but cannot collapse one-to-one.\nSELECT 1", false},
+		{"ERROR: deadlock detected\nDETAIL: Process 1 waits for ShareLock", true},
 	}
 	for _, tt := range tests {
 		if got := isErrorLike(tt.text); got != tt.want {
