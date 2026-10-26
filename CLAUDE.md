@@ -98,26 +98,26 @@ Runs an eino ADK agent (15 max iterations) with filesystem tools (grep, read_fil
 
 | Concern | Use |
 |---|---|
-| Error handling | `github.com/go-errors/errors` with `errors.Errorf("<verb> <object>: %w", err)` (`fmt.Errorf` is lint-forbidden) — see `pkg/workspace/importrun.go`; RPC handlers return `connect.NewError(connect.Code…, err)` — see `pkg/webapp/service.go` |
-| Config & env | Read env vars at the CLI edge and pass them down in `Config` structs; `.env` loaded once — see `cmd/lapp/main.go`, `cmd/lapp/web.go`; model via `config.ResolveModel` — see `pkg/config/model.go` |
-| Persistence | Workspace files are the source of truth (ADR 0001): JSON records written via temp file + rename — see `pkg/workspace/importrun.go`. Legacy: DuckDB `pkg/store/duckdb.go` (only `pkg/ingest` and integration tests use it) — do not extend |
-| Workspace paths & IDs | Current: helpers/constants in `pkg/workspace` (`DiscoveryRunDir`, `ImportRunRecordPath`, `*DirName`) — see `pkg/workspace/discovery.go`; Legacy: inline `"logs"`, `~/.lapp/workspaces`, and ID sanitizing in `cmd/lapp/workspace.go` and `pkg/webapp/service.go` — migrate when touched |
-| Logging | Current: `log/slog` with key/value attrs — see `pkg/workspace/pipeline.go`; Legacy: stdlib `log.Printf` in `pkg/tape/eino_handler.go` — migrate when touched |
-| Tracing | `otel.Tracer("lapp/<pkg>").Start` + `span.RecordError` — see `pkg/semantic/labeler.go`; setup in `pkg/tracing/otel.go` |
-| Retries & timeouts | LLM batches: bounded attempts, per-attempt `context.WithTimeout`, overridable delay var — see `pkg/workspace/pipeline.go`; Google APIs: `gax.WithRetry`/`gax.WithTimeout` — see `pkg/gcplog/fetch.go` |
-| HTTP | Injectable `*http.Client`, default `otelhttp` transport with timeout — see `pkg/semantic/labeler.go`; handlers wrapped in `otelhttp.NewHandler` — see `pkg/webapp/server.go` |
-| LLM / agent calls | Labeling: eino OpenRouter model behind `workspace.PatternLabeler` — see `pkg/semantic/labeler.go`; analysis: eino ADK + ACP — see `pkg/analyzer/analyzer.go` |
-| Structured log lines | Current: NDJSON detect + message extraction (ADR 0006) — see `pkg/ndjson/extract.go`; Legacy: `pkg/event/parser.go` (only `pkg/ingest` uses it) — do not extend |
-| Run progress & errors | Current: structured `Progress`/`Error`, text rendered in the frontend — see `pkg/workspace/discovery.go`, `frontend/src/main.tsx`; Legacy: deprecated `progress_message`/`error_message` in `proto/lapp/web/v1/web.proto` — stop writing when touched |
-| Long-running work | Create returns `google.longrunning.Operation` (AIP 151), client polls `GetOperation` — see `pkg/webapp/operations_service.go`, `frontend/src/store.ts` |
+| Error handling | `github.com/go-errors/errors` with `errors.Errorf("<verb> <object>: %w", err)` (`fmt.Errorf` is lint-forbidden); see `pkg/workspace/importrun.go`; RPC handlers return `connect.NewError(connect.Code…, err)`; see `pkg/webapp/service.go` |
+| Config & env | Read env vars at the CLI edge and pass them down in `Config` structs; `.env` loaded once; see `cmd/lapp/main.go`, `cmd/lapp/web.go`; model via `config.ResolveModel`; see `pkg/config/model.go` |
+| Persistence | Workspace files are the source of truth (ADR 0001): JSON records written via temp file + rename; see `pkg/workspace/importrun.go`. Legacy: DuckDB `pkg/store/duckdb.go` (only `pkg/ingest` and integration tests use it); do not extend |
+| Workspace paths & IDs | Run paths: helpers/constants in `pkg/workspace` (`DiscoveryRunDir`, `ImportRunRecordPath`, `*DirName`); see `pkg/workspace/discovery.go`. Not yet unified (duplicate implementations, no shared entry point yet): the workspace root `~/.lapp/workspaces`, workspace creation, and ID sanitizing exist in both `cmd/lapp/workspace.go` and `pkg/webapp/service.go`; consolidate into one when touched, don't add a third |
+| Logging | Current: `log/slog` with key/value attrs; see `pkg/workspace/pipeline.go`; Legacy: stdlib `log.Printf` in `pkg/tape/eino_handler.go`; migrate when touched |
+| Tracing | `otel.Tracer("lapp/<pkg>").Start` + `span.RecordError`; see `pkg/semantic/labeler.go`; setup in `pkg/tracing/otel.go` |
+| Retries & timeouts | LLM batches: bounded attempts, per-attempt `context.WithTimeout`, overridable delay var; see `pkg/workspace/pipeline.go`; Google APIs: `gax.WithRetry`/`gax.WithTimeout`; see `pkg/gcplog/fetch.go` |
+| HTTP | Injectable `*http.Client`, default `otelhttp` transport with timeout; see `pkg/semantic/labeler.go`; handlers wrapped in `otelhttp.NewHandler`; see `pkg/webapp/server.go` |
+| LLM / agent calls | Labeling: eino OpenRouter model behind `workspace.PatternLabeler`; see `pkg/semantic/labeler.go`; analysis: eino ADK + ACP; see `pkg/analyzer/analyzer.go` |
+| Structured log lines | Current: NDJSON detect + message extraction (ADR 0006); see `pkg/ndjson/extract.go`; Legacy: `pkg/event/parser.go` (only `pkg/ingest` uses it); do not extend |
+| Run progress & errors | Current: structured `Progress`/`Error`, text rendered in the frontend; see `pkg/workspace/discovery.go`, `frontend/src/main.tsx`; Legacy: deprecated `progress_message`/`error_message` in `proto/lapp/web/v1/web.proto`; stop writing when touched |
+| Long-running work | Create returns `google.longrunning.Operation` (AIP 151), client polls `GetOperation`; see `pkg/webapp/operations_service.go`, `frontend/src/store.ts` |
 | Frontend | Generated Connect clients from `frontend/src/api.ts`; state in the zustand store `frontend/src/store.ts` |
-| Testing | stdlib `testing` (no testify), `t.TempDir()`, fakes via function-typed config fields — see `pkg/webapp/import_service_test.go`; golden pairs `testdata/<case>.input.*` + `.expected.txt` — see `pkg/ndjson/extract_test.go` |
+| Testing | stdlib `testing` (no testify), `t.TempDir()`, fakes via function-typed config fields; see `pkg/webapp/import_service_test.go`; golden pairs `testdata/<case>.input.*` + `.expected.txt`; see `pkg/ndjson/extract_test.go` |
 
 ## Find the existing pattern first
 
 - Before writing new code, search the repo for how the same kind of thing is already done (the table above is the starting point) and follow it.
-- Introducing a new pattern requires a justification in the PR description, and the same change must migrate all existing callers and delete the old pattern. No side-by-side "new way" plus "old way".
-- Every PR description includes a line `Reused pattern: <pattern> (see <path>)`, or `Reused pattern: none — <justification>`.
+- Introducing a new pattern requires a justification in the PR description. If it replaces or overlaps an existing one, the same change must migrate all existing callers and delete the old pattern; no side-by-side "new way" plus "old way". Genuinely new resources or capabilities with no existing counterpart are not affected.
+- Every PR description includes a line `Reused pattern: <pattern> (see <path>)`, or `Reused pattern: none; <justification>`.
 
 ## Review checklist
 
@@ -127,4 +127,4 @@ Reviewers must check whether the PR introduces:
 - a new way of doing something the repo already does (errors, logging, config, persistence, retries, HTTP, LLM calls, tests), or
 - a duplicate model or type (a struct, proto message, or TS type mirroring an existing one).
 
-If any answer is yes and the PR does not migrate all callers and delete the old way, request changes.
+If any answer is yes and the new thing replaces or overlaps an existing one without migrating all callers and deleting the old way, request changes.
