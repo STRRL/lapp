@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -535,5 +536,55 @@ func TestNDJSONLevelStaysOutOfTemplate(t *testing.T) {
 		if level != want {
 			t.Fatalf("ndjson level of %q = %q, want %q", template, level, want)
 		}
+	}
+}
+
+// An import made with an older lapp stays listed, marked, and its patterns
+// answer 410 with the service to import again into.
+func TestOlderImportIsListedButNotOpened(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	id, err := d.importLog(context.Background(), "pg.log", strings.NewReader(pgPlainLog(1, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(d.root, id)
+	records, err := workspace.ListDiscoveryRunRecords(dir)
+	if err != nil || len(records) != 1 {
+		t.Fatalf("records = %+v, err = %v", records, err)
+	}
+	path := workspace.DiscoveryRunRecordPath(dir, records[0].ID)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	delete(raw, "format")
+	data, _ = json.Marshal(raw)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	d.register(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/workspaces", nil))
+	var list []demoWorkspace
+	_ = json.Unmarshal(rec.Body.Bytes(), &list)
+	if len(list) != 1 || !list[0].OlderVersion || list[0].ID != id || list[0].Service == "" {
+		t.Fatalf("workspaces = %+v", list)
+	}
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/demo/patterns?ws="+id, nil))
+	var body struct {
+		OlderVersion bool   `json:"olderVersion"`
+		Service      string `json:"service"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if rec.Code != http.StatusGone || !body.OlderVersion || body.Service != list[0].Service {
+		t.Fatalf("patterns: %d %s", rec.Code, rec.Body)
 	}
 }

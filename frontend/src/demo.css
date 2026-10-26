@@ -18,6 +18,16 @@
 .dz .menu-item:hover { background: var(--surface-hover); }
 .dz .menu-item b { color: var(--ink); }
 .dz .menu-item em { font-style: normal; color: var(--muted); font-size: 12px; }
+/* An import made with an older lapp: dimmed, still clickable to import again. */
+.dz .menu-item.older, .dz .rrow.older { opacity: 0.55; }
+.dz .rrow.older { height: auto; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+.dz .rrow.older > * { grid-row: 1; }
+.dz .rrow.older > b { grid-column: 1; }
+.dz .rrow.older > .older-title { grid-column: 2 / 4; }
+.dz .rrow.older > .tnum { grid-column: 4; }
+.dz .rrow.older > svg { grid-column: 5; }
+.dz .menu-item.older small, .dz .rrow.older small { display: block; font-size: 12px; color: var(--muted); white-space: normal; }
+.dz .older-import { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
 .dz .menu-empty { padding: 10px; color: var(--muted); font-size: 13px; }
 
 .dz .svc-name { display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; background: none; border-radius: 5px; padding: 1px 4px; margin: 0 -5px; font-size: 13px; color: var(--ink); }

@@ -75,6 +75,9 @@ type demoWorkspace struct {
 	PatternCount  int    `json:"patternCount"`
 	FilteredLines int    `json:"filteredLines"`
 	LimitReached  bool   `json:"limitReached,omitempty"`
+	// OlderVersion marks an import made before the current discovery run
+	// format: it is listed so it does not vanish, but has to be imported again.
+	OlderVersion bool `json:"olderVersion,omitempty"`
 	// TruncatedLines counts lines cut at logsource.MaxLineBytes.
 	TruncatedLines int       `json:"truncatedLines,omitempty"`
 	UpdatedAt      time.Time `json:"updatedAt"`
@@ -195,6 +198,11 @@ func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 		}
 		run := workspace.LatestSuccessfulDiscoveryRun(records)
 		if run == nil {
+			if old := workspace.LatestOldDiscoveryRun(dir); old != nil {
+				info := d.workspaceInfo(e.Name(), old)
+				info.OlderVersion, info.LineCount, info.PatternCount = true, 0, 0
+				out = append(out, info)
+			}
 			continue
 		}
 		info := d.workspaceInfo(e.Name(), run)
@@ -450,6 +458,9 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	}
 	run := workspace.LatestSuccessfulDiscoveryRun(records)
 	if run == nil {
+		if workspace.LatestOldDiscoveryRun(dir) != nil {
+			return nil, workspace.ErrOldDiscoveryRun
+		}
 		return nil, errors.New("no patterns yet for " + id)
 	}
 	lines, err := workspace.LoadTaggedLines(ctx, dir)
@@ -898,7 +909,15 @@ func formatPercent(share float64) string {
 }
 
 func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
-	a, err := d.analyzeWith(r.Context(), r.URL.Query().Get("ws"), r.URL.Query().Get("compare"))
+	id := r.URL.Query().Get("ws")
+	a, err := d.analyzeWith(r.Context(), id, r.URL.Query().Get("compare"))
+	if errors.Is(err, workspace.ErrOldDiscoveryRun) {
+		// The page offers Import again with the service filled in.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "olderVersion": true, "service": readService(filepath.Join(d.root, id), id)})
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

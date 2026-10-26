@@ -184,6 +184,28 @@ func ListDiscoveryRunRecords(workspaceDir string) ([]DiscoveryRunRecord, error) 
 	return records, nil
 }
 
+// LatestOldDiscoveryRun returns the latest succeeded run of another
+// DiscoveryRunFormat, or nil. It is only for showing that the log has to be
+// imported again; its patterns are never read.
+func LatestOldDiscoveryRun(workspaceDir string) *DiscoveryRunRecord {
+	entries, err := os.ReadDir(DiscoveryRunsDir(workspaceDir))
+	if err != nil {
+		return nil
+	}
+	var old []DiscoveryRunRecord
+	for _, entry := range entries {
+		data, err := os.ReadFile(DiscoveryRunRecordPath(workspaceDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var record DiscoveryRunRecord
+		if json.Unmarshal(data, &record) == nil && record.Format != DiscoveryRunFormat {
+			old = append(old, record)
+		}
+	}
+	return LatestSuccessfulDiscoveryRun(old)
+}
+
 func LatestDiscoveryRun(records []DiscoveryRunRecord) *DiscoveryRunRecord {
 	var latest *DiscoveryRunRecord
 	for i := range records {
