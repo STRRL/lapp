@@ -286,7 +286,11 @@ func (s *Summary) WriteText(w io.Writer) {
 	if s.From != nil && s.To != nil {
 		fmt.Fprintf(w, " · %s – %s", fmtTime(*s.From), fmtTime(*s.To))
 	}
-	fmt.Fprintf(w, "\n%.1f%% hidden as noise · %d patterns · %d unmatched lines\n", s.FilteredPercent, len(s.Patterns), s.Unmatched.Lines)
+	hidden := "Nothing hidden"
+	if s.FilteredLines > 0 {
+		hidden = fmt.Sprintf("%.1f%% hidden as noise", s.FilteredPercent)
+	}
+	fmt.Fprintf(w, "\n%s · %d patterns · %d unmatched lines\n", hidden, len(s.Patterns), s.Unmatched.Lines)
 	if s.Compare != nil {
 		fmt.Fprintf(w, "Since last time (%s): %d new · %d gone · %d changed a lot\n", s.Compare.Previous, s.Compare.New, len(s.Compare.Gone), s.Compare.Changed)
 	}

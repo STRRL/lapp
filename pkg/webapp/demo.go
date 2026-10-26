@@ -100,6 +100,8 @@ type demoPattern struct {
 	SinceLast   string   `json:"sinceLast,omitempty"` // new, up, down
 	Ratio       float64  `json:"ratio,omitempty"`     // lines per hour vs last time
 	PrevCount   *int     `json:"prevCount,omitempty"`
+	// Color is the series color index (0-based, --s1…--s8), saved per service.
+	Color int `json:"color"`
 }
 
 type demoUnmatched struct {
@@ -147,6 +149,9 @@ type noiseRules struct {
 	Shown []string `json:"shown,omitempty"`
 	// TimeColumn is the CSV column chosen to time entries.
 	TimeColumn string `json:"timeColumn,omitempty"`
+	// Colors maps a pattern template to its series color index (see
+	// assignColors), so a pattern keeps its color across imports.
+	Colors map[string]int `json:"colors,omitempty"`
 }
 
 func (d *demoAPI) register(mux *http.ServeMux) {
@@ -887,6 +892,10 @@ func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if err := d.withColors(a); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
 	writeJSON(w, a.resp)
 }
 
@@ -917,6 +926,10 @@ func (d *demoAPI) handleTimeColumn(w http.ResponseWriter, r *http.Request) {
 	a, err = d.analyzeWith(r.Context(), id, r.URL.Query().Get("compare"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := d.withColors(a); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	writeJSON(w, a.resp)

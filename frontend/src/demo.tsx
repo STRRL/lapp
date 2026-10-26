@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -68,6 +68,8 @@ type DemoPattern = {
   sinceLast?: "new" | "up" | "down";
   ratio?: number;
   prevCount?: number;
+  // Series color index, saved per service by the server (assignColors in colors.go).
+  color: number;
 };
 
 type CompareInfo = {
@@ -202,9 +204,12 @@ function serviceFromFileName(name: string) {
   return stem.split(/[^a-z0-9]+/).filter(Boolean)[0] ?? "logs";
 }
 
-// Series colors are design tokens --s1…--s8; rank 9+ and filtered use --s-other.
-const seriesColor = (rank: number) => (rank < 8 ? `var(--s${rank + 1})` : "var(--s-other)");
+// Series colors are the design tokens --s1…--s8 (values in design.css); hidden patterns use --s-other.
+const SERIES_COLORS = 8;
 const OTHER = "var(--s-other)";
+// The one color for a pattern everywhere: list dot, volume chart, legend, Start here.
+const patternColor = (p: DemoPattern, hidden: boolean) =>
+  !hidden && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
 
 function useToast() {
   const [toast, setToast] = useState<string | null>(null);
@@ -964,13 +969,6 @@ function PatternList({
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [wsId, compareTo, reload]);
 
-  // Colors are assigned once by total-line rank and never repaint.
-  const rank = useMemo(() => {
-    const m = new Map<string, number>();
-    data?.patterns.forEach((p, i) => m.set(p.id, i));
-    return m;
-  }, [data]);
-
   const selected: DemoPattern | "unmatched" | null = useMemo(() => {
     if (!data || !patternParam) return null;
     if (patternParam === "unmatched") return "unmatched";
@@ -1034,7 +1032,11 @@ function PatternList({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patterns: ids, decision })
     })
-      .then(() => toast(done, 2000))
+      .then(() => {
+        toast(done, 2000);
+        // Refetch so a pattern moving into the top 8 gets its collision-free color.
+        setReload((n) => n + 1);
+      })
       .catch((e) => toast(`Couldn't save: ${e instanceof Error ? e.message : String(e)}`));
   };
   const toggle = (id: string) => decide([id], filtered.has(id) ? "unhide" : "hide");
@@ -1114,11 +1116,12 @@ function PatternList({
   const total = data.workspace.lineCount;
   const filteredLines = hidden.reduce((s, p) => s + p.count, 0);
   const left = total - filteredLines;
+  const hiddenText = filteredLines === 0 ? "Nothing hidden" : `${formatPercent(filteredLines, total)} hidden`;
   const likelyNoise = visible.filter((p) => p.suggestion === "noise" && !leaving.has(p.id));
   const likelyNoiseLines = likelyNoise.reduce((s, p) => s + p.count, 0);
   const fileName = data.fileNames[0] ?? data.workspace.title;
   const service = data.workspace.service;
-  const colorOf = (p: DemoPattern) => (filtered.has(p.id) ? OTHER : seriesColor(rank.get(p.id) ?? 99));
+  const colorOf = (p: DemoPattern) => patternColor(p, filtered.has(p.id));
 
   const exportHref =
     `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
@@ -1177,7 +1180,7 @@ function PatternList({
               {data.splitMode === "PER_LINE" && <span className="sub">Split by line: no timestamps at line starts.</span>}
               {data.splitMode === "MERGED" && !!data.physicalLineCount && (
                 <span className="sub tnum">
-                  Merged multi-line entries: {fmtCount(data.physicalLineCount)} lines → {fmtCount(total)} entries
+                  Joined multi-line logs: {fmtCount(data.physicalLineCount)} raw lines → {fmtCount(total)} lines
                   {data.cappedEntryCount ? ` · ${fmtCount(data.cappedEntryCount)} cut at 500 lines or 1 MB` : ""}
                 </span>
               )}
@@ -1216,12 +1219,12 @@ function PatternList({
           <div className="summary">
             <div className="meter">
               <div className="meter-num tnum">
-                <b>{formatPercent(filteredLines, total)} hidden</b>
+                <b>{hiddenText}</b>
                 <span>
                   <b>{fmtCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{fmtCount(data.unmatched.count)}</b> unmatched lines
                 </span>
               </div>
-              <div className="meter-bar" role="img" aria-label={`${formatPercent(filteredLines, total)} hidden`}>
+              <div className="meter-bar" role="img" aria-label={hiddenText}>
                 <i style={{ width: formatPercent(left, total) }} />
               </div>
             </div>
@@ -1379,7 +1382,7 @@ function PatternList({
                   <i className="dot" style={{ background: "var(--muted)" }} />
                   <b>Unmatched lines</b>
                 </div>
-                <div className="ptpl">Lines that fit no pattern are listed here and are never filtered.</div>
+                <div className="ptpl">Lines that fit no pattern are listed here and are never hidden.</div>
               </div>
               <span className="col-level" />
               <div className="cell-trend">
@@ -1404,7 +1407,7 @@ function PatternList({
                       p={p}
                       data={data}
                       total={total}
-                      color={OTHER}
+                      color={colorOf(p)}
                       hidden
                       hovered={hoverId === p.id}
                       selected={selected !== "unmatched" && selected?.id === p.id}
@@ -1521,6 +1524,26 @@ function PatternList({
 
 function short(s: string, n: number) {
   return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
+// Labels cut to n characters that stay apart: where two cut labels would be
+// the same, each starts from its first difference with a leading "…"
+// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
+function distinctLabels(names: string[], n: number) {
+  const cut = names.map((s) => short(s, n));
+  return names.map((name, i) => {
+    let from = 0;
+    names.forEach((other, j) => {
+      if (j === i || cut[j] !== cut[i] || other === name) return;
+      let k = 0;
+      while (k < name.length && name[k] === other[k]) k++;
+      from = Math.max(from, k);
+    });
+    if (from === 0) return cut[i];
+    const word = name.lastIndexOf(" ", from - 1) + 1;
+    if (from - word <= 12) from = word;
+    return `…${short(name.slice(from), n - 1)}`;
+  });
 }
 
 // Unnamed display names drop a leading "[error]" marker; it never contains
@@ -1911,8 +1934,12 @@ const VOLUME_UNMATCHED_ID = "~unmatched";
 const TICK_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400];
 // Wide enough for "Oct 26" plus a gap, so neighbouring labels never touch.
 const TICK_MIN_PX = 64;
+// Tooltip distance from the cursor; in the right TIP_FLIP share of the chart it goes left of the cursor.
+const TIP_GAP = 12;
+const TIP_FLIP = 0.6;
 
-type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean; hatched?: boolean };
+// legend and tip are the series' labels in the legend and the tooltip (distinctLabels).
+type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean; hatched?: boolean; legend: string; tip: string };
 
 // Swatch for legends and tooltips: the same 45° hatch as the bars for unmatched lines.
 const swatchStyle = (s: VolumeSeries): React.CSSProperties =>
@@ -1920,6 +1947,11 @@ const swatchStyle = (s: VolumeSeries): React.CSSProperties =>
     ? { background: "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface-2) 1.5px 5.5px)" }
     : { background: s.color };
 
+// Y-axis ticks: 0, the middle and the top, all whole numbers (line counts
+// are integers, so "2.5" would read as a bug).
+function axisTicks(max: number) {
+  return [...new Set([0, Math.ceil(max / 2), max])];
+}
 // Axis numbers: 1000 → "1K", 1500 → "1.5K".
 function fmtAxis(v: number) {
   if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
@@ -1931,13 +1963,20 @@ function fmtAxis(v: number) {
 function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: (p: DemoPattern) => string): VolumeSeries[] {
   const top = patterns.slice(0, VOLUME_TOP);
   const rest = patterns.slice(VOLUME_TOP);
-  const series: VolumeSeries[] = top.map((p) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets }));
+  const names = top.map((p) => p.name);
+  const legend = distinctLabels(names, 32);
+  const tip = distinctLabels(names, 38);
+  const series: VolumeSeries[] = top.map((p, i) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets, legend: legend[i], tip: tip[i] }));
   // Unmatched lines are hatched so they never read as one more pattern.
-  if (data.unmatched.count > 0) series.push({ id: VOLUME_UNMATCHED_ID, name: "Unmatched lines", color: "url(#vol-unmatched-hatch)", buckets: data.unmatched.buckets, hatched: true });
+  if (data.unmatched.count > 0) {
+    const name = "Unmatched lines";
+    series.push({ id: VOLUME_UNMATCHED_ID, name, color: "url(#vol-unmatched-hatch)", buckets: data.unmatched.buckets, hatched: true, legend: name, tip: name });
+  }
   if (rest.length > 0) {
     const n = data.unmatched.buckets.length;
     const buckets = Array.from({ length: n }, (_, i) => rest.reduce((s, p) => s + p.buckets[i], 0));
-    series.push({ id: VOLUME_OTHER_ID, name: `Other (${countOf(rest.length, "pattern")})`, color: VOLUME_OTHER, buckets, other: true });
+    const name = `Other (${countOf(rest.length, "pattern")})`;
+    series.push({ id: VOLUME_OTHER_ID, name, color: VOLUME_OTHER, buckets, other: true, legend: name, tip: name });
   }
   return series;
 }
@@ -1977,6 +2016,7 @@ function LogsVolume({
       localStorage.setItem(VOLUME_COLLAPSED_KEY, c ? "0" : "1");
       return !c;
     });
+  const [legendHover, setLegendHover] = useState<string | null>(null);
   const hasTrend = data.bucketSeconds > 0;
   const series = hasTrend ? volumeSeries(data, patterns, colorOf) : [];
   return (
@@ -1993,9 +2033,9 @@ function LogsVolume({
         {hasTrend && !collapsed && (
           <div className="legend">
             {series.map((s) => (
-              <span key={s.id}>
+              <span key={s.id} title={s.name} onMouseEnter={() => setLegendHover(s.id)} onMouseLeave={() => setLegendHover(null)}>
                 <i style={swatchStyle(s)} />
-                {s.other || s.id === VOLUME_UNMATCHED_ID ? s.name : short(s.name, 32)}
+                {s.legend}
               </span>
             ))}
           </div>
@@ -2003,7 +2043,7 @@ function LogsVolume({
       </header>
       {!collapsed &&
         (hasTrend ? (
-          <Overview data={data} series={series} highlight={highlight} onOpen={(id) => onOpen(id === VOLUME_UNMATCHED_ID ? "unmatched" : id)} />
+          <Overview data={data} series={series} highlight={legendHover ?? highlight} onOpen={(id) => onOpen(id === VOLUME_UNMATCHED_ID ? "unmatched" : id)} />
         ) : (
           <NoTimes data={data} onChoose={onChooseTimeColumn} />
         ))}
@@ -2024,9 +2064,36 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
   const gap = bw > 4 ? 2 : 0;
   const y = (v: number) => top + H - (v / maxV) * H;
   const ticks = timeTicks(data, n, W - padL);
-  const tipLeft = hover ? padL + (hover.i + 1) * bw + 8 : 0;
+  const [pt, setPt] = useState<{ x: number; y: number } | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
+  // Places the tooltip after it renders, when its size is known: beside the
+  // cursor, and never outside the chart card vertically.
+  useLayoutEffect(() => {
+    const tip = tipRef.current;
+    const wrap = ref.current;
+    if (!tip || !wrap || !pt) return;
+    const w = wrap.getBoundingClientRect();
+    const c = (wrap.closest(".card") ?? wrap).getBoundingClientRect();
+    const minTop = c.top - w.top + 4;
+    const maxBottom = c.bottom - w.top - 4;
+    tip.style.maxHeight = `${maxBottom - minTop}px`;
+    const left = pt.x > W * TIP_FLIP ? pt.x - TIP_GAP - tip.offsetWidth : pt.x + TIP_GAP;
+    tip.style.left = `${Math.max(0, Math.min(left, W - tip.offsetWidth))}px`;
+    tip.style.top = `${Math.max(minTop, Math.min(8, maxBottom - tip.offsetHeight))}px`;
+  });
   return (
-    <div className="chart-wrap" ref={ref} onMouseLeave={() => setHover(null)}>
+    <div
+      className="chart-wrap"
+      ref={ref}
+      onMouseMove={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        setPt({ x: e.clientX - r.left, y: e.clientY - r.top });
+      }}
+      onMouseLeave={() => {
+        setHover(null);
+        setPt(null);
+      }}
+    >
       <svg width={W} height={H + top + 22} role="img" aria-label="Logs volume over time, stacked by pattern">
         <defs>
           <pattern id="vol-unmatched-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -2034,11 +2101,11 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
             <line x1="0" y1="0" x2="0" y2="4" stroke="var(--muted)" strokeWidth="1.5" />
           </pattern>
         </defs>
-        {[0, 0.5, 1].map((f) => (
-          <g key={f}>
-            <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
-            <text x={padL - 8} y={y(maxV * f) + 4} textAnchor="end" className="axis">
-              {fmtAxis(maxV * f)}
+        {axisTicks(maxV).map((v) => (
+          <g key={v}>
+            <line x1={padL} x2={W} y1={y(v)} y2={y(v)} stroke="var(--line)" />
+            <text x={padL - 8} y={y(v) + 4} textAnchor="end" className="axis">
+              {fmtAxis(v)}
             </text>
           </g>
         ))}
@@ -2052,21 +2119,25 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
                 const v = s.buckets[i];
                 if (!v) return null;
                 const y0 = y(acc);
+                // A 1px --surface gap above the segment below, so two neighbours never merge.
+                const seam = acc > 0 && y0 - y(acc + v) >= 2 ? 1 : 0;
                 acc += v;
                 return (
-                  <rect
-                    key={s.id}
-                    className={s.other ? undefined : "vol-seg"}
-                    x={x + gap / 2}
-                    width={Math.max(1, bw - gap)}
-                    y={y(acc)}
-                    height={Math.max(0.5, y0 - y(acc))}
-                    fill={s.color}
-                    opacity={highlight && highlight !== s.id ? 0.3 : 1}
-                    onMouseEnter={() => setHover({ i, id: s.id })}
-                    onMouseLeave={() => setHover({ i, id: null })}
-                    onClick={s.other ? undefined : () => onOpen(s.id)}
-                  />
+                  <React.Fragment key={s.id}>
+                    <rect
+                      className={s.other ? undefined : "vol-seg"}
+                      x={x + gap / 2}
+                      width={Math.max(1, bw - gap)}
+                      y={y(acc)}
+                      height={Math.max(0.5, y0 - y(acc) - seam)}
+                      fill={s.color}
+                      opacity={highlight && highlight !== s.id ? 0.3 : 1}
+                      onMouseEnter={() => setHover({ i, id: s.id })}
+                      onMouseLeave={() => setHover({ i, id: null })}
+                      onClick={s.other ? undefined : () => onOpen(s.id)}
+                    />
+                    {seam > 0 && <rect x={x + gap / 2} width={Math.max(1, bw - gap)} y={y0 - seam} height={seam} fill="var(--surface)" pointerEvents="none" />}
+                  </React.Fragment>
                 );
               })}
             </g>
@@ -2085,7 +2156,7 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
         })}
       </svg>
       {hover !== null && totals[hover.i] > 0 && (
-        <div className="tooltip tnum" style={{ left: tipLeft + 240 > W ? Math.max(0, tipLeft - bw - 256) : tipLeft, top: 8, pointerEvents: "none" }}>
+        <div ref={tipRef} className="tooltip tnum" style={{ top: 8, overflow: "hidden", pointerEvents: "none" }}>
           <div className="tt-h">
             {data.bucketSeconds >= 86400 ? bucketLabel(data, hover.i) : `${bucketLabel(data, hover.i)} – ${bucketLabel(data, hover.i + 1).split(" ").pop()}`}
           </div>
@@ -2095,7 +2166,7 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
             .map((s) => (
               <div key={s.id} className={`tt-row${hover.id === s.id ? " is-on" : ""}`}>
                 <i style={swatchStyle(s)} />
-                <span>{short(s.name, 38)}</span>
+                <span>{s.tip}</span>
                 <b>{fmtCount(s.buckets[hover.i])}</b>
               </div>
             ))}
@@ -2365,11 +2436,11 @@ function OverTime({ data, buckets, color, spikeAt }: { data: PatternsResponse; b
       </h3>
       <div className="chart-wrap" onMouseLeave={() => setHover(null)}>
         <svg width={W} height={H + top + 22} role="img" aria-label={`Lines per ${unitName(data.bucketSeconds)}`}>
-          {[0, 0.5, 1].map((f) => (
-            <g key={f}>
-              <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
-              <text x={padL - 6} y={y(maxV * f) + 4} textAnchor="end" className="axis">
-                {fmtNum(maxV * f)}
+          {axisTicks(maxV).map((v) => (
+            <g key={v}>
+              <line x1={padL} x2={W} y1={y(v)} y2={y(v)} stroke="var(--line)" />
+              <text x={padL - 6} y={y(v) + 4} textAnchor="end" className="axis">
+                {fmtNum(v)}
               </text>
             </g>
           ))}

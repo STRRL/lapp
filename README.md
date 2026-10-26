@@ -46,7 +46,7 @@ lapp summary app.log --json              # patterns, spikes and noise marks for 
 
 lapp never changes your original log files. Filtering only affects what you see and what you export.
 
-The **Logs volume** chart shows lines over time when at least half of them have a time. If a CSV file has no time lapp can read, choose its **Time column** in the chart card; lapp remembers it for the service. From then on the CSV header row is not counted as a log line, and exported lines (including `lapp filter`) leave it out.
+The **Logs volume** chart shows lines over time when at least half of them have a time. Each pattern keeps its color in the chart and the list across imports of the same service. If a CSV file has no time lapp can read, choose its **Time column** in the chart card; lapp remembers it for the service. From then on the CSV header row is not counted as a log line, and exported lines (including `lapp filter`) leave it out.
 
 ## Install
 
