@@ -226,8 +226,8 @@ const patternColor = (p: DemoPattern, charted: boolean) =>
 // apart from every other pattern in the workspace. Where two cut names would
 // read the same, each starts from its first difference with a leading "…"
 // ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
-// If those still read the same, the word where the names first differ is put
-// in front ("READ …alpha" and "SEND …alpha").
+// If those still read the same, the words where the names differ are put in
+// front ("READ …alpha" and "SEND …alpha"; "READ …tenantA …alpha").
 // fields maps each <*> in text to its field index in the full name, for Template.
 type PatternLabel = { text: string; fields: number[] };
 type LabelOf = (p: { id: string; name: string }, n: number) => PatternLabel;
@@ -263,14 +263,16 @@ function backToWord(name: string, i: number) {
 
 const fieldsBefore = (name: string, i: number) => name.slice(0, i).split("<*>").length - 1;
 
-// A label shown from position from of name, optionally after a head word.
-function labelFrom(name: string, from: number, n: number, head?: [number, number]): PatternLabel {
+// A label shown from position from of name, after the words in heads.
+function labelFrom(name: string, from: number, n: number, heads: [number, number][] = []): PatternLabel {
   const fields: number[] = [];
   let text = "";
-  if (head) {
-    const h = name.slice(head[0], head[1]);
-    text = `${head[0] > 0 ? "…" : ""}${h} `;
-    h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, head[0]) + k));
+  let shown = 0;
+  for (const [a, b] of heads) {
+    const h = name.slice(a, b);
+    text += `${a > shown ? "…" : ""}${h} `;
+    h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, a) + k));
+    shown = b;
   }
   const rest = from === 0 ? cutName(name, n) : `…${cutName(name.slice(from), Math.max(8, n - 1 - text.length))}`;
   rest.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, from) + k));
@@ -297,17 +299,36 @@ function patternLabels(names: string[], n: number): PatternLabel[] {
       }
     }
   }
-  // Same tail after a different start: put the first differing word in front.
-  for (const group of collisions(flat, labels)) {
-    for (const i of group) {
-      let d = flat[i].length;
-      for (const j of group) if (flat[j] !== flat[i]) d = Math.min(d, firstDifference(flat[i], flat[j]));
-      if (d >= from[i]) continue;
-      const start = backToWord(flat[i], d);
-      const space = flat[i].indexOf(" ", d);
-      const end = Math.min(space < 0 ? flat[i].length : space, start + 16, from[i]);
-      labels[i] = labelFrom(flat[i], from[i], n, [start, end]);
+  // Same tail after a different start: put the earliest word not shown yet
+  // where the names differ in front, until every label reads differently.
+  const heads: [number, number][][] = flat.map(() => []);
+  const shown = (i: number, k: number) => k >= from[i] || heads[i].some(([a, b]) => k >= a && k < b);
+  for (let round = 0; round < 6; round++) {
+    const groups = collisions(flat, labels);
+    if (groups.length === 0) break;
+    let changed = false;
+    for (const group of groups) {
+      for (const i of group) {
+        let d = from[i];
+        for (const j of group) {
+          if (flat[j] === flat[i]) continue;
+          for (let k = 0; k < d; k++) {
+            if (!shown(i, k) && flat[i][k] !== flat[j][k]) {
+              d = k;
+              break;
+            }
+          }
+        }
+        if (d >= from[i]) continue;
+        const start = backToWord(flat[i], d);
+        const space = flat[i].indexOf(" ", d);
+        const end = Math.min(space < 0 ? flat[i].length : space, Math.max(d + 1, start + 16), from[i]);
+        heads[i] = [...heads[i], [start, end] as [number, number]].sort((x, y) => x[0] - y[0]);
+        labels[i] = labelFrom(flat[i], from[i], n, heads[i]);
+        changed = true;
+      }
     }
+    if (!changed) break;
   }
   return labels;
 }
