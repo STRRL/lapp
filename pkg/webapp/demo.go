@@ -78,6 +78,8 @@ type demoPattern struct {
 	SpikeAt     *int     `json:"spikeAt,omitempty"`
 	NewAt       *int     `json:"newAt,omitempty"`
 	Samples     []string `json:"samples"`
+	SinceLast   string   `json:"sinceLast,omitempty"` // new, up, down
+	PrevShare   *float64 `json:"prevShare,omitempty"`
 }
 
 type demoUnmatched struct {
@@ -98,6 +100,7 @@ type demoPatternsResponse struct {
 	Named         bool          `json:"named"`
 	Patterns      []demoPattern `json:"patterns"`
 	Unmatched     demoUnmatched `json:"unmatched"`
+	Compare       *demoCompare  `json:"compare,omitempty"`
 }
 
 type noiseRules struct {
@@ -510,7 +513,95 @@ func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
 	}
 	a.resp.Patterns = patterns
 	a.resp.Unmatched = unmatched
+	a.resp.Compare = d.compareWithPrevious(id, a.service, run, &a.resp)
 	return a, nil
+}
+
+type gonePattern struct {
+	Template string  `json:"template"`
+	Name     string  `json:"name"`
+	Count    int     `json:"count"`
+	Share    float64 `json:"share"`
+}
+
+type demoCompare struct {
+	PreviousID    string        `json:"previousId"`
+	PreviousTitle string        `json:"previousTitle"`
+	PreviousAt    time.Time     `json:"previousAt"`
+	New           int           `json:"new"`
+	Up            int           `json:"up"`
+	Down          int           `json:"down"`
+	Gone          []gonePattern `json:"gone"`
+}
+
+// compareWithPrevious finds the latest earlier import of the same service
+// and marks each pattern as new, up or down since then, plus the patterns
+// that disappeared. Patterns are matched by template text.
+func (d *demoAPI) compareWithPrevious(id, service string, run *workspace.DiscoveryRunRecord, resp *demoPatternsResponse) *demoCompare {
+	if run.FinishedAt == nil {
+		return nil
+	}
+	entries, _ := os.ReadDir(d.root)
+	var prev *workspace.DiscoveryRunRecord
+	prevID := ""
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == id {
+			continue
+		}
+		dir := filepath.Join(d.root, e.Name())
+		if readService(dir, e.Name()) != service {
+			continue
+		}
+		records, err := workspace.ListDiscoveryRunRecords(dir)
+		if err != nil {
+			continue
+		}
+		r := workspace.LatestSuccessfulDiscoveryRun(records)
+		if r == nil || r.FinishedAt == nil || !r.FinishedAt.Before(*run.FinishedAt) {
+			continue
+		}
+		if prev == nil || r.FinishedAt.After(*prev.FinishedAt) {
+			prev, prevID = r, e.Name()
+		}
+	}
+	if prev == nil || prev.LineCount == 0 {
+		return nil
+	}
+	out := &demoCompare{PreviousID: prevID, PreviousTitle: d.workspaceInfo(prevID, prev).Title, PreviousAt: *prev.FinishedAt, Gone: []gonePattern{}}
+	before := map[string]float64{}
+	for _, p := range prev.Patterns {
+		before[p.Template] = float64(p.Count) / float64(prev.LineCount)
+	}
+	total := float64(max(resp.Workspace.LineCount, 1))
+	seen := map[string]bool{}
+	for i := range resp.Patterns {
+		p := &resp.Patterns[i]
+		seen[p.ID] = true
+		now := float64(p.Count) / total
+		was, ok := before[p.ID]
+		switch {
+		case !ok:
+			p.SinceLast = "new"
+			out.New++
+		case now >= 2*was && now-was >= 0.01:
+			p.SinceLast, p.PrevShare = "up", &was
+			out.Up++
+		case was >= 2*now && was-now >= 0.01:
+			p.SinceLast, p.PrevShare = "down", &was
+			out.Down++
+		}
+	}
+	for _, p := range prev.Patterns {
+		if !seen[p.Template] {
+			name := p.SemanticID
+			if name == "" || name == p.Template {
+				name = leadingLevel.ReplaceAllString(p.Template, "")
+			}
+			out.Gone = append(out.Gone, gonePattern{Template: p.Template, Name: name, Count: p.Count, Share: before[p.Template]})
+		}
+	}
+	sort.Slice(out.Gone, func(i, j int) bool { return out.Gone[i].Count > out.Gone[j].Count })
+	return out
 }
 
 func chooseBucket(span time.Duration) int64 {
@@ -964,6 +1055,14 @@ func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("no such pattern"))
 		return
 	}
+	writeJSON(w, a.patternDetail(idx))
+}
+
+// patternDetail computes per-field metrics for one pattern: fields with at
+// most 20 distinct values get a breakdown, mostly-numeric ones get
+// median/p95/max per time slot. It feeds both the detail panel and the
+// Investigate context, so the agent sees exactly the numbers the page shows.
+func (a *analysis) patternDetail(idx int) demoPatternDetail {
 	tmpl := fieldTokens(a.resp.Patterns[idx].Template)
 	var slots []int
 	for i, t := range tmpl {
@@ -1073,7 +1172,7 @@ func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		out.Fields = append(out.Fields, f)
 	}
-	writeJSON(w, out)
+	return out
 }
 
 func summarize(xs []float64) *fieldStat {

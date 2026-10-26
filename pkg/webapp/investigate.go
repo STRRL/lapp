@@ -34,7 +34,8 @@ type investigation struct {
 	Answer     string     `json:"answer,omitempty"`
 	ErrorCode  string     `json:"errorCode,omitempty"` // not_found, auth, failed
 	Error      string     `json:"error,omitempty"`
-	Refs       []string   `json:"refs"` // P1… → pattern id (template)
+	Refs       []string   `json:"refs"`                 // P1… → pattern id (template)
+	Unverified []string   `json:"unverified,omitempty"` // numbers in the answer not found in context.md
 	Previous   string     `json:"previous,omitempty"`
 	StartedAt  time.Time  `json:"startedAt"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
@@ -145,7 +146,9 @@ func (d *demoAPI) handleInvestigateStart(w http.ResponseWriter, r *http.Request)
 			case err != nil:
 				j.State, j.ErrorCode, j.Error = "failed", classifyAgentError(err), err.Error()
 			default:
-				j.State, j.Answer = "succeeded", strings.TrimSpace(answer)
+				j.State, j.Answer = "succeeded", trimToAnswer(answer)
+				ctxText, _ := os.ReadFile(filepath.Join(dir, "investigations", "context.md"))
+				j.Unverified = unverifiedNumbers(j.Answer, string(ctxText))
 			}
 		})
 		if err != nil {
@@ -207,6 +210,7 @@ func writeInvestigationContext(dir string, a *analysis, filteredOverride []strin
 		fmt.Fprintf(&b, "Time range (UTC): %s – %s\nTime slots: %s each\n", fmtTime(*resp.From), fmtTime(*resp.To), bucketUnit(resp.BucketSeconds))
 	}
 	b.WriteString("\nPatterns are listed by line count. Cite them as [P<n>] or [P<n> · <time range>] using the times shown here.\n")
+	b.WriteString("All numbers below are exactly what the lapp page shows. Use only these numbers in your answer.\n")
 	b.WriteString("Patterns marked FILTERED were judged as noise by the user; mention them only if they matter.\n\n")
 	refs := make([]string, len(resp.Patterns))
 	for i, p := range resp.Patterns {
@@ -216,6 +220,7 @@ func writeInvestigationContext(dir string, a *analysis, filteredOverride []strin
 			filtered = contains(filteredOverride, p.ID)
 		}
 		fmt.Fprintf(&b, "## P%d %s\n", i+1, p.Template)
+		fmt.Fprintf(&b, "- display name: %s\n", p.Name)
 		facts := []string{fmt.Sprintf("%d lines (%s)", p.Count, formatPercent(float64(p.Count)/float64(max(total, 1))))}
 		if p.Level != "" {
 			facts = append(facts, "level "+p.Level)
@@ -231,7 +236,10 @@ func writeInvestigationContext(dir string, a *analysis, filteredOverride []strin
 		}
 		b.WriteString("- " + strings.Join(facts, "; ") + "\n")
 		if resp.BucketStart != nil {
-			b.WriteString("- counts per slot: " + slotCounts(resp, p.Buckets) + "\n")
+			b.WriteString("- lines per slot (slots not listed had 0): " + slotCounts(resp, p.Buckets) + "\n")
+		}
+		for _, f := range a.patternDetail(i).Fields {
+			b.WriteString("- " + describeField(f) + "\n")
 		}
 		b.WriteString("- samples:\n")
 		for _, line := range p.Samples[:min(3, len(p.Samples))] {
@@ -299,26 +307,28 @@ func investigationSystemPrompt(dir string) string {
 	return fmt.Sprintf(`You are helping a developer find the problem in their logs, using lapp's pattern analysis.
 
 Stay inside %[1]s. Do not modify any file.
-First read %[1]s/investigations/context.md: it lists every log pattern as P1, P2, … with counts, timing (spikes, first seen) and sample lines.
-You may search the raw logs under %[1]s/logs/ (read-only) to confirm details.
+Read %[1]s/investigations/context.md first. It lists every log pattern as P1, P2, … with line counts, lines per time slot, field value breakdowns and sample lines — exactly the numbers the user sees on the lapp page.
+Do not open the raw logs or run commands: context.md has everything the user can see, and every number in your answer must be one that appears in it.
 
 Answer in Markdown with exactly these sections, in this order:
 
 # <one line naming the problem>
 ## Likely cause
-2–4 sentences. This is a hypothesis; say so if the evidence is thin.
+At most 3 short sentences, plain language. It is a hypothesis; say so if the evidence is thin.
 ## Timeline
 - <time> — <what happened> [P<n>]
 ## Evidence
+At most 5 bullets, one sentence each.
 - <fact> [P<n> · <time range>]
 ## What to check next
+At most 4 bullets, one sentence each.
 - <concrete check or fix>
 
 Rules:
-- Every Evidence and Timeline bullet cites at least one pattern as [P<n>] or [P<n> · <time range>], using the ids and times from context.md.
-- In prose, refer to a pattern by a few words of its text (e.g. "the workerEnv error state lines"), never by a bare id like P3; ids only appear inside the [ ] citations.
-- Use only facts from context.md or the logs. Do not invent numbers.
-- Keep it short. No preamble before the first heading.`, dir)
+- Every Timeline and Evidence bullet cites at least one pattern as [P<n>] or [P<n> · <time range>], using ids and times from context.md. Leave out the time range when the fact covers the whole log.
+- In prose, refer to a pattern by its display name or a few words of its text, never by a bare id like P3; ids only appear inside the [ ] citations.
+- Every number you write must be copied verbatim from context.md. Do not compute new numbers (no ratios like "6×", no differences, no ranges you worked out). If a number you want is not there, describe it in words ("several times higher").
+- No preamble before the first heading.`, dir)
 }
 
 // handleAgents reports which local agents can run an investigation.
@@ -344,4 +354,88 @@ func (d *demoAPI) loadInvestigation(id string) (investigation, bool) {
 		}
 	}
 	return investigation{}, false
+}
+
+// describeField renders one field's metrics as the page shows them.
+func describeField(f demoField) string {
+	if f.Kind == "text" {
+		total := f.Other
+		for _, v := range f.Breakdown {
+			total += v.Count
+		}
+		parts := make([]string, 0, len(f.Breakdown)+1)
+		for _, v := range f.Breakdown {
+			parts = append(parts, fmt.Sprintf("%q=%d", v.Value, v.Count))
+		}
+		if f.Other > 0 {
+			parts = append(parts, fmt.Sprintf("other=%d", f.Other))
+		}
+		return fmt.Sprintf("field %d (<*> #%d) values, %d distinct shown of %d lines: %s", f.Index, f.Index, len(f.Breakdown), total, strings.Join(parts, ", "))
+	}
+	o := f.Overall
+	return fmt.Sprintf("field %d (<*> #%d) numbers%s: median %g, p95 %g, max %g", f.Index, f.Index, unitSuffix(f.Unit), o.Median, o.P95, o.Max)
+}
+
+func unitSuffix(u string) string {
+	if u == "" {
+		return ""
+	}
+	return " in " + u
+}
+
+// trimToAnswer drops anything the agent said before the first "# " heading
+// (thinking out loud between tool calls).
+func trimToAnswer(answer string) string {
+	answer = strings.TrimSpace(answer)
+	for i := 0; i < len(answer); {
+		j := strings.IndexByte(answer[i:], '#')
+		if j < 0 {
+			break
+		}
+		k := i + j
+		if (k == 0 || answer[k-1] == '\n' || answer[k-1] == '.' || answer[k-1] == ' ') && strings.HasPrefix(answer[k:], "# ") {
+			return strings.TrimSpace(answer[k:])
+		}
+		i = k + 1
+	}
+	return answer
+}
+
+var (
+	citationRe = regexp.MustCompile(`\[P\d+[^\]]*\]`)
+	clockRe    = regexp.MustCompile(`\b\d{1,2}:\d{2}\b`)
+	dateRe     = regexp.MustCompile(`\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}\b`)
+	numberRe   = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	ratioRe    = regexp.MustCompile(`\d+(?:\.\d+)?\s?[×x]\b|\d+(?:\.\d+)?×`)
+)
+
+// unverifiedNumbers lists numbers in the answer (outside citations, dates
+// and clock times) that do not appear anywhere in the context the agent was
+// given, so the UI can flag them instead of presenting them as fact.
+func unverifiedNumbers(answer, context string) []string {
+	known := map[string]bool{}
+	for _, n := range numberRe.FindAllString(context, -1) {
+		known[n] = true
+	}
+	text := citationRe.ReplaceAllString(answer, " ")
+	text = dateRe.ReplaceAllString(text, " ")
+	text = clockRe.ReplaceAllString(text, " ")
+	var out []string
+	seen := map[string]bool{}
+	// Ratios are computed by the agent, never shown on the page.
+	for _, r := range ratioRe.FindAllString(text, -1) {
+		if !seen[r] && !strings.Contains(context, r) {
+			seen[r] = true
+			out = append(out, r)
+		}
+	}
+	text = ratioRe.ReplaceAllString(text, " ")
+	for _, n := range numberRe.FindAllString(text, -1) {
+		if known[n] || seen[n] || len(n) == 1 {
+			continue
+		}
+		seen[n] = true
+		out = append(out, n)
+	}
+	return out
 }

@@ -34,6 +34,7 @@ type Investigation = {
   errorCode?: "not_found" | "auth" | "failed";
   error?: string;
   refs: string[];
+  unverified?: string[];
   startedAt: string;
   finishedAt?: string;
 };
@@ -91,6 +92,8 @@ export function parseAnswer(md: string): Parsed | null {
 // Citations: [P3], [P3 · Dec 4 06:00–07:00], or several ids in one bracket
 // ([P1 · P2 · Dec 4 06:00–07:00]).
 const CITE = /\[(P\d+(?:\s*[·,]\s*P\d+)*)(?:\s*·\s*([^\]]+))?\]/g;
+// "all slots" / "whole window" style ranges read as "whole log" to users.
+const rangeText = (r?: string) => (!r ? "" : /^(all|every|whole|entire)\b/i.test(r.trim()) ? "whole log" : r.trim());
 const citeIds = (m: RegExpMatchArray) => [...m[1].matchAll(/P(\d+)/g)].map((x) => Number(x[1]));
 
 // ---------- panel ----------
@@ -375,7 +378,7 @@ function RunView({
     const nodes: React.ReactNode[] = [];
     let last = 0;
     for (const m of text.matchAll(CITE)) {
-      nodes.push(inline(text.slice(last, m.index)));
+      nodes.push(flagNumbers(text.slice(last, m.index), inv.unverified ?? [], `t${last}`));
       for (const n of citeIds(m)) {
         const p = byId.get(inv.refs[n - 1]);
         const key = `${m.index}-${n}`;
@@ -399,13 +402,13 @@ function RunView({
           >
             <i style={{ background: isFiltered ? "var(--s-other)" : colorOf(p) }} />
             {short(p.name, 28)}
-            {m[2] ? ` · ${m[2].trim()}` : ""}
+            {m[2] ? ` · ${rangeText(m[2])}` : ""}
           </button>
         );
       }
       last = (m.index ?? 0) + m[0].length;
     }
-    nodes.push(inline(text.slice(last)));
+    nodes.push(flagNumbers(text.slice(last), inv.unverified ?? [], `t${last}`));
     return nodes;
   };
 
@@ -459,6 +462,26 @@ function errorText(inv: Investigation) {
   if (inv.errorCode === "not_found") return `Couldn't find ${bin} on this machine. Install it, sign in, then try again.`;
   if (inv.errorCode === "auth") return `${AGENT_LABEL[inv.agent]} needs you to sign in. Run \`${bin}\` in a terminal once, then try again.`;
   return `The investigation stopped: ${inv.error ?? "unknown error"}. Try again, or switch agent.`;
+}
+
+// Numbers the server could not find in the page data get a dashed underline.
+function flagNumbers(text: string, unverified: string[], key: string): React.ReactNode {
+  if (unverified.length === 0) return inline(text);
+  const esc = unverified.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const re = new RegExp(`(?<![\\d.])(${esc})(?![\\d.])`, "g");
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    out.push(<React.Fragment key={`${key}-${last}`}>{inline(text.slice(last, m.index))}</React.Fragment>);
+    out.push(
+      <span key={`${key}-n${m.index}`} className="unverified" title="Not found in the data on this page. Check it before relying on it.">
+        {m[0]}
+      </span>
+    );
+    last = (m.index ?? 0) + m[0].length;
+  }
+  out.push(<React.Fragment key={`${key}-end`}>{inline(text.slice(last))}</React.Fragment>);
+  return out;
 }
 
 // Minimal inline Markdown: **bold** and `code`.
@@ -529,11 +552,11 @@ function exportSummary(data: InvData, runs: Investigation[], filtered: Set<strin
         .map((x) => byId.get(inv.refs[Number(x[1]) - 1]))
         .filter((p): p is InvPattern => !!p)
         .map((p) => {
-          if (!cited.has(p.id)) cited.set(p.id, range?.trim() ?? "");
+          if (!cited.has(p.id)) cited.set(p.id, rangeText(range));
           return `\`${nameOf(p)}\``;
         });
       if (names.length === 0) return "";
-      return `(${names.join(", ")}${range ? `, ${range.trim()}` : ""})`;
+      return `(${names.join(", ")}${range ? `, ${rangeText(range)}` : ""})`;
     });
   const total = data.workspace.lineCount;
   const filteredPatterns = data.patterns.filter((p) => filtered.has(p.id));
