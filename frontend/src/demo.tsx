@@ -642,14 +642,17 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
             this machine.
           </span>
         </div>
-        <div className="clihint">
-          <span className="sub">Or from a terminal</span>
-          {["lapp app.log", "kubectl logs pod/api | lapp --name api.log"].map((c) => (
-            <button key={c} className="chip mono" onClick={() => copyText(c, show)} title="Copy">
-              {c}
-            </button>
-          ))}
-        </div>
+        {/* GCP and VictoriaLogs have no one-command terminal form yet. */}
+        {tab === "file" && (
+          <div className="clihint">
+            <span className="sub">Or from a terminal</span>
+            {["lapp app.log", "kubectl logs pod/api | lapp --name api.log"].map((c) => (
+              <button key={c} className="chip mono" onClick={() => copyText(c, show)} title="Copy">
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         <section className="recent">
           <h3>Recent</h3>
@@ -775,11 +778,11 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState("");
-  const [recent, setRecent] = useState<{ projects: string[]; filters: string[] }>({ projects: [], filters: [] });
+  const [recent, setRecent] = useState<ImportRecent["gcp"]>({ projects: [], filters: [] });
   useEffect(() => {
-    getJSON<{ projects: string[]; filters: string[] }>("/api/demo/gcp-recent").then(setRecent).catch(() => undefined);
+    getJSON<ImportRecent>("/api/demo/import-recent").then((r) => setRecent(r.gcp)).catch(() => undefined);
   }, []);
-  const ready = project.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const blocker = project.trim() === "" ? "Enter a GCP project to import." : rangeBlocker(range, from, to);
   const start = async () => {
     setError("");
     const body =
@@ -846,16 +849,34 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
         <p className="hint">Uses this machine's gcloud credentials. Stops at 100,000 lines.</p>
       </div>
       {error && <p className="err">Couldn't import from GCP. {error}</p>}
-      <div className="actions">
-        <button className="btn primary" disabled={!ready} onClick={start}>
-          Import
-        </button>
-      </div>
+      <ImportActions blocker={blocker} onStart={start} />
     </div>
   );
 }
 
 type StartedService = { id: string; service: string };
+
+// Past import sources, latest first (/api/demo/import-recent).
+type ImportRecent = {
+  gcp: { projects: string[]; filters: string[] };
+  victoriaLogs: { urls: string[]; filters: string[] };
+};
+
+// Why Import can't be clicked yet, shown next to the button.
+function rangeBlocker(range: string, from: string, to: string) {
+  return range === "custom" && (from === "" || to === "") ? "Pick a start and end time to import." : "";
+}
+
+function ImportActions({ blocker, onStart }: { blocker: string; onStart: () => void }) {
+  return (
+    <div className="actions">
+      {blocker && <span className="blocker">{blocker}</span>}
+      <button className="btn primary" disabled={blocker !== ""} onClick={onStart}>
+        Import
+      </button>
+    </div>
+  );
+}
 
 // VictoriaLogs imports split by service: one workspace per service, so
 // progress is a list rather than the single-file step view.
@@ -938,11 +959,21 @@ function ServicesProcessing({
 function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces: StartedService[]) => void }) {
   const [url, setUrl] = useState("");
   const [query, setQuery] = useState("");
+  const [recent, setRecent] = useState<ImportRecent["victoriaLogs"]>({ urls: [], filters: [] });
+  useEffect(() => {
+    getJSON<ImportRecent>("/api/demo/import-recent")
+      .then((r) => {
+        setRecent(r.victoriaLogs);
+        // The last URL used is filled in.
+        setUrl((u) => u || (r.victoriaLogs.urls[0] ?? ""));
+      })
+      .catch(() => undefined);
+  }, []);
   const [range, setRange] = useState("1h");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState("");
-  const ready = url.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const blocker = url.trim() === "" ? "Enter your VictoriaLogs URL to import." : rangeBlocker(range, from, to);
   const start = async () => {
     setError("");
     const body =
@@ -971,13 +1002,23 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
     <div className="card form">
       <div className="field">
         <label htmlFor="vl-url">URL</label>
-        <input id="vl-url" className="mono" value={url} placeholder="http://localhost:9428" onChange={(e) => setUrl(e.target.value)} />
+        <input id="vl-url" className="mono" list="vl-urls" value={url} placeholder="http://localhost:9428" onChange={(e) => setUrl(e.target.value)} />
+        <datalist id="vl-urls">
+          {recent.urls.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
       </div>
       <div className="field">
         <label htmlFor="vl-query">
           LogsQL filter <span>optional · leave empty for all logs</span>
         </label>
-        <input id="vl-query" className="mono" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
+        <input id="vl-query" className="mono" list="vl-filters" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
+        <datalist id="vl-filters">
+          {recent.filters.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
       </div>
       <div className="field">
         <label>Time range</label>
@@ -1000,11 +1041,7 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
         </p>
       </div>
       {error && <p className="err">Couldn't import from VictoriaLogs. {error}</p>}
-      <div className="actions">
-        <button className="btn primary" disabled={!ready} onClick={start}>
-          Import
-        </button>
-      </div>
+      <ImportActions blocker={blocker} onStart={start} />
     </div>
   );
 }
