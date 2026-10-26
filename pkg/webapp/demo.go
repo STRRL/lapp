@@ -42,6 +42,7 @@ type demoAPI struct {
 	rulesDir string
 	apiKey   string
 	model    string
+	fetcher  workspace.ImportFetcher
 }
 
 func newDemoAPI(root, apiKey, model string) *demoAPI {
@@ -55,6 +56,7 @@ type demoWorkspace struct {
 	LineCount     int       `json:"lineCount"`
 	PatternCount  int       `json:"patternCount"`
 	FilteredLines int       `json:"filteredLines"`
+	LimitReached  bool      `json:"limitReached,omitempty"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
@@ -109,6 +111,8 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/demo/status", d.handleStatus)
 	mux.HandleFunc("GET /api/demo/service-rules", d.handleServiceRules)
 	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
+	mux.HandleFunc("POST /api/demo/import-gcp", d.handleImportGCP)
+	mux.HandleFunc("GET /api/demo/gcp-recent", d.handleGCPRecent)
 	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
 	mux.HandleFunc("GET /api/demo/pattern", d.handlePatternDetail)
 	mux.HandleFunc("GET /api/demo/export", d.handleExport)
@@ -155,6 +159,10 @@ func (d *demoAPI) workspaceInfo(id string, run *workspace.DiscoveryRunRecord) de
 	info := demoWorkspace{ID: id, Title: id, Service: readService(dir, id), LineCount: run.LineCount, PatternCount: run.PatternCount}
 	if files, err := workspace.ListLogFiles(dir); err == nil && len(files) > 0 {
 		info.Title = files[0]
+	}
+	if rec := latestImport(dir); rec != nil {
+		info.Title = describeImport(rec)
+		info.LimitReached = rec.Truncated
 	}
 	if run.FinishedAt != nil {
 		info.UpdatedAt = *run.FinishedAt
@@ -251,6 +259,7 @@ type demoStatus struct {
 	Named   bool   `json:"named"`
 	Lines   int    `json:"lines"`
 	Batches string `json:"batches,omitempty"`
+	Source  string `json:"source,omitempty"`
 }
 
 func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -260,11 +269,37 @@ func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	st := demoStatus{State: "queued", Named: d.apiKey != ""}
-	records, _ := workspace.ListDiscoveryRunRecords(filepath.Join(d.root, id))
+	dir := filepath.Join(d.root, id)
+	if rec := latestImport(dir); rec != nil {
+		st.Source = "gcp"
+		switch rec.State {
+		case workspace.ImportRunStateFailed:
+			st.State, st.Step = "failed", "IMPORTING"
+			if rec.Error != nil {
+				st.Error = rec.Error.Message
+			}
+			writeJSON(w, st)
+			return
+		case workspace.ImportRunStateSucceeded:
+			st.Lines = rec.EntryCount
+			if rec.EntryCount == 0 {
+				st.State, st.Step, st.Error = "failed", "IMPORTING", "No log entries matched this project, filter and time range."
+				writeJSON(w, st)
+				return
+			}
+		default:
+			st.State, st.Step, st.Lines = "running", "IMPORTING", rec.EntryCount
+			writeJSON(w, st)
+			return
+		}
+	}
+	records, _ := workspace.ListDiscoveryRunRecords(dir)
 	if run := workspace.LatestDiscoveryRun(records); run != nil {
 		st.State = strings.ToLower(string(run.State))
 		st.Step = string(run.CurrentStep)
-		st.Lines = run.LineCount
+		if run.LineCount > 0 {
+			st.Lines = run.LineCount
+		}
 		if run.Error != nil {
 			st.Error = run.Error.Message
 		}
@@ -1040,4 +1075,131 @@ func summarize(xs []float64) *fieldStat {
 	sort.Float64s(s)
 	q := func(p float64) float64 { return s[int(math.Ceil(p*float64(len(s))))-1] }
 	return &fieldStat{Median: q(0.5), P95: q(0.95), Max: s[len(s)-1]}
+}
+
+const gcpImportLimit = 100000
+
+type gcpImportRequest struct {
+	Project string    `json:"project"`
+	Filter  string    `json:"filter"`
+	Since   string    `json:"since"` // e.g. "1h"; ignored when From/To are set
+	From    time.Time `json:"from"`
+	To      time.Time `json:"to"`
+	Service string    `json:"service"`
+}
+
+// handleImportGCP pulls a Cloud Logging snapshot into a new workspace and
+// finds its patterns, both in the background; poll /api/demo/status.
+func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
+	if d.fetcher == nil {
+		writeError(w, http.StatusFailedDependency, errors.New("GCP import is not available"))
+		return
+	}
+	var req gcpImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	req.Project = strings.TrimSpace(req.Project)
+	if req.Project == "" {
+		writeError(w, http.StatusBadRequest, errors.New("project is required"))
+		return
+	}
+	to, from := req.To, req.From
+	if from.IsZero() || to.IsZero() {
+		since, err := time.ParseDuration(req.Since)
+		if err != nil || since <= 0 {
+			writeError(w, http.StatusBadRequest, errors.New("choose a time range"))
+			return
+		}
+		to = time.Now().UTC()
+		from = to.Add(-since)
+	}
+	if !from.Before(to) {
+		writeError(w, http.StatusBadRequest, errors.New("the start must be before the end"))
+		return
+	}
+	svc := cleanServiceName(req.Service)
+	if strings.TrimSpace(req.Service) == "" {
+		svc = cleanServiceName(req.Project)
+	}
+	id, dir, err := d.newWorkspaceDir(svc)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(svc), 0o644); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		res, err := workspace.RunImport(ctx, workspace.ImportConfig{
+			Dir: dir, Provider: "gcp", Project: req.Project, Filter: req.Filter,
+			From: from, To: to, Limit: gcpImportLimit, Fetcher: d.fetcher,
+		})
+		if err != nil {
+			slog.Error("gcp import failed", "workspace", id, "error", err)
+			return
+		}
+		if res.EntryCount == 0 {
+			return
+		}
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model}); err != nil {
+			slog.Error("discovery failed", "workspace", id, "error", err)
+		}
+	}()
+	writeJSON(w, map[string]string{"id": id, "service": svc})
+}
+
+// latestImport returns the newest provider import for a workspace, if any.
+func latestImport(dir string) *workspace.ImportRunRecord {
+	records, err := workspace.ListImportRunRecords(dir)
+	if err != nil || len(records) == 0 {
+		return nil
+	}
+	latest := records[0]
+	for _, r := range records[1:] {
+		if r.StartedAt.After(latest.StartedAt) {
+			latest = r
+		}
+	}
+	return &latest
+}
+
+func describeImport(rec *workspace.ImportRunRecord) string {
+	span := rec.To.Sub(rec.From).Round(time.Minute)
+	label := strings.TrimSuffix(strings.TrimSuffix(span.String(), "0s"), "0m")
+	return fmt.Sprintf("GCP · %s · last %s", rec.Project, label)
+}
+
+type gcpRecent struct {
+	Projects []string `json:"projects"`
+	Filters  []string `json:"filters"`
+}
+
+// handleGCPRecent lists past projects and filters for autocomplete.
+func (d *demoAPI) handleGCPRecent(w http.ResponseWriter, _ *http.Request) {
+	out := gcpRecent{Projects: []string{}, Filters: []string{}}
+	entries, _ := os.ReadDir(d.root)
+	seenP, seenF := map[string]bool{}, map[string]bool{}
+	for _, e := range entries {
+		records, _ := workspace.ListImportRunRecords(filepath.Join(d.root, e.Name()))
+		for _, rec := range records {
+			if rec.Project != "" && !seenP[rec.Project] {
+				seenP[rec.Project] = true
+				out.Projects = append(out.Projects, rec.Project)
+			}
+			if rec.Filter != "" && !seenF[rec.Filter] {
+				seenF[rec.Filter] = true
+				out.Filters = append(out.Filters, rec.Filter)
+			}
+		}
+	}
+	writeJSON(w, out)
 }

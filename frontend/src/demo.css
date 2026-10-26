@@ -95,3 +95,19 @@
 .dz .pname.badges-only { margin-top: 4px; padding-left: 18px; }
 .dz .pname.badges-only:not(:has(.badge, .level-inline > *:not(.notime))) { display: none; }
 .dz .pname .dot { align-self: center; }
+
+/* Width rules follow the list area, not the window (detail panel shrinks it). */
+.dz .lp-main { container-type: inline-size; container-name: lpmain; }
+.dz .meter-num b { white-space: nowrap; }
+.dz .summary .btn { flex: none; }
+@container lpmain (max-width: 1100px) {
+  .summary { flex-wrap: wrap; row-gap: 10px; }
+  .summary .cli { display: none; }
+  .summary > div[style] { display: none; }
+  .summary .btn.primary { margin-left: auto; }
+}
+/* The detail template box shows the whole template, wrapped. */
+.dz .ptpl.boxed { white-space: pre-wrap; overflow: visible; text-overflow: clip; word-break: break-all; height: auto; line-height: 18px; }
+/* Filtered rows: count and share both dimmed, in both themes. */
+.dz .prow.filtered .cell-count b, .dz .prow.filtered .cell-count span { color: var(--ink-3); }
+.dz .field .seg { display: inline-flex; }

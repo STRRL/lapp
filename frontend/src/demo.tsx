@@ -37,6 +37,7 @@ type DemoWorkspace = {
   lineCount: number;
   patternCount: number;
   filteredLines: number;
+  limitReached?: boolean;
   updatedAt: string;
 };
 
@@ -302,6 +303,7 @@ function ServiceName({ wsId, value, onRenamed }: { wsId: string; value: string; 
 // ---------- import page ----------
 
 const STEPS = [
+  { key: "fetch", label: "Fetching from GCP", steps: ["IMPORTING"] },
   { key: "read", label: "Reading file", steps: ["READING_LOGS", "MERGING_ENTRIES"] },
   { key: "find", label: "Finding patterns", steps: ["DISCOVERING_PATTERNS"] },
   { key: "name", label: "Naming patterns", steps: ["LABELING_PATTERNS"] },
@@ -309,7 +311,7 @@ const STEPS = [
 ];
 
 function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replace?: boolean) => void }) {
-  const [tab, setTab] = useState<"file" | "gcp">("file");
+  const [tab, setTab] = useState<"file" | "gcp">(() => (new URLSearchParams(window.location.search).get("tab") === "gcp" ? "gcp" : "file"));
   const [file, setFile] = useState<File | null>(null);
   const [service, setService] = useState("");
   const [savedRules, setSavedRules] = useState(0);
@@ -388,6 +390,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
         <TopBar navigate={navigate} full={false} />
         <Processing
           name={job.name}
+          gcp={job.name.startsWith("GCP · ")}
           status={status}
           onRetry={() => {
             setJob(null);
@@ -414,14 +417,12 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
         </div>
 
         {tab === "gcp" ? (
-          <div className="card form">
-            <p className="lead-plain">For this demo, GCP imports still run on the previous screen.</p>
-            <div>
-              <a className="btn primary" href="/classic">
-                <CloudDownload className="ico" /> Open GCP import
-              </a>
-            </div>
-          </div>
+          <GCPForm
+            onStarted={(id, name) => {
+              setStatus(null);
+              setJob({ id, name });
+            }}
+          />
         ) : (
           <>
             <button
@@ -515,21 +516,22 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
   );
 }
 
-function Processing({ name, status, onRetry }: { name: string; status: ImportStatus | null; onRetry: () => void }) {
-  const current = STEPS.findIndex((s) => s.steps.includes(status?.step || "READING_LOGS"));
+function Processing({ name, gcp, status, onRetry }: { name: string; gcp: boolean; status: ImportStatus | null; onRetry: () => void }) {
+  const steps = STEPS.filter((s) => gcp || s.key !== "fetch");
+  const current = steps.findIndex((s) => s.steps.includes(status?.step || (gcp ? "IMPORTING" : "READING_LOGS")));
   const failed = status?.state === "failed";
   const done = status?.state === "succeeded";
-  const idx = done ? STEPS.length : Math.max(0, current);
+  const idx = done ? steps.length : Math.max(0, current);
   return (
     <main className="imp">
       <h1>{name}</h1>
       <p className="lead">The pattern list opens as soon as this finishes.</p>
       <div className="card steps">
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
           const skipped = s.key === "name" && status !== null && !status.named;
           const state = failed && i === idx ? "fail" : i < idx ? "done" : i === idx ? "run" : "todo";
           let detail = "";
-          if (s.key === "read" && status?.lines) detail = `${fmtCount(status.lines)} lines`;
+          if ((s.key === "read" || s.key === "fetch") && status?.lines) detail = `${fmtCount(status.lines)} lines`;
           if (skipped && i <= idx) detail = "Skipped — no OpenRouter key";
           if (s.key === "name" && state === "run" && status?.batches) detail = status.batches;
           return (
@@ -539,23 +541,118 @@ function Processing({ name, status, onRetry }: { name: string; status: ImportSta
                 {state === "run" && <LoaderCircle className="ico spin" />}
                 {state === "fail" && <X className="ico" />}
               </span>
-              <b>{state === "fail" ? "Couldn't read this file." : `${s.label}${state === "run" ? "…" : ""}`}</b>
+              <b>{state === "fail" ? (s.key === "fetch" ? "Couldn't import from GCP." : "Couldn't read this file.") : `${s.label}${state === "run" ? "…" : ""}`}</b>
               <span className="tnum">{state === "fail" ? status?.error : detail}</span>
             </div>
           );
         })}
         <div className="pbar">
-          <i style={{ width: `${(idx / STEPS.length) * 100}%` }} />
+          <i style={{ width: `${(idx / steps.length) * 100}%` }} />
         </div>
         {failed && (
           <div className="actions left">
             <button className="btn primary" onClick={onRetry}>
-              Choose another file
+              {gcp ? "Try again" : "Choose another file"}
             </button>
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+const RANGES = [
+  { key: "1h", label: "Last 1h" },
+  { key: "6h", label: "Last 6h" },
+  { key: "24h", label: "Last 24h" },
+  { key: "custom", label: "Custom…" }
+];
+
+function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void }) {
+  const [project, setProject] = useState("");
+  const [service, setService] = useState("");
+  const [filter, setFilter] = useState("");
+  const [range, setRange] = useState("1h");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [error, setError] = useState("");
+  const [recent, setRecent] = useState<{ projects: string[]; filters: string[] }>({ projects: [], filters: [] });
+  useEffect(() => {
+    getJSON<{ projects: string[]; filters: string[] }>("/api/demo/gcp-recent").then(setRecent).catch(() => undefined);
+  }, []);
+  const ready = project.trim() !== "" && (range !== "custom" || (from !== "" && to !== ""));
+  const start = async () => {
+    setError("");
+    const body =
+      range === "custom"
+        ? { project, filter, service, from: new Date(from).toISOString(), to: new Date(to).toISOString() }
+        : { project, filter, service, since: range };
+    try {
+      const res = await getJSON<{ id: string }>("/api/demo/import-gcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const label = range === "custom" ? "custom range" : `last ${range}`;
+      onStarted(res.id, `GCP · ${project} · ${label}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  return (
+    <div className="card form">
+      <div className="frow">
+        <div className="field">
+          <label htmlFor="gcp-project">Project</label>
+          <input id="gcp-project" list="gcp-projects" value={project} placeholder="my-project" onChange={(e) => setProject(e.target.value)} />
+          <datalist id="gcp-projects">
+            {recent.projects.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </div>
+        <div className="field">
+          <label htmlFor="gcp-service">
+            Service <span>Saved noise rules for this service apply automatically</span>
+          </label>
+          <input id="gcp-service" value={service} placeholder={project ? project.toLowerCase() : "e.g. api"} onChange={(e) => setService(e.target.value)} />
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="gcp-filter">
+          Filter <span>optional</span>
+        </label>
+        <input id="gcp-filter" className="mono" list="gcp-filters" value={filter} placeholder='resource.type="cloud_run_revision" severity>=WARNING' onChange={(e) => setFilter(e.target.value)} />
+        <datalist id="gcp-filters">
+          {recent.filters.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+      </div>
+      <div className="field">
+        <label>Time range</label>
+        <div className="seg" role="tablist">
+          {RANGES.map((r) => (
+            <button key={r.key} className={range === r.key ? "on" : ""} onClick={() => setRange(r.key)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+        {range === "custom" && (
+          <div className="frow" style={{ marginTop: 8 }}>
+            <input type="datetime-local" aria-label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <input type="datetime-local" aria-label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+        )}
+        <p className="hint">Uses this machine's gcloud credentials. Stops at 100,000 lines.</p>
+      </div>
+      {error && <p className="err">Couldn't import from GCP. {error}</p>}
+      <div className="actions">
+        <button className="btn primary" disabled={!ready} onClick={start}>
+          Import
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -746,9 +843,15 @@ function PatternList({
                 }}
               />
               <span className="tnum">
-                {fileName} · {fmtCount(total)} lines
+                {data.workspace.title.startsWith("GCP · ") ? data.workspace.title : fileName} · {fmtCount(total)} lines
                 {data.from && data.to ? ` · ${formatTime(new Date(data.from))} – ${formatTime(new Date(data.to))}` : ""}
               </span>
+              {data.workspace.limitReached && (
+                <span className="badge b-warn" title="Stopped at 100,000 lines. Narrow the time range or filter to see everything.">
+                  <TriangleAlert className="ico" />
+                  limit reached
+                </span>
+              )}
             </div>
           </>
         }
