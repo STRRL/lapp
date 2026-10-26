@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Clock, Copy, Download, Plus, Search, Sparkles, TrendingUp, Upload, VolumeX, X } from "lucide-react";
+import { Check, ChevronDown, OctagonAlert, ChevronRight, Clock, Copy, Download, Plus, Search, Sparkles, TrendingUp, Upload, VolumeX, X } from "lucide-react";
+import "./demo-tokens.css";
 import "./demo.css";
 
 type DemoWorkspace = {
@@ -40,8 +41,12 @@ type PatternsResponse = {
   unmatched: { count: number; buckets: number[]; samples: string[] };
 };
 
-const PALETTE = ["#1f9d6b", "#e8a20c", "#e26d96", "#16801f", "#3b7dd8", "#8a5cd6", "#d4582a", "#14a3b8"];
-const GRAY = "#b4bcc6";
+// Series colors come from the design tokens (--s1…--s8, checked for
+// color-blind separation); rank 9+ and filtered patterns are gray.
+const cssVar = (name: string, fallback: string) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"].map((c, i) => cssVar(`--s${i + 1}`, c));
+const GRAY = cssVar("--s-other", "#b5b3ac");
 
 // formatPercent is the single place percentages are rounded: 1 decimal, half up.
 export function formatPercent(part: number, total: number) {
@@ -511,7 +516,7 @@ function PatternRow({
           onChange={() => onToggle(p.id)}
         />
       </span>
-      <span className="d-pattern-cell">
+      <span className="d-pattern-cell d-fade">
         <span className="d-name">
           <i style={{ background: color }} />
           {p.named ? (
@@ -544,9 +549,18 @@ function PatternRow({
         </span>
         {p.named && <Template text={p.template} />}
       </span>
-      <span>{p.level ? <span className={`d-level d-level-${p.level}`}>{p.level}</span> : <span className="d-muted">—</span>}</span>
+      <span className="d-fade">
+        {p.level ? (
+          <span className={`d-level d-level-${p.level}`}>
+            {["error", "fatal"].includes(p.level) && <OctagonAlert size={12} />}
+            {p.level}
+          </span>
+        ) : (
+          <span className="d-muted">—</span>
+        )}
+      </span>
       <span>{data.bucketSeconds > 0 && <Sparkline buckets={p.buckets} color={color} mark={filtered ? undefined : p.spikeAt} />}</span>
-      <span className="d-count">
+      <span className="d-count d-fade">
         <span>
           <b>{formatCount(p.count)}</b>
           <em>{share}</em>
