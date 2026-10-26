@@ -1,131 +1,71 @@
-# LAPP - Log Auto Pattern Pipeline
+# lapp
 
-LAPP turns raw log files into a structured investigation workspace for humans and AI agents.
+**Find the problem in your logs, not the noise.**
 
-It clusters repeated log lines with Drain, asks an LLM to assign semantic IDs to repeated patterns, then writes a file-based workspace with pattern notes, samples, error summaries, and agent instructions.
+Drop in a log file and lapp shows you where to look first: errors that suddenly spiked and patterns that never appeared before. Click any of them to see the lines behind it, or hand it to Claude Code or Codex to investigate. Every claim in the answer links back to the pattern, and the lines, it came from.
 
-## Quick Start
+![lapp on a 2,000-line Apache log: the Start here card lists one spiking error and two new ones, above the chart of remaining lines and the pattern list with noise filtered out](docs/images/lapp-start-here.png)
+
+To get there, lapp groups thousands of repetitive lines into a few named patterns and filters out the noise (health checks, heartbeats, routine requests). On a 2,000-line Apache sample log, that's 6 patterns, 70% of lines filtered, and one spiking error at the top of the list.
+
+Your logs stay on your machine except in two cases you opt into. If you set an OpenRouter key, lapp sends a few sample lines from each pattern to an LLM to name the pattern; without a key, patterns are shown as their raw text. If you click **Investigate**, your Claude Code or Codex reads the filtered patterns, and like any session of theirs, what it reads goes to that agent's provider.
+
+## Quick start
 
 ```bash
-# Build
+lapp app.log                                    # a file
+kubectl logs deploy/api | lapp --name api.log   # a pipe
+```
+
+lapp finds the patterns and opens them in your browser. To pull logs from GCP Cloud Logging, use **Import logs** in the page.
+
+1. **Start here.** A short list of the patterns most likely to be the problem: spiking errors first, then new errors, then other spikes.
+2. **Investigate.** Click **Investigate** on any of them. Your local Claude Code or Codex reads the filtered patterns and explains the likely cause, citing the patterns and times it relied on.
+3. **Filter.** Patterns that look like noise are already filtered, with the reason shown. Check or uncheck any pattern. The share filtered and the lines left update as you go.
+4. **Save.** Click **Save noise rules** to keep these noise rules. lapp applies them the next time you open logs from the same service.
+5. **Take the result with you.** Export an investigation summary (Markdown) for an issue, or export the filtered logs. From the command line:
+
+```bash
+lapp filter app.log > clean.log          # the log without lines filtered as noise
+lapp summary app.log --json              # patterns, spikes and noise marks for scripts and coding agents
+```
+
+lapp never changes your original log files. Filtering only affects what you see and what you export.
+
+## Install
+
+<!-- TODO: fill in once v0.1 ships (go install / Homebrew). Until then: -->
+
+```bash
+git clone https://github.com/STRRL/lapp && cd lapp
+(cd frontend && pnpm install)
 make build
-
-# Clean, rebuild, and start the local web app
-make dev
-
-# Create a workspace
-go run ./cmd/lapp/ workspace create app-incident
-
-# Start the local web app
-go run ./cmd/lapp/ web
-
-# Add logs to the workspace (pure copy, no discovery)
-go run ./cmd/lapp/ workspace add-log --topic app-incident /var/log/syslog
-
-# Run discovery over all log files in the workspace
-go run ./cmd/lapp/ workspace discover --topic app-incident
-
-# AI-powered analysis (agent backend via ACP provider)
-go run ./cmd/lapp/ workspace analyze --topic app-incident "why are there connection timeouts?" --acp claude
-go run ./cmd/lapp/ workspace analyze --topic app-incident "what failed?" --acp codex
+export PATH="$PWD/output:$PATH"
 ```
 
-## How It Works
-
-The current CLI product is a structured file workspace under `~/.lapp/workspaces/<topic>/`.
-
-```
-workspace add-log
-  -> copy input into logs/ (nothing else)
-
-workspace discover
-  -> read all files in logs/
-  -> merge multiline entries
-  -> discover repeated Drain patterns
-  -> label repeated patterns with retried LLM batches
-  -> write discovery-runs/<run-id>/patterns/, notes/, and AGENTS.md
-```
-
-**Core idea**: Drain clusters logs into templates cheaply (no API cost), then LLM semantifies the templates in bounded batches. This follows the IBM "Label Broadcasting" pattern — cluster first (90%+ volume reduction), apply LLM to representatives, broadcast labels back.
-
-Generated workspace layout:
-
-```text
-~/.lapp/workspaces/<topic>/
-  logs/                         # copied source logs
-  discovery-runs/<run-id>/
-    run.json                    # status, progress, summary counts
-    patterns/<semantic-id>/
-      pattern.md                # metadata, counts, source line refs
-      samples.log               # representative matching lines
-    patterns/unmatched/samples.log
-    notes/summary.md            # frequency-sorted overview
-    notes/errors.md             # error/warning-focused view
-    AGENTS.md                   # instructions for AI-assisted investigation
-  AGENTS.md                     # initial workspace note before discovery
-```
-
-DiscoveryRuns are one-time local tasks. If `lapp web` starts and finds a previous `QUEUED` or `RUNNING` run on disk, it marks that run as failed because no worker is still attached to it.
-
-## Environment Variables
-
-- `OPENROUTER_API_KEY`: Required for semantic labeling in `workspace discover`
-- `MODEL_NAME`: Override default LLM model (default: `google/gemini-3-flash-preview`)
-- Provider-specific auth for ACP agent CLI (for example Claude/Codex/Gemini CLI login credentials)
-- `.env` file is auto-loaded
+Needs Go 1.26+, Node.js and pnpm. Optional: `OPENROUTER_API_KEY` for readable pattern names. Before anything is sent, lapp shows you exactly which lines will go to OpenRouter. Anything that looks like an email, IP address or token is replaced with `<email>`, `<ip>` or `<token>` by default.
 
 ## Commands
 
-| Command | Description |
+| Command | What it does |
 |---|---|
-| `workspace create <topic>` | Create a workspace under `~/.lapp/workspaces/` |
-| `workspace list` | List all workspace topics |
-| `workspace add-log --topic <topic> <file>` | Copy a log file into the workspace |
-| `workspace import gcp --topic <topic> --project <p> --since 1h` | Import a snapshot from GCP Cloud Logging |
-| `workspace discover --topic <topic>` | Run pattern discovery over all log files |
-| `workspace analyze --topic <topic> [question]` | Run AI analysis (`--acp claude|codex|gemini`) |
+| `lapp <file>` | Import a log file, find patterns, open the page (`--no-open` to skip the browser) |
+| `<cmd> \| lapp --name <name>` | Same, from a pipe. lapp names the service after it (`api.log` → `api`); without `--name` the service is `stdin` |
+| `lapp filter <file>` | Print the log without lines filtered as noise, using the service's saved rules |
+| `lapp summary <file> [--json]` | Print patterns, counts, spikes, new patterns and noise marks |
+| `lapp web` | Open the page without importing anything |
 
-## Event Schema
+The earlier `lapp workspace …` commands still work. The previous web UI is at `/classic`.
 
-The initial normalized event contract is defined in [proto/lapp/event/v1/event.proto](proto/lapp/event/v1/event.proto) and documented in [docs/event-schema-v1.md](docs/event-schema-v1.md). Representative fixtures live under `fixtures/events/v1/` for JSON, logfmt, `key=value`, and plain text logs.
-
-The event parser and DuckDB store packages are library-level building blocks. They are covered by tests and integration tests, but `workspace discover` currently writes DiscoveryRun results directly into the local workspace instead of persisting through DuckDB first.
-
-## Development
+## Contributing
 
 ```bash
-make build                           # Build embedded web assets and output/lapp
-make clean                           # Remove generated build artifacts
-make dev                             # Clean, build, and start lapp web on 127.0.0.1:8080
-make proto-gen                       # Generate protobuf/Connect code
-make test                            # Run unit and integration tests
-make check                           # Run formatting, linting, type checks, build, and unit tests
-
-LOGHUB_PATH=/path/to/2k_dataset \
-  go test -v ./integration_test/...  # Integration tests (14 Loghub-2.0 datasets)
+make dev      # rebuild and start the web UI on 127.0.0.1:8080
+make test     # unit + integration tests
+make check    # format, lint, type-check, build, unit tests
 ```
 
-Override the local web address with `WEB_ADDR=127.0.0.1:3000 make dev`.
-
-## Roadmap
-
-See [Issue #2](https://github.com/STRRL/lapp/issues/2) for full vision and progress.
-
-### Current
-
-Structured workspace generation, multiline merging, Drain pattern discovery, LLM semantic labeling, ACP-backed agent analysis, event parsing, DuckDB storage primitives, and Loghub integration tests.
-
-### Next: Log Viewer
-
-Color-coded log viewer with template filtering. Each semantic template gets a distinct color. Unmatched/leftover logs shown in gray.
-
-### Future
-
-- Persist discovery inputs/results through the event store
-- Iterative refinement (re-discover patterns from leftover)
-- Per-template statistics and trend detection
-- Real-time discovery progress
-- MCP server for LLM agent access
+Integration tests use the [Loghub](https://github.com/logpai/loghub) datasets: `LOGHUB_PATH=/path/to/2k_dataset make integration-test`. Design notes are in [`docs/`](docs/) and [`CONTEXT.md`](CONTEXT.md).
 
 ## License
 
