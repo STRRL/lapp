@@ -21,6 +21,9 @@ type MergedLine struct {
 	StartLine int
 	EndLine   int
 	Content   string
+	// Capped is set when the entry was cut at the detector's maximum entry
+	// size or line count; the next line starts a new entry.
+	Capped bool
 }
 
 // MergeResult wraps either a successfully merged line or an error from the input stream.
@@ -48,7 +51,7 @@ func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], 
 		bufBytes := 0
 		everDetected := false
 
-		flush := func() {
+		flush := func(capped bool) {
 			if len(buf) == 0 {
 				return
 			}
@@ -57,6 +60,7 @@ func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], 
 					StartLine: startLine,
 					EndLine:   endLine,
 					Content:   strings.Join(buf, "\n"),
+					Capped:    capped,
 				},
 			}
 			buf = buf[:0]
@@ -76,11 +80,11 @@ func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], 
 
 			// If we have never seen a timestamp, fall back to line-by-line
 			if !everDetected && len(buf) > 0 {
-				flush()
+				flush(false)
 			}
 
 			if isNew && len(buf) > 0 {
-				flush()
+				flush(false)
 			}
 
 			// Check overflow before updating endLine so flush uses correct range
@@ -88,8 +92,8 @@ func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], 
 			if len(buf) > 0 {
 				newSize++
 			}
-			if newSize > detector.MaxEntryBytes() && len(buf) > 0 {
-				flush()
+			if detector.entryFull(len(buf), newSize) {
+				flush(true)
 			}
 
 			if len(buf) == 0 {
@@ -103,7 +107,7 @@ func Merge(ctx context.Context, in <-chan logsource.Result[*logsource.LogLine], 
 			buf = append(buf, line.Content)
 		}
 
-		flush()
+		flush(false)
 	}()
 	return out
 }
@@ -128,7 +132,7 @@ func MergeSlice(ctx context.Context, lines []string, detector *Detector) []Merge
 	bufBytes := 0
 	everDetected := false
 
-	flush := func() {
+	flush := func(capped bool) {
 		if len(buf) == 0 {
 			return
 		}
@@ -136,6 +140,7 @@ func MergeSlice(ctx context.Context, lines []string, detector *Detector) []Merge
 			StartLine: startLine,
 			EndLine:   endLine,
 			Content:   strings.Join(buf, "\n"),
+			Capped:    capped,
 		})
 		buf = buf[:0]
 		bufBytes = 0
@@ -149,19 +154,19 @@ func MergeSlice(ctx context.Context, lines []string, detector *Detector) []Merge
 		}
 
 		if !everDetected && len(buf) > 0 {
-			flush()
+			flush(false)
 		}
 
 		if isNew && len(buf) > 0 {
-			flush()
+			flush(false)
 		}
 
 		newSize := bufBytes + len(line)
 		if len(buf) > 0 {
 			newSize++
 		}
-		if newSize > detector.MaxEntryBytes() && len(buf) > 0 {
-			flush()
+		if detector.entryFull(len(buf), newSize) {
+			flush(true)
 		}
 
 		if len(buf) == 0 {
@@ -175,7 +180,7 @@ func MergeSlice(ctx context.Context, lines []string, detector *Detector) []Merge
 		buf = append(buf, line)
 	}
 
-	flush()
+	flush(false)
 
 	span.SetAttributes(attribute.Int("merged.entries", len(result)))
 	return result

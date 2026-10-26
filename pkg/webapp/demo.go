@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/gcplog"
+	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/victorialogs"
@@ -114,6 +115,12 @@ type demoPatternsResponse struct {
 	Patterns       []demoPattern `json:"patterns"`
 	Unmatched      demoUnmatched `json:"unmatched"`
 	Compare        *demoCompare  `json:"compare,omitempty"`
+	// SplitMode is the run's workspace.SplitMode: "MERGED" when continuation
+	// lines joined timestamped entries, "PER_LINE" when a text file had too
+	// few timestamps at line starts to merge entries.
+	SplitMode         string `json:"splitMode,omitempty"`
+	PhysicalLineCount int    `json:"physicalLineCount,omitempty"`
+	CappedEntryCount  int    `json:"cappedEntryCount,omitempty"`
 }
 
 type noiseRules struct {
@@ -263,11 +270,15 @@ func writeLog(dir, name, service string, body io.Reader) error {
 	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
 		return err
 	}
+	normalized, err := ndjson.Normalize(body)
+	if err != nil {
+		return err
+	}
 	f, err := os.Create(filepath.Join(dir, "logs", name))
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(f, body)
+	_, err = io.Copy(f, normalized)
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -419,6 +430,9 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	}
 	a := &analysis{service: readService(dir, id)}
 	a.resp.Workspace = d.workspaceInfo(id, run)
+	a.resp.SplitMode = string(run.SplitMode)
+	a.resp.PhysicalLineCount = run.PhysicalLineCount
+	a.resp.CappedEntryCount = run.CappedEntryCount
 	a.resp.FileNames, _ = workspace.ListLogFiles(dir)
 
 	// Re-match lines against the run's templates so counts, buckets and

@@ -1,5 +1,6 @@
-// Package ndjson classifies log files as NDJSON and extracts the text lines
-// fed to pattern mining from structured entries, per ADR 0006.
+// Package ndjson classifies log files as NDJSON, normalizes Grafana Explore
+// exports to NDJSON when they land, and extracts the text lines fed to
+// pattern mining from structured entries, per ADR 0006.
 package ndjson
 
 import (

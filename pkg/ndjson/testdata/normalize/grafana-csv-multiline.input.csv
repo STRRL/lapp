@@ -1,0 +1,7 @@
+Date,Time,Line,detected_level,service.name,metadata.parsed.query
+2026-10-26T05:42:00.500Z,1792993320500,"column ""user_id"" does not exist",error,postgres,"select ""user_id"" from accounts"
+2026-10-26T05:41:50.000Z,1792993310000,"duration: 12.5 ms  plan:
+Query Text: SELECT id,
+       name
+FROM accounts",info,postgres,
+,1792993300000,checkpoint complete,,postgres,

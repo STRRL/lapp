@@ -32,11 +32,15 @@ var formats = []format{
 		layouts: []string{"Mon Jan _2 15:04:05 2006", "Mon Jan _2 15:04:05.000000 2006"},
 	},
 	// ISO-8601 / RFC 3339-ish, optional brackets, optional "host proc[pid]:".
+	// The timestamp may be quoted and followed by whitespace or, in CSV-like
+	// text, by a "," or ";" separator. A leading Unix epoch and tab (Grafana's
+	// text export: "<unix ms>\t<ISO time>\t<body>") is dropped; the ISO time
+	// wins.
 	{
-		re: regexp.MustCompile(`^\[?(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\]?\s+(?P<body>.*)$`),
+		re: regexp.MustCompile(`^(?:\d{10,19}\t)?\[?"?(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)"?\]?(?:\s+|\s*[,;]\s*)(?P<body>.*)$`),
 		layouts: []string{
-			time.RFC3339Nano, "2006-01-02T15:04:05.999999999Z0700", "2006-01-02T15:04:05.999999999",
-			"2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999Z0700", "2006-01-02 15:04:05.999999999",
+			time.RFC3339Nano, "2006-01-02T15:04:05.999999999Z0700", "2006-01-02T15:04:05.999999999Z07", "2006-01-02T15:04:05.999999999",
+			"2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999Z0700", "2006-01-02 15:04:05.999999999Z07", "2006-01-02 15:04:05.999999999",
 			"2006-01-02 15:04:05,999999999", "2006-01-02 15:04:05,999999999Z0700",
 		},
 	},
@@ -94,6 +98,54 @@ func Strip(line string) Result {
 		return Result{Body: strings.TrimSpace(body), Timestamp: parse(ts, f)}
 	}
 	return Result{Body: line}
+}
+
+// StartShape returns the shape of the timestamp a line starts with: the
+// line up to the end of its leading timestamp (including any epoch prefix,
+// bracket, or quote), without fractional seconds or zone suffix, with each
+// run of digits written as "9" and each run of letters as "a". It is empty when the line does not start with a recognized
+// header. Lines of one log format share a shape, so a file's entry starts
+// can be told apart from continuation lines that start with another format.
+func StartShape(line string) string {
+	for _, f := range formats {
+		m := f.re.FindStringSubmatchIndex(line)
+		if m == nil {
+			continue
+		}
+		tsStart, tsEnd := m[2*f.re.SubexpIndex("ts")], m[2*f.re.SubexpIndex("ts")+1]
+		ts := shapeFraction.ReplaceAllString(line[tsStart:tsEnd], "")
+		ts = shapeZone.ReplaceAllString(ts, "")
+		return collapseShape(line[:tsStart] + ts)
+	}
+	return ""
+}
+
+// shapeFraction and shapeZone drop the parts of a timestamp whose presence
+// varies between lines of one format (fractional seconds, zone suffix), so
+// "05:41:47Z" and "05:41:47.158+00:00" share a shape.
+var (
+	shapeFraction = regexp.MustCompile(`[.,]\d+`)
+	shapeZone     = regexp.MustCompile(`(?:Z|[+-]\d{2}(?::?\d{2})?)$`)
+)
+
+func collapseShape(prefix string) string {
+	var b strings.Builder
+	var last byte
+	for i := 0; i < len(prefix); i++ {
+		c := prefix[i]
+		switch {
+		case c >= '0' && c <= '9':
+			c = '9'
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+			c = 'a'
+		}
+		if (c == '9' || c == 'a') && c == last {
+			continue
+		}
+		b.WriteByte(c)
+		last = c
+	}
+	return b.String()
 }
 
 func parse(ts string, f format) time.Time {

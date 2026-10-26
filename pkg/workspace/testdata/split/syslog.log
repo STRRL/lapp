@@ -1,0 +1,4 @@
+Oct 26 05:41:47 web01 sshd[2101]: Accepted publickey for deploy
+Oct 26 05:41:48 web01 sshd[2101]: session opened for user deploy
+Oct 26 05:41:49 web01 cron[311]: job started
+Oct 26 05:41:50 web01 sshd[2101]: session closed for user deploy

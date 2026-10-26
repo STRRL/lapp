@@ -1,0 +1,11 @@
+2026-10-25 22:29:46.046 duration: 42142.361 ms  plan:
+    Query Text: SELECT o.id, o.total
+      FROM orders o
+      JOIN accounts a ON a.id = o.account_id
+    Limit  (cost=0.85..16.90 rows=10 width=16)
+      ->  Nested Loop  (cost=0.85..1604.10 rows=1000 width=16)
+            ->  Index Scan using orders_pkey on orders o  (cost=0.42..60.42 rows=1000 width=24)
+2026-10-25 22:29:47.101 LOG:  checkpoint starting: time
+2026-10-25 22:29:48.250 duration: 1201.003 ms  plan:
+    Query Text: SELECT 1
+    Result  (cost=0.00..0.01 rows=1 width=4)

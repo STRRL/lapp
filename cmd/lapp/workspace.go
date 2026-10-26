@@ -13,6 +13,7 @@ import (
 	"github.com/go-errors/errors"
 	"github.com/spf13/cobra"
 	"github.com/strrl/lapp/pkg/analyzer"
+	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/workspace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -263,7 +264,7 @@ func runWorkspaceDiscover(cmd *cobra.Command, _ []string) error {
 func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...attribute.KeyValue)) error {
 	if addLogStdin {
 		name := fmt.Sprintf("stdin-%d.log", time.Now().UnixNano())
-		data, err := io.ReadAll(os.Stdin)
+		data, err := readLogForWorkspace(os.Stdin)
 		if err != nil {
 			return errors.Errorf("read stdin: %w", err)
 		}
@@ -280,7 +281,12 @@ func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...att
 	logFile := args[0]
 	setSpanAttributes(attribute.String("log.file", logFile))
 
-	data, err := os.ReadFile(logFile)
+	src, err := os.Open(logFile)
+	if err != nil {
+		return errors.Errorf("read log file: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+	data, err := readLogForWorkspace(src)
 	if err != nil {
 		return errors.Errorf("read log file: %w", err)
 	}
@@ -290,6 +296,16 @@ func copyLogToWorkspace(dir string, args []string, setSpanAttributes func(...att
 	}
 	slog.Info("Added log file", "file", filepath.Base(logFile))
 	return nil
+}
+
+// readLogForWorkspace reads a log to land in logs/, normalizing structured
+// exports to NDJSON (ADR 0006).
+func readLogForWorkspace(r io.Reader) ([]byte, error) {
+	body, err := ndjson.Normalize(r)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(body)
 }
 
 var analyzeWsModel string

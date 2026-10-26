@@ -1,0 +1,2 @@
+{"_time":"2026-10-26T05:41:40Z","level":"info","_msg":"checkpoint complete","fields":{"detected_level":"info","service.name":"postgres"}}
+{"_time":"2026-10-26T05:41:50Z","level":"info","_msg":"duration: 3.2 ms  plan:\nQuery Text: SELECT 1\nResult  (cost=0.00..0.01 rows=1 width=4)","fields":{"detected_level":"info","service.name":"postgres"}}

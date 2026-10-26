@@ -128,12 +128,12 @@ func TestMergeAllLogsNDJSONWithTruncatedLine(t *testing.T) {
 		`{"_time":"2026-06-06T10:00:02Z","_msg":"request served path=/b"}`,
 	}, "\n")+"\n")
 
-	tagged, _, _, truncatedLines, err := mergeAllLogs(context.Background(), dir)
+	tagged, _, _, split, err := mergeAllLogs(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("mergeAllLogs: %v", err)
 	}
-	if truncatedLines != 1 || len(tagged) != 3 {
-		t.Fatalf("truncated = %d, entries = %d, want 1 and 3", truncatedLines, len(tagged))
+	if split.truncatedLines != 1 || len(tagged) != 3 {
+		t.Fatalf("truncated = %d, entries = %d, want 1 and 3", split.truncatedLines, len(tagged))
 	}
 	for _, i := range []int{0, 2} {
 		if tagged[i].Truncated || tagged[i].Timestamp == nil || !strings.HasPrefix(tagged[i].ExtractedLine, "request served") {

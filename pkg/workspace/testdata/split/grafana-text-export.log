@@ -1,0 +1,20 @@
+: "4 lines shown — 100.00% (2min 0sec) of 2min"
+Common labels: {"service_name":"postgres"}
+
+1792993320500	2026-10-26T05:42:00.500Z	column "user_id" does not exist
+1792993310000	2026-10-26T05:41:50.000Z	duration: 812.204 ms  plan:
+	Query Text: SELECT a.id,
+	       a.name
+	FROM accounts a
+	WHERE a.id = $1
+	Query Parameters: $1 = '42'
+	Limit  (cost=0.42..8.44 rows=1 width=40)
+	  ->  Index Scan using accounts_pkey on accounts a  (cost=0.42..8.44 rows=1 width=40)
+Filter: (created_at > '2026-10-26 05:20:11.123+00'::timestamp with time zone)
+2026-10-26 05:20:11.123+00 snapshot taken inside the plan
+	        Index Cond: (id = $1)
+1792993300000	2026-10-26T05:41:40.000Z	checkpoint complete: wrote 12 buffers
+1792993290000	2026-10-26T05:41:30.000Z	duration: 640.010 ms  plan:
+Query Text: SELECT count(*) FROM orders
+Aggregate  (cost=10.50..10.51 rows=1 width=8)
+  ->  Seq Scan on orders  (cost=0.00..10.40 rows=40 width=0)

@@ -1,0 +1,3 @@
+{"_time":"2026-10-26T05:41:40Z","_msg":"checkpoint complete","fields":{"service.name":"postgres"}}
+{"_time":"2026-10-26T05:41:50Z","level":"info","_msg":"duration: 12.5 ms  plan:\nQuery Text: SELECT id,\n       name\nFROM accounts","fields":{"detected_level":"info","service.name":"postgres"}}
+{"_time":"2026-10-26T05:42:00.5Z","level":"error","_msg":"column \"user_id\" does not exist","fields":{"detected_level":"error","metadata.parsed.query":"select \"user_id\" from accounts","service.name":"postgres"}}

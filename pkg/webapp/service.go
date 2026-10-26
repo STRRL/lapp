@@ -1,8 +1,10 @@
 package webapp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	webv1 "github.com/strrl/lapp/gen/go/lapp/web/v1"
 	"github.com/strrl/lapp/gen/go/lapp/web/v1/webv1connect"
+	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/workspace"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -186,7 +189,15 @@ func (s *WorkspaceService) UploadLogFile(_ context.Context, req *connect.Request
 	} else if err != nil && !os.IsNotExist(err) {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	if err := os.WriteFile(path, req.Msg.Content, 0o644); err != nil {
+	normalized, err := ndjson.Normalize(bytes.NewReader(req.Msg.Content))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	content, err := io.ReadAll(normalized)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if err := os.WriteFile(path, content, 0o644); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	msg, err := s.logFileMessage(id, fileName)
