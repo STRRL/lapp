@@ -392,12 +392,17 @@ func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		tagged = append(tagged, TaggedLine{
+		extracted, ts := ndjson.Extract(line)
+		tl := TaggedLine{
 			Content:       line,
 			FileName:      fileName,
 			LineNum:       i + 1,
-			ExtractedLine: ndjson.Extract(line),
-		})
+			ExtractedLine: extracted,
+		}
+		if !ts.IsZero() {
+			tl.Timestamp = &ts
+		}
+		tagged = append(tagged, tl)
 	}
 	return tagged
 }

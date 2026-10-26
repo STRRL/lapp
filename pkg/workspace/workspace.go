@@ -17,7 +17,8 @@ type TaggedLine struct {
 	// entries, or the body after the timestamp/host header for plain text.
 	// Empty when Content is mined directly.
 	ExtractedLine string `json:",omitempty"`
-	// Timestamp is parsed from the line header when one is recognised.
+	// Timestamp is parsed from the line header or the NDJSON timestamp field
+	// when one is recognised.
 	Timestamp *time.Time `json:",omitempty"`
 }
 

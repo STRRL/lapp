@@ -2,7 +2,7 @@
 
 Log files can be NDJSON (one JSON entry per line) as well as plain text, detected per file by the pipeline — the capability belongs to the pipeline, not to any import provider, so hand-uploaded NDJSON files get the same treatment as imported ones. Imported GCP entries land in a fixed envelope: `{"ts": ..., "severity": ..., "payload": {...}}` with the jsonPayload nested untouched (textPayload becomes `payload.message`); provider metadata such as labels, trace, and resource stays in the ImportRun record, not in the log lines.
 
-For pattern discovery, a text line is extracted from each JSON entry rather than feeding Drain the whole entry: the first string field among `payload.message`, `msg`, `log`, `error` becomes the extraction (`<severity> <message>`); if none exists, the compact payload JSON is the fallback. Timestamps are excluded from the extraction to keep Drain templates clean.
+For pattern discovery, a text line is extracted from each JSON entry rather than feeding Drain the whole entry: the first string field among `_msg`, `message`, `msg`, `log`, `error` of the payload becomes the extraction (`<severity> <message>`); if none exists, the compact payload JSON is the fallback. `_msg` is the VictoriaLogs message field, so VictoriaLogs query results are read as is. Because `_msg` is checked first, a plain JSON line that has both `_msg` and `message` now yields `_msg`. Timestamps are excluded from the extraction to keep Drain templates clean; a top-level RFC 3339 `_time` (VictoriaLogs) field is kept as the entry timestamp for time-based metrics.
 
 **Considered Options**
 
