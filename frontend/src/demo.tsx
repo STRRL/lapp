@@ -96,6 +96,8 @@ type PatternsResponse = {
   patterns: DemoPattern[];
   unmatched: { count: number; buckets: number[]; samples: string[] };
   compare?: CompareInfo;
+  // Every "Start here" candidate in order, hidden patterns included.
+  startHere: { id: string; reason: string }[];
   splitMode?: "MERGED" | "PER_LINE";
   physicalLineCount?: number;
   cappedEntryCount?: number;
@@ -1247,7 +1249,7 @@ function PatternList({
             </div>
           )}
 
-          <StartHere data={data} items={startHere(visible)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
+          <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
 
           <section className="card overview">
             <header>
@@ -1526,37 +1528,18 @@ function short(s: string, n: number) {
 // <*>, so field positions line up with the template.
 const levelOffset = (p: DemoPattern) => (p.template.split("<*>").length - p.name.split("<*>").length);
 
-const isError = (p: DemoPattern) => p.level === "error" || p.level === "fatal";
-const isNew = (p: DemoPattern) => p.newAt !== undefined || p.sinceLast === "new";
-
-// "Start here": rule-based shortlist of the patterns most likely to be the
-// problem — spiking errors, steady errors, new errors, other spikes, other
-// new (max 5, each pattern once). Same rules as startHere in summary.go.
-export function startHere(patterns: DemoPattern[]) {
-  const spike = (p: DemoPattern) => (p.spikeAt !== undefined ? p.buckets[p.spikeAt] : 0);
-  const vsLast = (p: DemoPattern) => isError(p) && p.spikeAt === undefined && (p.sinceLast === "new" || p.sinceLast === "up");
-  const groups = [
-    patterns.filter((p) => isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
-    patterns.filter((p) => p.steadyError && p.spikeAt === undefined).sort((a, b) => b.count - a.count),
-    patterns.filter(vsLast).sort((a, b) => (b.ratio ?? 99) - (a.ratio ?? 99) || b.count - a.count),
-    patterns.filter((p) => isError(p) && p.spikeAt === undefined && !vsLast(p) && isNew(p)).sort((a, b) => b.count - a.count),
-    patterns.filter((p) => !isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
-    patterns.filter((p) => !isError(p) && p.spikeAt === undefined && isNew(p)).sort((a, b) => b.count - a.count)
-  ];
-  return [...new Set(groups.flat())].slice(0, 5);
+// "Start here": the server ranks every candidate (startHere in summary.go);
+// the page drops hidden patterns and shows the first 5.
+function startHere(data: PatternsResponse, hidden: Set<string>) {
+  const byId = new Map(data.patterns.map((p) => [p.id, p]));
+  return data.startHere
+    .filter((c) => !hidden.has(c.id))
+    .slice(0, 5)
+    .flatMap((c) => byId.get(c.id) ?? []);
 }
 
 function startReason(p: DemoPattern, data: PatternsResponse) {
-  if (p.steadyError && p.spikeAt === undefined) return `Steady error · ${formatPercent(p.count, data.workspace.lineCount)} of lines`;
-  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "new") return "New error since last time";
-  if (isError(p) && p.spikeAt === undefined && p.sinceLast === "up") return `Error · ${p.ratio}× last time`;
-  const parts: string[] = [];
-  if (isError(p)) parts.push("Error");
-  if (p.spikeAt !== undefined) parts.push(`spiked to ${p.buckets[p.spikeAt]}${perUnit(data.bucketSeconds)} ${atBucket(data, p.spikeAt)}`);
-  else if (p.newAt !== undefined) parts.push(`first seen ${bucketLabel(data, p.newAt)}`);
-  else if (p.sinceLast === "new") parts.push("new since last time");
-  const text = parts.join(" · ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return data.startHere.find((c) => c.id === p.id)?.reason;
 }
 
 function StartHere({
@@ -1586,10 +1569,12 @@ function StartHere({
             <i className="dot" style={{ background: colorOf(p) }} />
             <div className="sh-main">
               {p.named ? (
-                <b className="ell">{p.name}</b>
+                <b className="ell" title={p.name}>
+                  {p.name.split("\n")[0]}
+                </b>
               ) : (
-                <b className="unnamed ell">
-                  <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
+                <b className="unnamed ell" title={p.name}>
+                  <Template text={p.name.split("\n")[0]} patternId={p.id} offset={levelOffset(p)} />
                 </b>
               )}
               <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : p.steadyError ? "is-err" : "is-new"}`}>

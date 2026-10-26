@@ -33,7 +33,7 @@ VICTORIALOGS_HEADERS='CF-Access-Client-Id: <id>; CF-Access-Client-Secret: <secre
   --query 'service.name:postgres_logs'
 ```
 
-1. **Start here.** A short list of the patterns most likely to be the problem: spiking errors first, then new errors, then other spikes.
+1. **Start here.** A short list of the patterns most likely to be the problem: steady errors first, then spiking errors, other errors, warnings, other spikes, and patterns that are new since the last import of the same service.
 2. **Investigate.** Click **Investigate** on any of them. Your local Claude Code or Codex reads the filtered patterns and explains the likely cause, citing the patterns and times it relied on.
 3. **Hide noise.** Patterns that look like noise are tagged **Likely noise**, with the reason on hover. Click **Hide** or **Not noise** on the row, or hide any other pattern from its row. The share hidden and the lines left update as you go.
 4. **Keep the decisions.** Every Hide, Not noise and Unhide is saved for the service right away, and lapp applies it the next time you open logs from the same service.

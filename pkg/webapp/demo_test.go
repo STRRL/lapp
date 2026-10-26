@@ -348,3 +348,144 @@ func TestPlanVictoriaLogsServicesFallsBackToStreamHash(t *testing.T) {
 		t.Fatalf("plan = %+v", plan)
 	}
 }
+
+// pgPlainLog is shaped like a plain-text Postgres export with no level field:
+// two steady error messages, a statement timeout (an error by its words) with
+// a spike, and three rare multi-line execution plans that appear late. Extra
+// lines are appended as "<minute> <message>" pairs.
+func pgPlainLog(day int, extra map[int]string) string {
+	var b strings.Builder
+	base := time.Date(2026, 10, day, 0, 0, 0, 0, time.UTC)
+	at := func(m, s int) string {
+		return base.Add(time.Duration(m)*time.Minute + time.Duration(s)*time.Second).Format(time.RFC3339)
+	}
+	plans := map[int]string{
+		45: "duration: 12745.859 ms  plan:\n\tQuery Text: SELECT sr.application_id FROM submissions sr\n\tSeq Scan on submissions sr  (cost=0.00..431.00 rows=10000 width=16)",
+		47: "duration: 17384.464 ms  plan:\n\tQuery Text: WITH pgrst_source AS ( SELECT * FROM members WHERE id = $1 )\n\tIndex Scan using members_pkey on members  (cost=0.29..8.30 rows=1 width=64)\n\t  Index Cond: (id = $1)",
+		50: "duration: 32898.026 ms  plan:\n\tQuery Text: WITH segment_creators AS ( SELECT creator_id, count(*) FROM segments GROUP BY creator_id )\n\tHashAggregate  (cost=20.00..22.00 rows=200 width=12)\n\t  Group Key: creator_id\n\t  ->  Seq Scan on segments  (cost=0.00..15.00 rows=1000 width=4)",
+	}
+	for m := 0; m < 60; m++ {
+		for i := 0; i < 15; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main column \"member_created_here\" does not exist at character %d\n", at(m, i), 4000+i, 40+i)
+		}
+		for i := 0; i < 3; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main invalid input syntax for type uuid: \"x%d\"\n", at(m, 20+i), 5000+i, i)
+		}
+		timeouts := 0
+		switch {
+		case m == 40:
+			timeouts = 12
+		case m%5 == 0 && m > 0 && m <= 50:
+			timeouts = 1
+		}
+		for i := 0; i < timeouts; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main canceling statement due to statement timeout\n", at(m, 30+i), 6000+i)
+		}
+		for start, plan := range plans {
+			if m == start || m == start+8 {
+				fmt.Fprintf(&b, "%s [%d] app@main LOG:  %s\n", at(m, 50), 7000+m, plan)
+			}
+		}
+		if msg, ok := extra[m]; ok {
+			fmt.Fprintf(&b, "%s [%d] app@main %s\n", at(m, 55), 8000+m, msg)
+		}
+	}
+	return b.String()
+}
+
+func TestStartHerePlainTextErrors(t *testing.T) {
+	names := func(s *Summary) []string {
+		var out []string
+		for _, f := range s.StartHere {
+			out = append(out, f.Name+" | "+f.Reason)
+		}
+		return out
+	}
+	s, err := SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", "pg.log", strings.NewReader(pgPlainLog(1, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans := 0
+	for _, p := range s.Patterns {
+		if strings.Contains(p.Template, "plan:") {
+			plans++
+		}
+	}
+	if plans != 3 {
+		t.Fatalf("want 3 plan patterns, got %d: %+v", plans, s.Patterns)
+	}
+	got := names(s)
+	want := []string{
+		`column "member_created_here" does not exist at character <*> | Steady error · `,
+		`invalid input syntax for type uuid: <*> | Steady error · `,
+		`canceling statement due to statement timeout | Error · spiked to 12 per minute at Oct 1 00:40`,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("first import: start here = %q, want only the two steady errors and the timeout", got)
+	}
+	for i := range want {
+		if !strings.Contains(got[i], want[i]) {
+			t.Fatalf("first import: start here[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	// A second import of the same service: a new non-error pattern is listed
+	// after the errors only from 3 lines.
+	for _, n := range []int{2, 3} {
+		root := filepath.Join(t.TempDir(), "workspaces")
+		d := newDemoAPI(root, "", "")
+		ctx := context.Background()
+		if _, err := d.importLog(ctx, "pg-1.log", strings.NewReader(pgPlainLog(1, nil))); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+		extra := map[int]string{}
+		for i := 0; i < n; i++ {
+			extra[10+i*7] = fmt.Sprintf("checkpoint starting: time %d", i)
+		}
+		second, err := d.importLog(ctx, "pg-2.log", strings.NewReader(pgPlainLog(2, extra)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := d.analyze(ctx, second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := names(buildSummary(a))
+		listed := len(got) == 4 && strings.Contains(got[3], "checkpoint starting: time <*> | New since last time")
+		if n == 2 && len(got) != 3 || n == 3 && !listed {
+			t.Fatalf("second import with %d new lines: start here = %q", n, got)
+		}
+	}
+}
+
+func TestIsErrorLike(t *testing.T) {
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{`column "x" does not exist`, true},
+		{"canceling statement due to statement timeout", true},
+		{"ERROR: invalid input syntax for type uuid", true},
+		{"java.io.IOException: broken pipe", true},
+		{"TypeError: cannot read properties of undefined", true},
+		{"statement: CREATE MATERIALIZED VIEW app_index AS SELECT has_error, is_exception FROM t -- this invalidates the cache", false},
+		{"health check ok in 3 ms", false},
+		{"statement: CREATE MATERIALIZED VIEW app_index AS\n-- A real edge exists but cannot collapse one-to-one.\nSELECT 1", false},
+		{"ERROR: deadlock detected\nDETAIL: Process 1 waits for ShareLock", true},
+	}
+	for _, tt := range tests {
+		if got := isErrorLike(tt.text); got != tt.want {
+			t.Errorf("isErrorLike(%q) = %v, want %v", tt.text, got, tt.want)
+		}
+	}
+}
+
+func TestDetectLevelUsesFirstLineOnly(t *testing.T) {
+	if got := detectLevel("statement: SELECT 1\n-- ERROR handling is elsewhere"); got != "" {
+		t.Fatalf("detectLevel = %q, want no level from a later line", got)
+	}
+	if got := detectLevel("ERROR: deadlock detected\nDETAIL: waits for ShareLock"); got != "error" {
+		t.Fatalf("detectLevel = %q, want error from the first line", got)
+	}
+}

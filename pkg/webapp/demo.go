@@ -123,6 +123,9 @@ type demoPatternsResponse struct {
 	Patterns       []demoPattern `json:"patterns"`
 	Unmatched      demoUnmatched `json:"unmatched"`
 	Compare        *demoCompare  `json:"compare,omitempty"`
+	// StartHere ranks every "Start here" candidate, hidden ones included;
+	// the page drops hidden ones and shows the first startHereShown.
+	StartHere []startHereCandidate `json:"startHere"`
 	// SplitMode is the run's workspace.SplitMode: "MERGED" when continuation
 	// lines joined timestamped entries, "PER_LINE" when a text file had too
 	// few timestamps at line starts to merge entries.
@@ -576,6 +579,7 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	if compareTo != "none" {
 		a.resp.Compare = d.compareWithPrevious(ctx, id, compareTo, a.service, run, &a.resp)
 	}
+	a.resp.StartHere = startHere(a.resp)
 	return a, nil
 }
 
@@ -804,7 +808,12 @@ func markTrends(p *demoPattern) {
 }
 
 func detectLevel(template string) string {
+	// Only the first line names the level; later lines of a multi-line entry
+	// are payload (SQL, plans, stack frames) and may mention ERROR in passing.
 	head := template
+	if i := strings.IndexByte(head, '\n'); i >= 0 {
+		head = head[:i]
+	}
 	if len(head) > 48 {
 		head = head[:48]
 	}
@@ -832,10 +841,21 @@ func detectLevel(template string) string {
 // errorWords is the one list of words and phrases that make a message look
 // like an error, whatever its log level. Patterns matching it are never
 // suggested as noise. Keep it short: every entry can keep real noise visible.
-var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b|\b\w*(?:error|exception)\b`)
+var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b`)
 
+// errorTypeNames matches exception class names such as TypeError or
+// IOException. It is case-sensitive on purpose: identifiers like has_error or
+// is_exception in SQL or code are field names, not errors.
+var errorTypeNames = regexp.MustCompile(`\b[A-Z][A-Za-z0-9]*(?:Error|Exception)\b`)
+
+// isErrorLike checks only the first line: in a multi-line entry (a query
+// plan, a SQL statement) the rest is payload, and comments in it ("cannot",
+// "could not") say nothing about whether the entry is an error.
 func isErrorLike(s string) bool {
-	return errorWords.MatchString(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return errorWords.MatchString(s) || errorTypeNames.MatchString(s)
 }
 
 // isErrorLevel reports whether a detected level (see detectLevel) is an error.
