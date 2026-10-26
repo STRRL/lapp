@@ -1,11 +1,12 @@
 package workspace
 
 import (
-	"bufio"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/strrl/lapp/pkg/logsource"
 )
 
 // TaggedLine represents a log line with its source file and line number.
@@ -20,6 +21,8 @@ type TaggedLine struct {
 	// Timestamp is parsed from the line header or the NDJSON timestamp field
 	// when one is recognised.
 	Timestamp *time.Time `json:",omitempty"`
+	// Truncated marks an entry with a line cut at logsource.MaxLineBytes.
+	Truncated bool `json:",omitempty"`
 }
 
 // DrainLine returns the text used for pattern mining and template matching:
@@ -66,47 +69,61 @@ func ListLogFiles(dir string) ([]string, error) {
 	return names, nil
 }
 
-// ReadAllLogs reads all log files in <dir>/logs/ and returns a map of filename to lines.
-func ReadAllLogs(dir string) (map[string][]string, error) {
+// LogFileLines holds one log file's lines and which of them were cut at
+// logsource.MaxLineBytes.
+type LogFileLines struct {
+	Lines []string
+	// Truncated holds the 0-based indexes of lines that were cut.
+	Truncated map[int]bool
+}
+
+// ReadAllLogs reads all log files in <dir>/logs/ and returns their lines by
+// file name.
+func ReadAllLogs(dir string) (map[string]LogFileLines, error) {
 	logsDir := filepath.Join(dir, "logs")
 	entries, err := os.ReadDir(logsDir)
 	if err != nil {
 		return nil, err
 	}
-	result := make(map[string][]string)
+	result := make(map[string]LogFileLines)
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
-		lines, err := readFileLines(filepath.Join(logsDir, e.Name()))
+		file, err := readFileLines(filepath.Join(logsDir, e.Name()))
 		if err != nil {
 			return nil, err
 		}
-		result[e.Name()] = lines
+		result[e.Name()] = file
 	}
 	return result, nil
 }
 
-func readFileLines(path string) ([]string, error) {
+func readFileLines(path string) (LogFileLines, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return LogFileLines{}, err
 	}
 	defer func() { _ = f.Close() }()
 
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+	var file LogFileLines
+	err = logsource.ScanLines(f, func(line string, truncated bool) error {
+		if truncated {
+			if file.Truncated == nil {
+				file.Truncated = map[int]bool{}
+			}
+			file.Truncated[len(file.Lines)] = true
+		}
+		file.Lines = append(file.Lines, line)
+		return nil
+	})
+	if err != nil {
+		return LogFileLines{}, err
 	}
 
 	// Trim trailing empty lines
-	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
-		lines = lines[:len(lines)-1]
+	for len(file.Lines) > 0 && strings.TrimSpace(file.Lines[len(file.Lines)-1]) == "" {
+		file.Lines = file.Lines[:len(file.Lines)-1]
 	}
-	return lines, nil
+	return file, nil
 }

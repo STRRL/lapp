@@ -54,14 +54,16 @@ func newDemoAPI(root, apiKey, model string) *demoAPI {
 }
 
 type demoWorkspace struct {
-	ID            string    `json:"id"`
-	Title         string    `json:"title"`
-	Service       string    `json:"service"`
-	LineCount     int       `json:"lineCount"`
-	PatternCount  int       `json:"patternCount"`
-	FilteredLines int       `json:"filteredLines"`
-	LimitReached  bool      `json:"limitReached,omitempty"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Service       string `json:"service"`
+	LineCount     int    `json:"lineCount"`
+	PatternCount  int    `json:"patternCount"`
+	FilteredLines int    `json:"filteredLines"`
+	LimitReached  bool   `json:"limitReached,omitempty"`
+	// TruncatedLines counts lines cut at logsource.MaxLineBytes.
+	TruncatedLines int       `json:"truncatedLines,omitempty"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 type demoPattern struct {
@@ -172,7 +174,7 @@ func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 
 func (d *demoAPI) workspaceInfo(id string, run *workspace.DiscoveryRunRecord) demoWorkspace {
 	dir := filepath.Join(d.root, id)
-	info := demoWorkspace{ID: id, Title: id, Service: readService(dir, id), LineCount: run.LineCount, PatternCount: run.PatternCount}
+	info := demoWorkspace{ID: id, Title: id, Service: readService(dir, id), LineCount: run.LineCount, PatternCount: run.PatternCount, TruncatedLines: run.TruncatedLineCount}
 	if files, err := workspace.ListLogFiles(dir); err == nil && len(files) > 0 {
 		info.Title = files[0]
 	}
@@ -269,13 +271,15 @@ func writeLog(dir, name, service string, body io.Reader) error {
 }
 
 type demoStatus struct {
-	State   string `json:"state"` // queued, running, succeeded, failed
-	Step    string `json:"step"`
-	Error   string `json:"error,omitempty"`
-	Named   bool   `json:"named"`
-	Lines   int    `json:"lines"`
-	Batches string `json:"batches,omitempty"`
-	Source  string `json:"source,omitempty"`
+	State string `json:"state"` // queued, running, succeeded, failed
+	Step  string `json:"step"`
+	Error string `json:"error,omitempty"`
+	// ErrorCode is the run's structured error code, e.g. FORMAT_UNRECOGNIZED.
+	ErrorCode string `json:"errorCode,omitempty"`
+	Named     bool   `json:"named"`
+	Lines     int    `json:"lines"`
+	Batches   string `json:"batches,omitempty"`
+	Source    string `json:"source,omitempty"`
 }
 
 func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +296,7 @@ func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
 		case workspace.ImportRunStateFailed:
 			st.State, st.Step = "failed", "IMPORTING"
 			if rec.Error != nil {
-				st.Error = rec.Error.Message
+				st.Error, st.ErrorCode = rec.Error.Message, rec.Error.Code
 			}
 			writeJSON(w, st)
 			return
@@ -317,7 +321,7 @@ func (d *demoAPI) handleStatus(w http.ResponseWriter, r *http.Request) {
 			st.Lines = run.LineCount
 		}
 		if run.Error != nil {
-			st.Error = run.Error.Message
+			st.Error, st.ErrorCode = run.Error.Message, run.Error.Code
 		}
 		if p := run.Progress; p != nil && p.LabelBatch != nil {
 			st.Batches = fmt.Sprintf("batch %d of %d", p.LabelBatch.BatchNumber, p.LabelBatch.BatchCount)

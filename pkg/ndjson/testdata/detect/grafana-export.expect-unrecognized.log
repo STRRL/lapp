@@ -1,0 +1,1 @@
+[{"line":"level=info msg=\"request served\" status=200","timestamp":"1761350400000000000","labels":{"app":"api","pod":"api-1"}},{"line":"level=error msg=\"db timeout\"","timestamp":"1761350401000000000","labels":{"app":"api","pod":"api-2"}}]

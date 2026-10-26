@@ -83,7 +83,7 @@ func TestRunImportSuccessWritesFileAndRecord(t *testing.T) {
 
 	// Discovery reads the imported envelope's ts as each entry's timestamp,
 	// so GCP imports get time ranges and buckets.
-	tagged, _, _, err := mergeAllLogs(context.Background(), dir)
+	tagged, _, _, _, err := mergeAllLogs(context.Background(), dir)
 	if err != nil {
 		t.Fatalf("mergeAllLogs: %v", err)
 	}

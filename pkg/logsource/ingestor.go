@@ -1,7 +1,6 @@
 package logsource
 
 import (
-	"bufio"
 	"context"
 	"os"
 
@@ -66,17 +65,17 @@ func (f *fileIngestor) Ingest(ctx context.Context) (<-chan Result[*LogLine], err
 			}
 		}()
 
-		scanner := bufio.NewScanner(file)
 		lineNum := 0
-		for scanner.Scan() {
+		err := ScanLines(file, func(line string, _ bool) error {
 			lineNum++
 			select {
-			case ch <- Result[*LogLine]{Value: &LogLine{LineNumber: lineNum, Content: scanner.Text()}}:
+			case ch <- Result[*LogLine]{Value: &LogLine{LineNumber: lineNum, Content: line}}:
+				return nil
 			case <-ctx.Done():
-				return
+				return ctx.Err()
 			}
-		}
-		if err := scanner.Err(); err != nil {
+		})
+		if err != nil && ctx.Err() == nil {
 			fileErr = errors.Errorf("read log file: %w", err)
 		}
 	}()

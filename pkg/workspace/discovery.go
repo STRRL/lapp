@@ -44,8 +44,10 @@ type DiscoveryRunRecord struct {
 	LineCount       int                   `json:"line_count"`
 	PatternCount    int                   `json:"pattern_count"`
 	UnmatchedCount  int                   `json:"unmatched_count"`
-	Patterns        []PatternInfo         `json:"patterns,omitempty"`
-	Unmatched       []TaggedLine          `json:"unmatched,omitempty"`
+	// TruncatedLineCount counts lines cut at logsource.MaxLineBytes.
+	TruncatedLineCount int           `json:"truncated_line_count,omitempty"`
+	Patterns           []PatternInfo `json:"patterns,omitempty"`
+	Unmatched          []TaggedLine  `json:"unmatched,omitempty"`
 }
 
 type DiscoveryRunProgress struct {

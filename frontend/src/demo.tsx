@@ -41,6 +41,7 @@ type DemoWorkspace = {
   patternCount: number;
   filteredLines: number;
   limitReached?: boolean;
+  truncatedLines?: number;
   updatedAt: string;
 };
 
@@ -105,7 +106,7 @@ type DemoField = {
 };
 type PatternDetail = { firstSeen?: string; lastSeen?: string; fields: DemoField[] };
 type DemoLine = { n: number; text: string };
-type ImportStatus = { state: string; step: string; error?: string; named: boolean; lines: number; batches?: string };
+type ImportStatus = { state: string; step: string; error?: string; errorCode?: string; named: boolean; lines: number; batches?: string };
 
 async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -555,10 +556,11 @@ function Processing({ name, gcp, status, onRetry }: { name: string; gcp: boolean
   const failed = status?.state === "failed";
   const done = status?.state === "succeeded";
   const idx = done ? steps.length : Math.max(0, current);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   return (
     <main className="imp">
       <h1>{name}</h1>
-      <p className="lead">The pattern list opens as soon as this finishes.</p>
+      <p className="lead">{failed ? (gcp ? "Nothing was imported." : "Nothing was imported. Your file wasn't changed.") : "The pattern list opens as soon as this finishes."}</p>
       <div className="card steps">
         {steps.map((s, i) => {
           const skipped = s.key === "name" && status !== null && !status.named;
@@ -568,15 +570,32 @@ function Processing({ name, gcp, status, onRetry }: { name: string; gcp: boolean
           if (skipped && i <= idx) detail = "Skipped — no OpenRouter key";
           if (s.key === "name" && state === "run" && status?.batches) detail = status.batches;
           return (
-            <div key={s.key} className={`step ${state}`}>
-              <span className="sic">
-                {state === "done" && <Check className="ico" />}
-                {state === "run" && <LoaderCircle className="ico spin" />}
-                {state === "fail" && <X className="ico" />}
-              </span>
-              <b>{state === "fail" ? (s.key === "fetch" ? "Couldn't import from GCP." : "Couldn't read this file.") : `${s.label}${state === "run" ? "…" : ""}`}</b>
-              <span className="tnum">{state === "fail" ? status?.error : detail}</span>
-            </div>
+            <React.Fragment key={s.key}>
+              <div className={`step ${state}`}>
+                <span className="sic">
+                  {state === "done" && <Check className="ico" />}
+                  {state === "run" && <LoaderCircle className="ico spin" />}
+                  {state === "fail" && <X className="ico" />}
+                </span>
+                <b>{state === "fail" ? (s.key === "fetch" ? "Couldn't import from GCP." : "Couldn't read this file.") : `${s.label}${state === "run" ? "…" : ""}`}</b>
+                <span className="tnum">{state === "fail" ? "" : detail}</span>
+              </div>
+              {state === "fail" && (
+                <div className="step-fail">
+                  {status?.errorCode === "FORMAT_UNRECOGNIZED" && (
+                    <p>lapp reads plain text or NDJSON (one JSON object per line). In Grafana, download logs as TXT and try again.</p>
+                  )}
+                  {status?.error && (
+                    <>
+                      <button className="linklike sub" onClick={() => setDetailsOpen((v) => !v)} aria-expanded={detailsOpen}>
+                        {detailsOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Details
+                      </button>
+                      {detailsOpen && <p className="mono sub">{status.error}</p>}
+                    </>
+                  )}
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
         <div className="pbar">
@@ -944,6 +963,14 @@ function PatternList({
                 <span className="badge b-warn" title="Stopped at 100,000 lines. Narrow the time range or filter to see everything.">
                   <TriangleAlert className="ico" />
                   limit reached
+                </span>
+              )}
+              {!!data.workspace.truncatedLines && (
+                <span className="badge b-warn">
+                  <TriangleAlert className="ico" />
+                  {data.workspace.truncatedLines === 1
+                    ? "1 line was too long and was cut at 16 MB."
+                    : `${fmtCount(data.workspace.truncatedLines)} lines were too long and were cut at 16 MB.`}
                 </span>
               )}
             </div>
