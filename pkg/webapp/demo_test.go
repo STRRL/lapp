@@ -122,3 +122,27 @@ func TestInvestigateAnswerChecks(t *testing.T) {
 		t.Fatalf("unverified = %v", got)
 	}
 }
+
+func TestSummarizeLog(t *testing.T) {
+	var b strings.Builder
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 600; i++ {
+		fmt.Fprintf(&b, "%s INFO health check ok from 10.0.0.%d\n", base.Add(time.Duration(i)*time.Minute).Format(time.RFC3339), i%7)
+	}
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&b, "%s ERROR payment failed for order %d\n", base.Add(5*time.Hour+time.Duration(i)*time.Second).Format(time.RFC3339), i)
+	}
+	s, err := SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", "checkout.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Service != "checkout" || s.Lines != 640 || len(s.Patterns) != 2 {
+		t.Fatalf("summary = %+v", s)
+	}
+	if len(s.StartHere) == 0 || !strings.HasPrefix(s.StartHere[0].Reason, "Error") {
+		t.Fatalf("startHere = %+v", s.StartHere)
+	}
+	if !s.Patterns[0].Filtered || s.Patterns[0].Noise == nil {
+		t.Fatalf("health checks should be filtered as noise: %+v", s.Patterns[0])
+	}
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 	"io"
@@ -133,4 +134,54 @@ func openBrowser(u string) {
 	if err := c.Start(); err != nil {
 		slog.Warn("could not open a browser", "error", err)
 	}
+}
+
+var summaryJSON bool
+var summaryService string
+var summaryWorkspace string
+
+func summaryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "summary [file|-]",
+		Short: "Print patterns, counts and spike/noise marks as JSON, for scripts and coding agents",
+		Long: `Print what lapp found in a log: patterns with counts, noise marks, spikes,
+first-seen times and the "Start here" shortlist. With a file or a pipe, lapp
+finds the patterns on the fly (no LLM, nothing kept) and applies the noise
+rules saved for the service. With --workspace, it summarizes an earlier import,
+including the comparison with the import before it.
+
+  lapp summary app.log --json | jq '.patterns[] | select(.spike)'`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var s *webapp.Summary
+			var err error
+			if summaryWorkspace != "" {
+				s, err = webapp.SummarizeWorkspace(cmd.Context(), "", summaryWorkspace)
+			} else {
+				name, body, closeFn, oerr := openInput(args)
+				if oerr != nil {
+					return oerr
+				}
+				if body == nil {
+					return goerrors.New("give a log file, pipe logs in, or use --workspace")
+				}
+				defer closeFn()
+				s, err = webapp.SummarizeLog(cmd.Context(), "", summaryService, name, body)
+			}
+			if err != nil {
+				return err
+			}
+			if summaryJSON {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(s)
+			}
+			s.WriteText(os.Stdout)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&summaryJSON, "json", false, "print JSON")
+	cmd.Flags().StringVar(&summaryService, "service", "", "use the noise rules saved for this service (default: from the file name)")
+	cmd.Flags().StringVar(&summaryWorkspace, "workspace", "", "summarize an earlier import (its id from the web app URL, e.g. apache)")
+	return cmd
 }
