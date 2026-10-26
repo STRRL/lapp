@@ -169,9 +169,9 @@ func buildSummary(a *analysis) *Summary {
 
 func pct1(part, total int) float64 { return round1(float64(part) * 100 / float64(total)) }
 
-// startHere mirrors the page's "Start here" card: spiking errors, errors new
-// or up since last time, new errors, other spikes, other new — at most 5,
-// never filtered patterns.
+// startHere mirrors the page's "Start here" card: spiking errors, steady
+// errors, errors new or up since last time, new errors, other spikes, other
+// new — at most 5, never filtered patterns, each pattern once.
 func startHere(r demoPatternsResponse) []SummaryFinding {
 	isErr := func(p demoPattern) bool { return p.Level == "error" || p.Level == "fatal" }
 	isNew := func(p demoPattern) bool { return p.NewAt != nil || p.SinceLast == "new" }
@@ -186,21 +186,24 @@ func startHere(r demoPatternsResponse) []SummaryFinding {
 	}
 	groups := []func(demoPattern) bool{
 		func(p demoPattern) bool { return isErr(p) && p.SpikeAt != nil },
+		func(p demoPattern) bool { return p.SteadyError && p.SpikeAt == nil },
 		vsLast,
 		func(p demoPattern) bool { return isErr(p) && p.SpikeAt == nil && !vsLast(p) && isNew(p) },
 		func(p demoPattern) bool { return !isErr(p) && p.SpikeAt != nil },
 		func(p demoPattern) bool { return !isErr(p) && p.SpikeAt == nil && isNew(p) },
 	}
 	var out []SummaryFinding
+	seen := map[string]bool{}
 	for gi, in := range groups {
 		var g []demoPattern
 		for _, p := range r.Patterns {
-			if !p.Filtered && in(p) {
+			if !p.Filtered && !seen[p.ID] && in(p) {
 				g = append(g, p)
+				seen[p.ID] = true
 			}
 		}
 		sort.SliceStable(g, func(i, j int) bool {
-			if gi == 0 || gi == 3 {
+			if gi == 0 || gi == 4 {
 				return spike(g[i]) > spike(g[j])
 			}
 			return g[i].Count > g[j].Count
@@ -220,6 +223,9 @@ func startHere(r demoPatternsResponse) []SummaryFinding {
 
 func findingReason(p demoPattern, r demoPatternsResponse) string {
 	isErr := p.Level == "error" || p.Level == "fatal"
+	if p.SteadyError && p.SpikeAt == nil {
+		return "Steady error · " + formatPercent(float64(p.Count)/float64(max(r.Workspace.LineCount, 1))) + " of lines"
+	}
 	if isErr && p.SpikeAt == nil && p.SinceLast == "new" {
 		return "New error since last time"
 	}

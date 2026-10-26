@@ -61,6 +61,7 @@ type DemoPattern = {
   reason: string;
   keptReason?: string;
   filtered: boolean;
+  steadyError?: boolean;
   spikeAt?: number;
   newAt?: number;
   samples: string[];
@@ -1529,21 +1530,24 @@ const isError = (p: DemoPattern) => p.level === "error" || p.level === "fatal";
 const isNew = (p: DemoPattern) => p.newAt !== undefined || p.sinceLast === "new";
 
 // "Start here": rule-based shortlist of the patterns most likely to be the
-// problem — spiking errors, new errors, other spikes, other new (max 5).
+// problem — spiking errors, steady errors, new errors, other spikes, other
+// new (max 5, each pattern once). Same rules as startHere in summary.go.
 export function startHere(patterns: DemoPattern[]) {
   const spike = (p: DemoPattern) => (p.spikeAt !== undefined ? p.buckets[p.spikeAt] : 0);
   const vsLast = (p: DemoPattern) => isError(p) && p.spikeAt === undefined && (p.sinceLast === "new" || p.sinceLast === "up");
   const groups = [
     patterns.filter((p) => isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
+    patterns.filter((p) => p.steadyError && p.spikeAt === undefined).sort((a, b) => b.count - a.count),
     patterns.filter(vsLast).sort((a, b) => (b.ratio ?? 99) - (a.ratio ?? 99) || b.count - a.count),
     patterns.filter((p) => isError(p) && p.spikeAt === undefined && !vsLast(p) && isNew(p)).sort((a, b) => b.count - a.count),
     patterns.filter((p) => !isError(p) && p.spikeAt !== undefined).sort((a, b) => spike(b) - spike(a)),
     patterns.filter((p) => !isError(p) && p.spikeAt === undefined && isNew(p)).sort((a, b) => b.count - a.count)
   ];
-  return groups.flat().slice(0, 5);
+  return [...new Set(groups.flat())].slice(0, 5);
 }
 
 function startReason(p: DemoPattern, data: PatternsResponse) {
+  if (p.steadyError && p.spikeAt === undefined) return `Steady error · ${formatPercent(p.count, data.workspace.lineCount)} of lines`;
   if (isError(p) && p.spikeAt === undefined && p.sinceLast === "new") return "New error since last time";
   if (isError(p) && p.spikeAt === undefined && p.sinceLast === "up") return `Error · ${p.ratio}× last time`;
   const parts: string[] = [];
@@ -1588,8 +1592,14 @@ function StartHere({
                   <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
                 </b>
               )}
-              <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : "is-new"}`}>
-                {p.spikeAt !== undefined || p.sinceLast === "up" ? <TrendingUp className="ico" /> : <Sparkles className="ico" />}
+              <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : p.steadyError ? "is-err" : "is-new"}`}>
+                {p.spikeAt !== undefined || p.sinceLast === "up" ? (
+                  <TrendingUp className="ico" />
+                ) : p.steadyError ? (
+                  <OctagonAlert className="ico" />
+                ) : (
+                  <Sparkles className="ico" />
+                )}
                 {startReason(p, data)}
               </span>
             </div>

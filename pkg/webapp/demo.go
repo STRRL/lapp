@@ -37,6 +37,9 @@ const (
 	maxBuckets      = 72
 	noiseMinShare   = 0.10
 	noiseMinPresent = 0.5
+	// steadyErrorMinShare is the share from which a persistent error-like
+	// pattern goes to "Start here" even without a spike or anything new.
+	steadyErrorMinShare = 0.05
 )
 
 var leadingLevel = regexp.MustCompile(`(?i)^\[?(?:fatal|panic|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\]?:?\s+`)
@@ -86,6 +89,7 @@ type demoPattern struct {
 	Reason      string   `json:"reason"`
 	KeptReason  string   `json:"keptReason,omitempty"`
 	Filtered    bool     `json:"filtered"`
+	SteadyError bool     `json:"steadyError,omitempty"` // error-like, high share, present most of the time
 	SpikeAt     *int     `json:"spikeAt,omitempty"`
 	NewAt       *int     `json:"newAt,omitempty"`
 	Samples     []string `json:"samples"`
@@ -700,15 +704,14 @@ func chooseBucket(span time.Duration) int64 {
 }
 
 // suggestNoise flags high-volume, steady, non-error patterns as likely noise.
-// High-volume error-looking patterns are only "maybe": the user decides.
+// Error-like patterns are never noise: when they are steady and high-volume
+// they are marked SteadyError for "Start here" instead, since an error on
+// every line of every minute is an ongoing incident, not background.
 func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	if total == 0 {
 		return
 	}
 	share := float64(p.Count) / float64(total)
-	if share < noiseMinShare {
-		return
-	}
 	present := 0
 	for _, c := range p.Buckets {
 		if c > 0 {
@@ -716,6 +719,13 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		}
 	}
 	steady := bucketCount == 0 || float64(present)/float64(bucketCount) >= noiseMinPresent
+	if isErrorLevel(p.Level) || isErrorLike(p.Template) {
+		p.SteadyError = steady && share >= steadyErrorMinShare
+		return
+	}
+	if share < noiseMinShare {
+		return
+	}
 	parts := []string{formatPercent(share)}
 	switch {
 	case bucketCount == 0:
@@ -725,8 +735,6 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		parts = append(parts, fmt.Sprintf("in %d of %d %s", present, bucketCount, pluralUnit(unit)))
 	}
 	switch {
-	case isErrorLike(p.Template):
-		p.Suggestion, p.KeptReason = "maybe", "looks like an error"
 	case !steady:
 		p.Suggestion, p.KeptReason = "maybe", "comes in bursts"
 	default:
@@ -817,10 +825,18 @@ func detectLevel(template string) string {
 	return ""
 }
 
-var failureLike = regexp.MustCompile(`(?i)\b(failure|denied|refused|abnormal)`)
+// errorWords is the one list of words and phrases that make a message look
+// like an error, whatever its log level. Patterns matching it are never
+// suggested as noise. Keep it short: every entry can keep real noise visible.
+var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b|\b\w*(?:error|exception)\b`)
 
 func isErrorLike(s string) bool {
-	return errorLikePattern.MatchString(s) || failureLike.MatchString(s)
+	return errorWords.MatchString(s)
+}
+
+// isErrorLevel reports whether a detected level (see detectLevel) is an error.
+func isErrorLevel(level string) bool {
+	return level == "error" || level == "fatal"
 }
 
 // formatPercent is the one place percentages are rounded (one decimal,
