@@ -2,7 +2,9 @@ package workspace
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -288,17 +290,31 @@ func (b *Builder) writeAgentsMD() error {
 	return os.WriteFile(filepath.Join(b.dir, "AGENTS.md"), buf.Bytes(), 0o644)
 }
 
-// deduplicateDirName appends -2, -3, etc. if the name is already taken.
+// maxDirNameLen caps the readable part of a pattern directory name. An
+// unnamed pattern uses its template as the name, and a long template (for
+// example a full SQL statement) would exceed the 255-byte file name limit.
+const maxDirNameLen = 60
+
 // sanitizeDirName strips characters not in [a-z0-9-] to prevent path traversal.
+// Names longer than maxDirNameLen are cut and get a short hash of the original
+// name, so the result stays short and two long names that share a prefix
+// still get different directories. The full text stays in pattern.md.
 func sanitizeDirName(name string) string {
+	original := name
 	name = strings.ToLower(name)
 	name = validDirChar.ReplaceAllString(name, "-")
 	name = strings.Trim(name, "-")
 	if name == "" {
 		name = "unknown"
 	}
+	if len(name) > maxDirNameLen {
+		sum := sha256.Sum256([]byte(original))
+		name = strings.TrimRight(name[:maxDirNameLen], "-") + "-" + hex.EncodeToString(sum[:4])
+	}
 	return name
 }
+
+// deduplicateDirName appends -2, -3, etc. if the name is already taken.
 
 func deduplicateDirName(used map[string]bool, name string) string {
 	if !used[name] {
