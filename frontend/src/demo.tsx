@@ -22,6 +22,7 @@ type DemoPattern = {
   buckets: number[];
   suggestion: "noise" | "maybe" | "";
   reason: string;
+  keptReason?: string;
   filtered: boolean;
   spikeAt?: number;
   newAt?: number;
@@ -61,16 +62,23 @@ function formatCount(n: number) {
 function bucketLabel(data: PatternsResponse, index: number) {
   if (!data.bucketStart) return "";
   const t = new Date(new Date(data.bucketStart).getTime() + index * data.bucketSeconds * 1000);
-  return data.bucketSeconds >= 86400 ? formatTime(t).slice(0, 5) : formatTime(t);
+  return data.bucketSeconds >= 86400 ? formatDate(t) : formatTime(t);
 }
 
 function atBucket(data: PatternsResponse, index: number) {
   return `${data.bucketSeconds >= 86400 ? "on" : "at"} ${bucketLabel(data, index)}`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function formatDate(t: Date) {
+  return `${MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
+}
+
+// "Dec 4 06:00" — never "12-04", which reads as a day-month pair.
 function formatTime(t: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`;
+  return `${formatDate(t)} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`;
 }
 
 function unitLabel(seconds: number) {
@@ -203,7 +211,7 @@ function ImportPage({ onOpen }: { onOpen: (id: string) => void }) {
           To name patterns, lapp sends a few sample lines from each pattern to OpenRouter. Everything else stays on this machine.
         </p>
         <p className="d-hint">
-          From a terminal: <code>lapp app.log</code> or <code>kubectl logs my-pod | lapp</code>
+          Or from a terminal: <code>lapp app.log</code> or <code>kubectl logs pod/api | lapp --name api.log</code>
         </p>
       </main>
     </div>
@@ -538,16 +546,18 @@ function PatternRow({
           )}
           {p.suggestion === "noise" && (
             <span className="d-badge d-noise">
-              <VolumeX size={13} /> Likely noise · {p.reason}
+              <VolumeX size={13} /> Likely noise
             </span>
           )}
           {p.suggestion === "maybe" && !filtered && (
             <span className="d-badge d-maybe" title="Not filtered. Decide for yourself.">
-              Maybe noise · {p.reason}
+              Maybe noise
             </span>
           )}
         </span>
         {p.named && <Template text={p.template} />}
+        {p.suggestion === "noise" && <span className="d-why-line">Why it looks like noise: {p.reason}</span>}
+        {p.suggestion === "maybe" && !filtered && <span className="d-why-line">Why it's not filtered: {p.keptReason}</span>}
       </span>
       <span className="d-fade">
         {p.level ? (
@@ -644,7 +654,7 @@ function StackedChart({ data, patterns, colors }: { data: PatternsResponse; patt
       {hover !== null && (
         <div className="d-tooltip" style={{ left: `${((padL + (hover + 1) * bw) / W) * 100}%` }}>
           <div className="d-muted">
-            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).slice(6)}`}
+            {data.bucketSeconds >= 86400 ? bucketLabel(data, hover) : `${bucketLabel(data, hover)} – ${bucketLabel(data, hover + 1).split(" ").pop()}`}
           </div>
           {series
             .filter((s) => s.buckets[hover] > 0)
@@ -745,6 +755,7 @@ function Detail({
           </label>
         )}
         {!isUnmatched && target.suggestion === "noise" && <div className="d-why">Why it looks like noise: {target.reason}</div>}
+        {!isUnmatched && target.suggestion === "maybe" && <div className="d-why">Why it's not filtered: {target.keptReason}</div>}
 
         <h3>Over time</h3>
         {data.bucketSeconds > 0 ? (

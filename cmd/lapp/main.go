@@ -22,7 +22,7 @@ func main() {
 		Long: `Find the patterns in your logs. Filter out the noise.
 
   lapp app.log                  import a log and open its patterns in the browser
-  kubectl logs my-pod | lapp    same, from a pipe
+  kubectl logs pod/api | lapp --name api.log   same, from a pipe
   lapp filter app.log > clean.log   print the log without lines filtered as noise`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runQuick,

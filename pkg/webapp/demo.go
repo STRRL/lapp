@@ -66,6 +66,7 @@ type demoPattern struct {
 	Buckets    []int    `json:"buckets"`
 	Suggestion string   `json:"suggestion"` // "noise", "maybe" or ""
 	Reason     string   `json:"reason"`
+	KeptReason string   `json:"keptReason,omitempty"`
 	Filtered   bool     `json:"filtered"`
 	SpikeAt    *int     `json:"spikeAt,omitempty"`
 	NewAt      *int     `json:"newAt,omitempty"`
@@ -386,11 +387,9 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	}
 	switch {
 	case isErrorLike(p.Template):
-		p.Suggestion = "maybe"
-		parts = append(parts, "kept because it looks like an error")
+		p.Suggestion, p.KeptReason = "maybe", "looks like an error"
 	case !steady:
-		p.Suggestion = "maybe"
-		parts = append(parts, "kept because it comes in bursts")
+		p.Suggestion, p.KeptReason = "maybe", "comes in bursts"
 	default:
 		p.Suggestion = "noise"
 	}
