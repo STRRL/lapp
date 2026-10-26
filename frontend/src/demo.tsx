@@ -1211,6 +1211,8 @@ function PatternList({
       >
       <main className={`lp ${selected || (inv && !invHidden) ? "with-drawer" : ""}`}>
         <section className="lp-main">
+          {banner}
+
           <div className="summary">
             <div className="meter">
               <div className="meter-num tnum">
@@ -1282,8 +1284,6 @@ function PatternList({
               }
             }}
           />
-
-          {banner}
 
           <div className="toolbar">
             <label className="search">
@@ -1920,9 +1920,6 @@ const swatchStyle = (s: VolumeSeries): React.CSSProperties =>
     ? { background: "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface-2) 1.5px 5.5px)" }
     : { background: s.color };
 
-function plural(n: number, word: string) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
 // Axis numbers: 1000 → "1K", 1500 → "1.5K".
 function fmtAxis(v: number) {
   if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
@@ -1940,7 +1937,7 @@ function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: 
   if (rest.length > 0) {
     const n = data.unmatched.buckets.length;
     const buckets = Array.from({ length: n }, (_, i) => rest.reduce((s, p) => s + p.buckets[i], 0));
-    series.push({ id: VOLUME_OTHER_ID, name: `Other (${plural(rest.length, "pattern")})`, color: VOLUME_OTHER, buckets, other: true });
+    series.push({ id: VOLUME_OTHER_ID, name: `Other (${countOf(rest.length, "pattern")})`, color: VOLUME_OTHER, buckets, other: true });
   }
   return series;
 }
@@ -1990,7 +1987,7 @@ function LogsVolume({
         </button>
         <h2>Logs volume</h2>
         <span className="sub tnum">{hasTrend
-            ? `Per ${unitName(data.bucketSeconds)}${data.time.timed < data.time.lines ? ` · ${fmtCount(data.time.timed)} of ${fmtCount(data.time.lines)} lines have a time` : ""} · hidden noise not shown`
+            ? `Per ${unitName(data.bucketSeconds)}${data.time.timed < data.time.lines ? ` · ${fmtCount(data.time.timed)} of ${countOf(data.time.lines, "line")} have a time` : ""} · hidden noise not shown`
             : ""}</span>
         <div style={{ flex: 1 }} />
         {hasTrend && !collapsed && (
@@ -2102,7 +2099,7 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
                 <b>{fmtCount(s.buckets[hover.i])}</b>
               </div>
             ))}
-          <div className="tt-f">Total {fmtCount(totals[hover.i])} lines</div>
+          <div className="tt-f">Total {countOf(totals[hover.i], "line")}</div>
         </div>
       )}
     </div>
@@ -2119,7 +2116,7 @@ function NoTimes({ data, onChoose }: { data: PatternsResponse; onChoose: (column
   const canPick = (t.format === "csv" || t.format === "json") && (t.columns?.length ?? 0) > 0;
   let reason: React.ReactNode;
   if (partial) {
-    reason = `Only ${fmtCount(t.timed)} of ${fmtCount(t.lines)} lines ${t.timed === 1 ? "has" : "have"} a time, too few to draw a chart.`;
+    reason = `Only ${fmtCount(t.timed)} of ${countOf(t.lines, "line")} ${t.timed === 1 ? "has" : "have"} a time, too few to draw a chart.`;
   } else if (t.format === "json") {
     reason = `None of the JSON lines have a time field lapp looks for (${(t.fields ?? []).join(", ")}).${canPick ? " Pick the time field below." : ""}`;
   } else if (t.format === "csv" && canPick) {

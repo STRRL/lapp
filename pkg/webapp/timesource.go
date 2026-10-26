@@ -1,10 +1,13 @@
 package webapp
 
 import (
-	"encoding/csv"
+	"bytes"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -50,10 +53,15 @@ type demoTimeSource struct {
 
 var csvHeaderName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_ .-]*$`)
 
+// maxCSVHeaderName is the longest first-row field still taken for a column
+// name.
+const maxCSVHeaderName = 64
+
 // applyTimeSource fills missing line times from the service's chosen time
 // column and reports the time facts. A column is only applied when no line
-// has a time of its own, so automatic detection always wins.
-func applyTimeSource(lines []workspace.TaggedLine, column string) demoTimeSource {
+// has a time of its own, so automatic detection always wins. dir is the
+// workspace directory; CSV files are read from its logs.
+func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) demoTimeSource {
 	src := demoTimeSource{Format: timeFormatText, Lines: len(lines)}
 	for _, tl := range lines {
 		if tl.Timestamp != nil {
@@ -67,32 +75,33 @@ func applyTimeSource(lines []workspace.TaggedLine, column string) demoTimeSource
 		}
 		sample = append(sample, tl.Content)
 	}
-	var valueOf func(content string) (string, bool)
-	switch {
-	case len(sample) > 0 && ndjson.DetectFormat(sample) == ndjson.FormatNDJSON:
+	isJSON := len(sample) > 0 && ndjson.DetectFormat(sample) == ndjson.FormatNDJSON
+	if isJSON {
 		src.Format = timeFormatJSON
 		src.Fields = ndjson.TimestampFields()
+	}
+	if src.Timed > 0 {
+		return src
+	}
+	var valueOf func(tl workspace.TaggedLine) (string, bool)
+	if isJSON {
 		src.Columns = jsonFieldNames(sample)
 		valueOf = jsonFieldValue(column)
-	default:
-		names, header := csvColumns(sample)
-		if names == nil {
+	} else {
+		logs := readCSVLogs(dir)
+		if logs == nil {
 			return src
 		}
 		src.Format = timeFormatCSV
-		src.Columns = names
-		valueOf = csvColumnValue(names, header, column)
-	}
-	if src.Timed > 0 {
-		src.Columns = nil
-		return src
+		src.Columns = logs.names
+		valueOf = logs.value(column)
 	}
 	if column == "" || !contains(src.Columns, column) {
 		return src
 	}
 	src.Column = column
 	for i := range lines {
-		value, ok := valueOf(lines[i].Content)
+		value, ok := valueOf(lines[i])
 		if !ok {
 			continue
 		}
@@ -142,10 +151,10 @@ func jsonFieldNames(sample []string) []string {
 	return names
 }
 
-func jsonFieldValue(field string) func(string) (string, bool) {
-	return func(content string) (string, bool) {
+func jsonFieldValue(field string) func(workspace.TaggedLine) (string, bool) {
+	return func(tl workspace.TaggedLine) (string, bool) {
 		var entry map[string]any
-		if err := json.Unmarshal([]byte(content), &entry); err != nil {
+		if err := json.Unmarshal([]byte(tl.Content), &entry); err != nil {
 			return "", false
 		}
 		switch v := entry[field].(type) {
@@ -158,37 +167,70 @@ func jsonFieldValue(field string) func(string) (string, bool) {
 	}
 }
 
-// csvColumns treats the sample as CSV when every line splits into the same
-// number of fields (at least three). The first line is a header when all of
-// its fields look like names; otherwise columns are numbered.
-func csvColumns(sample []string) (names []string, header bool) {
-	width := 0
-	var first []string
-	rows := 0
-	for _, line := range sample {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		fields, err := csvFields(line)
-		if err != nil || len(fields) < 3 || (width > 0 && len(fields) != width) {
-			return nil, false
-		}
-		if width == 0 {
-			width, first = len(fields), fields
-		}
-		rows++
+// csvLogs are a workspace's log files read as CSV with one shared set of
+// column names.
+type csvLogs struct {
+	names []string
+	files map[string]csvFile
+}
+
+// csvFile is one CSV log file: its data records and, per physical line
+// (1-based), the record that line belongs to. A quoted field can span lines,
+// so every line of a record maps to it; header lines map to none.
+type csvFile struct {
+	rows     [][]string
+	recordAt map[int]int
+}
+
+// readCSVLogs reads every log file in the workspace with ndjson.ReadCSV and
+// returns nil unless all of them are CSV with the same columns.
+func readCSVLogs(dir string) *csvLogs {
+	names, err := workspace.ListLogFiles(dir)
+	if err != nil || len(names) == 0 {
+		return nil
 	}
-	if rows < 2 {
-		return nil, false
+	logs := &csvLogs{files: map[string]csvFile{}}
+	for _, name := range names {
+		data, err := os.ReadFile(filepath.Join(dir, "logs", name))
+		if err != nil {
+			return nil
+		}
+		columns, file, ok := parseCSVLog(data)
+		if !ok || (logs.names != nil && !slices.Equal(columns, logs.names)) {
+			return nil
+		}
+		logs.names = columns
+		logs.files[name] = file
 	}
-	header = true
+	return logs
+}
+
+// parseCSVLog treats data as CSV when it has at least two columns and every
+// record has as many fields as the first row. The first row is a header when
+// all of its fields look like names; otherwise columns are numbered, which
+// needs at least three of them so ordinary text with one comma per line is
+// not taken for CSV.
+func parseCSVLog(data []byte) ([]string, csvFile, bool) {
+	first, records, err := ndjson.ReadCSV(bytes.NewReader(data))
+	if err != nil || len(first) < 2 || len(records) == 0 {
+		return nil, csvFile{}, false
+	}
+	for _, record := range records {
+		if len(record) != len(first) {
+			return nil, csvFile{}, false
+		}
+	}
+	header := true
 	for _, f := range first {
-		if !csvHeaderName.MatchString(strings.TrimSpace(f)) {
+		if f = strings.TrimSpace(f); len(f) > maxCSVHeaderName || !csvHeaderName.MatchString(f) {
 			header = false
 			break
 		}
 	}
-	names = make([]string, width)
+	if !header && len(first) < 3 {
+		return nil, csvFile{}, false
+	}
+	names := make([]string, len(first))
 	for i := range names {
 		if header {
 			names[i] = strings.TrimSpace(first[i])
@@ -196,32 +238,52 @@ func csvColumns(sample []string) (names []string, header bool) {
 			names[i] = "Column " + strconv.Itoa(i+1)
 		}
 	}
-	return names, header
-}
-
-func csvFields(line string) ([]string, error) {
-	r := csv.NewReader(strings.NewReader(line))
-	r.FieldsPerRecord = -1
-	r.LazyQuotes = true
-	return r.Read()
-}
-
-func csvColumnValue(names []string, header bool, column string) func(string) (string, bool) {
-	idx := -1
-	for i, n := range names {
-		if n == column {
-			idx = i
-		}
+	all := append([][]string{first}, records...)
+	file := csvFile{rows: all, recordAt: map[int]int{}}
+	if header {
+		file.rows = records
 	}
-	return func(content string) (string, bool) {
-		fields, err := csvFields(content)
-		if err != nil || idx < 0 || idx >= len(fields) {
+	// Walk the physical lines the way the CSV reader did: it skips empty
+	// lines between records, and a record spans one line plus one per
+	// newline inside its quoted fields.
+	physical := strings.Split(string(data), "\n")
+	line := 0
+	for i, record := range all {
+		for line < len(physical) && strings.TrimRight(physical[line], "\r") == "" {
+			line++
+		}
+		span := 1
+		for _, f := range record {
+			span += strings.Count(f, "\n")
+		}
+		row := i
+		if header {
+			row--
+		}
+		if row >= 0 {
+			for k := 0; k < span; k++ {
+				file.recordAt[line+k+1] = row
+			}
+		}
+		line += span
+	}
+	return names, file, true
+}
+
+// value returns a function reading the named column of the record an entry
+// starts in.
+func (l *csvLogs) value(column string) func(workspace.TaggedLine) (string, bool) {
+	idx := slices.Index(l.names, column)
+	return func(tl workspace.TaggedLine) (string, bool) {
+		file, ok := l.files[tl.FileName]
+		if !ok || idx < 0 {
 			return "", false
 		}
-		if header && strings.TrimSpace(fields[idx]) == names[idx] {
+		row, ok := file.recordAt[tl.LineNum]
+		if !ok {
 			return "", false
 		}
-		return fields[idx], true
+		return file.rows[row][idx], true
 	}
 }
 

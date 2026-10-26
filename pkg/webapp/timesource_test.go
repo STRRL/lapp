@@ -37,19 +37,7 @@ func TestTimeColumnFallback(t *testing.T) {
 		t.Fatalf("before choosing: time = %+v, bucket = %d", got, a.resp.BucketSeconds)
 	}
 
-	choose := func(column string) demoPatternsResponse {
-		t.Helper()
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/demo/time-column?ws="+id, strings.NewReader(fmt.Sprintf(`{"column":%q}`, column))))
-		if rec.Code != http.StatusOK {
-			t.Fatalf("choose %s: %d %s", column, rec.Code, rec.Body)
-		}
-		var resp demoPatternsResponse
-		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-			t.Fatal(err)
-		}
-		return resp
-	}
+	choose := func(column string) demoPatternsResponse { return chooseTimeColumn(t, mux, id, column) }
 	if resp := choose("level"); !resp.Time.ColumnUnreadable || resp.BucketSeconds != 0 || resp.Time.Column != "level" {
 		t.Fatalf("unreadable column: time = %+v", resp.Time)
 	}
@@ -99,5 +87,102 @@ func TestTimeSourceFacts(t *testing.T) {
 	resp := analyzeText("worker.log", txt.String())
 	if got := resp.Time; got.Format != timeFormatText || got.Timed != 1 || got.Lines != 301 || got.Columns != nil || resp.BucketSeconds != 0 {
 		t.Fatalf("partial text: time = %+v, bucket = %d", got, resp.BucketSeconds)
+	}
+}
+
+// chooseTimeColumn posts a time column choice and returns the response.
+func chooseTimeColumn(t *testing.T, mux *http.ServeMux, id, column string) demoPatternsResponse {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/demo/time-column?ws="+id, strings.NewReader(fmt.Sprintf(`{"column":%q}`, column))))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("choose %s: %d %s", column, rec.Code, rec.Body)
+	}
+	var resp demoPatternsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+// TestTimeColumnTwoColumnCSV checks the picker for a plain two-column CSV
+// whose time column lapp does not recognize at line starts (Unix ms).
+func TestTimeColumnTwoColumnCSV(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	mux := http.NewServeMux()
+	d.register(mux)
+	base := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString("when,msg\n")
+	for i := 0; i < 40; i++ {
+		fmt.Fprintf(&b, "%d,request served %d\n", base.Add(time.Duration(i)*time.Hour).UnixMilli(), i)
+	}
+	id, err := d.importLog(context.Background(), "requests.csv", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := d.analyze(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := a.resp.Time; got.Format != timeFormatCSV || !slices.Equal(got.Columns, []string{"when", "msg"}) || a.resp.BucketSeconds != 0 {
+		t.Fatalf("before choosing: time = %+v, bucket = %d", got, a.resp.BucketSeconds)
+	}
+	resp := chooseTimeColumn(t, mux, id, "when")
+	if resp.Time.Timed != 40 || resp.Time.Lines != 41 || resp.BucketSeconds != 3600 || !resp.From.Equal(base) {
+		t.Fatalf("after choosing: time = %+v, bucket = %d, from = %v", resp.Time, resp.BucketSeconds, resp.From)
+	}
+}
+
+// TestTimeColumnMultilineCSV checks that a quoted field spanning lines keeps
+// the columns intact and that every line of a record gets the record's time.
+func TestTimeColumnMultilineCSV(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	mux := http.NewServeMux()
+	d.register(mux)
+	base := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	var b strings.Builder
+	b.WriteString("ts,level,msg\r\n")
+	for i := 0; i < 30; i++ {
+		msg := fmt.Sprintf("job %d done", i)
+		if i%3 == 0 {
+			msg = fmt.Sprintf("\"job %d failed:\r\n  at step, \"\"load\"\"\r\n  retrying\"", i)
+		}
+		fmt.Fprintf(&b, "%d,info,%s\r\n", base.Add(time.Duration(i)*time.Minute).Unix(), msg)
+		if i == 10 {
+			b.WriteString("\r\n")
+		}
+	}
+	id, err := d.importLog(context.Background(), "jobs.csv", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := d.analyze(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := a.resp.Time; got.Format != timeFormatCSV || !slices.Equal(got.Columns, []string{"ts", "level", "msg"}) {
+		t.Fatalf("before choosing: time = %+v", got)
+	}
+	resp := chooseTimeColumn(t, mux, id, "ts")
+	// All lines but the header have a time: 30 records, 10 of them three lines.
+	if resp.Time.Lines != 51 || resp.Time.Timed != 50 || !resp.From.Equal(base) || !resp.To.Equal(base.Add(29*time.Minute)) {
+		t.Fatalf("after choosing: time = %+v, from = %v, to = %v", resp.Time, resp.From, resp.To)
+	}
+}
+
+// TestTimeColumnKeepsNoiseDecisions checks that saving the time column does
+// not drop noise decisions in the same rules file.
+func TestTimeColumnKeepsNoiseDecisions(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	if err := d.updateRules("orders", func(r *noiseRules) { r.Filtered = []string{"a"}; r.NotNoise = []string{"b"} }); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.updateRules("orders", func(r *noiseRules) { r.TimeColumn = "when" }); err != nil {
+		t.Fatal(err)
+	}
+	rules, _ := d.loadRules("orders")
+	if !slices.Equal(rules.Filtered, []string{"a"}) || !slices.Equal(rules.NotNoise, []string{"b"}) || rules.TimeColumn != "when" {
+		t.Fatalf("rules = %+v", rules)
 	}
 }

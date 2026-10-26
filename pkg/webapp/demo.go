@@ -475,7 +475,7 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 		}
 	}
 	rules, rulesSaved := d.loadRules(a.service)
-	a.resp.Time = applyTimeSource(lines, rules.TimeColumn)
+	a.resp.Time = applyTimeSource(dir, lines, rules.TimeColumn)
 	var from, to time.Time
 	for _, tl := range lines {
 		if tl.Timestamp != nil && a.resp.Time.enoughTimes() {
