@@ -192,9 +192,9 @@ var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA
 
 // MaskInline replaces date-times and UUIDs (a list of UUIDs as a whole)
 // inside a message body with a single wildcard token so they don't split
-// patterns. It also returns the replaced text of each <*>, in order, so field
-// values can still be shown.
-func MaskInline(body string) (string, []string) {
+// patterns. It also returns where each <*> it wrote is and what it replaced,
+// so field values can still show the real text.
+func MaskInline(body string) (string, []Mask) {
 	spans := inlineTimestamp.FindAllStringIndex(body, -1)
 	for _, u := range uuidList.FindAllStringIndex(body, -1) {
 		overlaps := false
@@ -213,16 +213,23 @@ func MaskInline(body string) (string, []string) {
 	}
 	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
 	var b strings.Builder
-	values := make([]string, 0, len(spans))
+	masks := make([]Mask, 0, len(spans))
 	last := 0
 	for _, s := range spans {
 		b.WriteString(body[last:s[0]])
+		masks = append(masks, Mask{At: b.Len(), Text: body[s[0]:s[1]]})
 		b.WriteString("<*>")
-		values = append(values, body[s[0]:s[1]])
 		last = s[1]
 	}
 	b.WriteString(body[last:])
-	return b.String(), values
+	return b.String(), masks
+}
+
+// Mask is one <*> written by MaskInline: its byte offset in the masked text
+// and the text it replaced. A <*> already in the log has no Mask.
+type Mask struct {
+	At   int    `json:"at"`
+	Text string `json:"text"`
 }
 
 // ParseTime reads a standalone date-time value, such as a CSV column or a

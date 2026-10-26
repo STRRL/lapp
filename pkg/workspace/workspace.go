@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/strrl/lapp/pkg/logheader"
 	"github.com/strrl/lapp/pkg/logsource"
 )
 
@@ -18,9 +19,10 @@ type TaggedLine struct {
 	// entries, or the body after the timestamp/host header for plain text.
 	// Empty when Content is mined directly.
 	ExtractedLine string `json:",omitempty"`
-	// Masked holds the text each masked <*> in ExtractedLine replaced (inline
-	// date-times, UUIDs), in order, so field values keep the real text.
-	Masked []string `json:",omitempty"`
+	// Masked lists the <*> that masking wrote into ExtractedLine (inline
+	// date-times, UUIDs) and the text each replaced, so field values keep the
+	// real text.
+	Masked []logheader.Mask `json:",omitempty"`
 	// Severity is the NDJSON entry's severity/level field. It is kept out of
 	// ExtractedLine so it never becomes part of a template.
 	Severity string `json:",omitempty"`

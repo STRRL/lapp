@@ -39,8 +39,8 @@ func TestMaskInline(t *testing.T) {
 	if want := "connection from 1.2.3.4 () at <*>"; got != want {
 		t.Errorf("MaskInline = %q, want %q", got, want)
 	}
-	if len(values) != 1 || values[0] != "Sun Jul  3 23:16:09 2005" {
-		t.Errorf("MaskInline values = %q", values)
+	if len(values) != 1 || values[0] != (Mask{At: 30, Text: "Sun Jul  3 23:16:09 2005"}) {
+		t.Errorf("MaskInline values = %+v", values)
 	}
 }
 
