@@ -188,3 +188,18 @@
 .dz .vp-ex { margin-top: 6px; font-size: 11px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dz .vp-chart { margin-top: 8px; font-size: 12px; }
 .valuepop-root { position: static; min-height: 0 !important; background: none !important; }
+
+/* OpenRouter preview dialog */
+.dz .modal-scrim { position: fixed; inset: 0; background: rgba(11,11,11,.3); z-index: 70; display: grid; place-items: center; }
+.dz .modal { width: min(720px, 94vw); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.18); padding: 16px 20px; }
+.dz .modal header, .dz .modal footer { display: flex; align-items: center; gap: 10px; }
+.dz .modal header { justify-content: space-between; }
+.dz .modal-stats { font-size: 13px; color: var(--ink-2); }
+.dz .modal-warn { font-size: 13px; background: var(--warning-soft); color: var(--warning-text); border-radius: 6px; padding: 6px 10px; }
+.dz .modal-body { overflow: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.dz .pv-block { padding: 10px 0; border-top: 1px solid var(--line); }
+.dz .pv-block:first-child { border-top: 0; }
+.dz .pv-tpl { background: var(--surface-2); border-radius: 4px; padding: 4px 8px; font-size: 12px; word-break: break-all; }
+.dz .pv-lines { margin: 6px 0 0; font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-all; }
+.dz mark.sens { background: var(--warning-soft); color: var(--warning-text); outline: 1px solid var(--warning); border-radius: 2px; cursor: help; }
+.dz .modal .chk .cb { font-size: 11px; display: inline-grid; place-items: center; }

@@ -157,3 +157,9 @@ func parseResponse(content string) ([]SemanticLabel, error) {
 	}
 	return labels, nil
 }
+
+// BuildPrompt returns the exact prompt Label sends for one batch of patterns,
+// so callers can show users what leaves the machine.
+func BuildPrompt(patterns []PatternInput) string {
+	return buildPrompt(patterns)
+}

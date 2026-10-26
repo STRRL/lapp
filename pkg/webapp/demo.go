@@ -18,7 +18,9 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
+	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/pattern"
+	"github.com/strrl/lapp/pkg/semantic"
 	"github.com/strrl/lapp/pkg/workspace"
 )
 
@@ -90,18 +92,20 @@ type demoUnmatched struct {
 }
 
 type demoPatternsResponse struct {
-	Workspace     demoWorkspace `json:"workspace"`
-	FileNames     []string      `json:"fileNames"`
-	From          *time.Time    `json:"from,omitempty"`
-	To            *time.Time    `json:"to,omitempty"`
-	BucketStart   *time.Time    `json:"bucketStart,omitempty"`
-	BucketSeconds int64         `json:"bucketSeconds"`
-	RulesSaved    bool          `json:"rulesSaved"`
-	RulesApplied  int           `json:"rulesApplied"`
-	Named         bool          `json:"named"`
-	Patterns      []demoPattern `json:"patterns"`
-	Unmatched     demoUnmatched `json:"unmatched"`
-	Compare       *demoCompare  `json:"compare,omitempty"`
+	Workspace      demoWorkspace `json:"workspace"`
+	FileNames      []string      `json:"fileNames"`
+	From           *time.Time    `json:"from,omitempty"`
+	To             *time.Time    `json:"to,omitempty"`
+	BucketStart    *time.Time    `json:"bucketStart,omitempty"`
+	BucketSeconds  int64         `json:"bucketSeconds"`
+	RulesSaved     bool          `json:"rulesSaved"`
+	RulesApplied   int           `json:"rulesApplied"`
+	Named          bool          `json:"named"`
+	KeySet         bool          `json:"keySet"`
+	NamingApproved bool          `json:"namingApproved"`
+	Patterns       []demoPattern `json:"patterns"`
+	Unmatched      demoUnmatched `json:"unmatched"`
+	Compare        *demoCompare  `json:"compare,omitempty"`
 }
 
 type noiseRules struct {
@@ -123,6 +127,8 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/demo/investigate", d.handleInvestigateGet)
 	mux.HandleFunc("POST /api/demo/investigate/stop", d.handleInvestigateStop)
 	mux.HandleFunc("GET /api/demo/agents", d.handleAgents)
+	mux.HandleFunc("GET /api/demo/llm-preview", d.handleLLMPreview)
+	mux.HandleFunc("POST /api/demo/name", d.handleName)
 	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
 	mux.HandleFunc("GET /api/demo/pattern", d.handlePatternDetail)
 	mux.HandleFunc("GET /api/demo/export", d.handleExport)
@@ -197,7 +203,7 @@ func (d *demoAPI) handleImport(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
-		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.apiKey, Model: d.model}); err != nil {
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.namingKey(service), Model: d.model}); err != nil {
 			slog.Error("import failed", "workspace", id, "error", err)
 		}
 	}()
@@ -206,11 +212,11 @@ func (d *demoAPI) handleImport(w http.ResponseWriter, r *http.Request) {
 
 // importLog lands a log and finds its patterns before returning (CLI path).
 func (d *demoAPI) importLog(ctx context.Context, name string, body io.Reader) (string, error) {
-	id, dir, _, err := d.landNew(name, "", body)
+	id, dir, svc, err := d.landNew(name, "", body)
 	if err != nil {
 		return "", err
 	}
-	if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model}); err != nil {
+	if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model}); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -444,7 +450,14 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 
 	rules, rulesSaved := d.loadRules(a.service)
 	a.resp.RulesSaved = rulesSaved
-	a.resp.Named = d.apiKey != ""
+	a.resp.KeySet = d.apiKey != ""
+	a.resp.NamingApproved = d.namingApproved(a.service)
+	for _, p := range run.Patterns {
+		if p.SemanticID != "" && p.SemanticID != p.Template {
+			a.resp.Named = true
+			break
+		}
+	}
 
 	total := len(lines)
 	patterns := make([]demoPattern, len(run.Patterns))
@@ -1310,7 +1323,7 @@ func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
 		if res.EntryCount == 0 {
 			return
 		}
-		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model}); err != nil {
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model}); err != nil {
 			slog.Error("discovery failed", "workspace", id, "error", err)
 		}
 	}()
@@ -1405,4 +1418,98 @@ func summarizeField(index int, vals []string, counts map[string]int) fieldSummar
 		fs.Kind = "distinct"
 	}
 	return fs
+}
+
+// Naming sends sample lines to OpenRouter, so for each service it only runs
+// after the user has seen the preview and chosen "Send" (or "don't ask again").
+
+func (d *demoAPI) namingFlag(service string) string {
+	return filepath.Join(d.rulesDir, service+".naming-approved")
+}
+
+func (d *demoAPI) namingApproved(service string) bool {
+	_, err := os.Stat(d.namingFlag(service))
+	return err == nil
+}
+
+// namingKey returns the OpenRouter key only when naming is approved for the
+// service; otherwise discovery keeps raw-text names.
+func (d *demoAPI) namingKey(service string) string {
+	if d.namingApproved(service) {
+		return d.apiKey
+	}
+	return ""
+}
+
+type previewPattern struct {
+	Template string   `json:"template"`
+	Samples  []string `json:"samples"`
+}
+
+func (d *demoAPI) handleLLMPreview(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	if !validID(id) {
+		writeError(w, http.StatusBadRequest, errors.New("invalid workspace"))
+		return
+	}
+	batches, err := workspace.LabelPreview(r.Context(), filepath.Join(d.root, id))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	out := struct {
+		Model       string           `json:"model"`
+		KeySet      bool             `json:"keySet"`
+		Patterns    []previewPattern `json:"patterns"`
+		SampleLines int              `json:"sampleLines"`
+		Tokens      int              `json:"tokens"`
+		Requests    int              `json:"requests"`
+	}{Model: llmconfig.ResolveModel(d.model), KeySet: d.apiKey != "", Patterns: []previewPattern{}, Requests: len(batches)}
+	for _, batch := range batches {
+		out.Tokens += len(semantic.BuildPrompt(batch)) / 4
+		for _, p := range batch {
+			out.Patterns = append(out.Patterns, previewPattern{Template: p.Pattern, Samples: p.Samples})
+			out.SampleLines += len(p.Samples)
+		}
+	}
+	writeJSON(w, out)
+}
+
+// handleName names the patterns of a workspace via OpenRouter (re-running
+// discovery with the key) and optionally remembers the approval.
+func (d *demoAPI) handleName(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	if !validID(id) {
+		writeError(w, http.StatusBadRequest, errors.New("invalid workspace"))
+		return
+	}
+	if d.apiKey == "" {
+		writeError(w, http.StatusPreconditionFailed, errors.New("Set OPENROUTER_API_KEY and restart lapp to name patterns."))
+		return
+	}
+	dir := filepath.Join(d.root, id)
+	service := readService(dir, id)
+	if r.URL.Query().Get("remember") == "1" {
+		if err := os.MkdirAll(d.rulesDir, 0o755); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if err := os.WriteFile(d.namingFlag(service), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	runID, err := uuid.NewV7()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.apiKey, Model: d.model}); err != nil {
+			slog.Error("naming failed", "workspace", id, "error", err)
+		}
+	}()
+	writeJSON(w, map[string]string{"id": id})
 }

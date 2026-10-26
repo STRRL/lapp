@@ -703,3 +703,17 @@ func LoadTaggedLines(ctx context.Context, dir string) ([]TaggedLine, error) {
 	tagged, _, _, err := mergeAllLogs(ctx, dir)
 	return tagged, err
 }
+
+// LabelPreview returns the pattern inputs that discovery would send to the
+// LLM for naming, batched exactly as Discover batches them.
+func LabelPreview(ctx context.Context, dir string) ([][]semantic.PatternInput, error) {
+	_, content, _, err := mergeAllLogs(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	templates, err := discoverRepeatedPatterns(ctx, content)
+	if err != nil {
+		return nil, err
+	}
+	return labelBatches(buildLabelInputs(ctx, templates, content)), nil
+}

@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import { InvestigatePanel } from "./investigate";
+import { PreviewDialog } from "./preview";
 import { Placeholder, ValueHoverProvider } from "./valuepop";
 import "./design.css";
 import "./demo.css";
@@ -85,6 +86,8 @@ type PatternsResponse = {
   rulesSaved: boolean;
   rulesApplied: number;
   named: boolean;
+  keySet: boolean;
+  namingApproved: boolean;
   patterns: DemoPattern[];
   unmatched: { count: number; buckets: number[]; samples: string[] };
   compare?: CompareInfo;
@@ -710,6 +713,8 @@ function PatternList({
   const [invHidden, setInvHidden] = useState(false);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [compareTo, setCompareTo] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [reload, setReload] = useState(0);
   const [compareFilter, setCompareFilter] = useState<"new" | "changed" | null>(null);
   const [goneOpen, setGoneOpen] = useState(false);
   const goneRef = useRef<HTMLButtonElement>(null);
@@ -724,6 +729,12 @@ function PatternList({
         setData(d);
         if (loaded.current) return;
         loaded.current = true;
+        // First time a service could be named: show what would be sent.
+        const seenKey = `lapp-naming-asked-${d.workspace.service}`;
+        if (d.keySet && !d.named && !d.namingApproved && !sessionStorage.getItem(seenKey)) {
+          sessionStorage.setItem(seenKey, "1");
+          setPreviewOpen(true);
+        }
         setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
         const jobId = new URLSearchParams(window.location.search).get("investigate");
         if (jobId) {
@@ -737,7 +748,7 @@ function PatternList({
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, [wsId, compareTo]);
+  }, [wsId, compareTo, reload]);
 
   // Colors are assigned once by total-line rank and never repaint.
   const rank = useMemo(() => {
@@ -993,7 +1004,12 @@ function PatternList({
           {!data.named && (
             <div className="banner">
               <KeyRound className="ico" />
-              <div>Patterns are shown as raw text. Set OPENROUTER_API_KEY to get readable names.</div>
+              <div>
+                {data.keySet ? "Patterns are shown as raw text." : "Patterns are shown as raw text. Set OPENROUTER_API_KEY to get readable names."}
+              </div>
+              <button className="btn sm ghost" onClick={() => setPreviewOpen(true)}>
+                {data.keySet ? "Name patterns" : "Preview what would be sent"}
+              </button>
             </div>
           )}
 
@@ -1246,6 +1262,26 @@ function PatternList({
         )}
       </main>
       </ValueHoverProvider>
+      {previewOpen && (
+        <PreviewDialog
+          wsId={wsId}
+          service={data.workspace.service}
+          onClose={() => setPreviewOpen(false)}
+          onSent={() => {
+            setPreviewOpen(false);
+            toast("Naming patterns…");
+            const poll = window.setInterval(async () => {
+              const st = await getJSON<ImportStatus>(`/api/demo/status?ws=${encodeURIComponent(wsId)}`).catch(() => null);
+              if (st && (st.state === "succeeded" || st.state === "failed")) {
+                window.clearInterval(poll);
+                loaded.current = true;
+                setReload((n) => n + 1);
+                if (st.state === "failed") toast(`Couldn't name patterns: ${st.error ?? "unknown error"}`);
+              }
+            }, 1000);
+          }}
+        />
+      )}
       {toastNode}
     </>
   );
