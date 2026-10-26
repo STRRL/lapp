@@ -560,7 +560,7 @@ function Processing({ name, gcp, status, onRetry }: { name: string; gcp: boolean
   return (
     <main className="imp">
       <h1>{name}</h1>
-      <p className="lead">{failed && !gcp ? "Nothing was imported. Your file wasn't changed." : "The pattern list opens as soon as this finishes."}</p>
+      <p className="lead">{failed ? (gcp ? "Nothing was imported." : "Nothing was imported. Your file wasn't changed.") : "The pattern list opens as soon as this finishes."}</p>
       <div className="card steps">
         {steps.map((s, i) => {
           const skipped = s.key === "name" && status !== null && !status.named;
