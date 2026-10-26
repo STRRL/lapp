@@ -122,8 +122,10 @@ func (b *Builder) computePatterns() {
 	for _, t := range b.templates {
 		tid := t.ID.String()
 		label, hasLabel := labelMap[tid]
-		if !hasLabel {
-			continue
+		if !hasLabel || strings.TrimSpace(label.SemanticID) == "" {
+			// Unnamed (no key, or the LLM skipped it): keep the pattern and
+			// use its template as the name instead of dropping its lines.
+			label = semantic.SemanticLabel{PatternUUIDString: tid, SemanticID: t.Pattern}
 		}
 		dirName := deduplicateDirName(usedDirs, sanitizeDirName(label.SemanticID))
 		usedDirs[dirName] = true

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // TaggedLine represents a log line with its source file and line number.
@@ -12,9 +13,12 @@ type TaggedLine struct {
 	Content  string
 	FileName string
 	LineNum  int
-	// ExtractedLine is the text fed to pattern mining for NDJSON entries.
-	// Empty for plain text entries, whose Content is mined directly.
+	// ExtractedLine is the text fed to pattern mining: the message for NDJSON
+	// entries, or the body after the timestamp/host header for plain text.
+	// Empty when Content is mined directly.
 	ExtractedLine string `json:",omitempty"`
+	// Timestamp is parsed from the line header when one is recognised.
+	Timestamp *time.Time `json:",omitempty"`
 }
 
 // DrainLine returns the text used for pattern mining and template matching:

@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
+	"github.com/strrl/lapp/pkg/logheader"
 	"github.com/strrl/lapp/pkg/multiline"
 	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/pattern"
@@ -81,6 +82,10 @@ func Discover(ctx context.Context, config DiscoveryConfig) (DiscoveryResult, err
 		return DiscoveryResult{}, err
 	}
 	labeler := discoveryLabeler(config.Labeler)
+	if config.Labeler == nil && strings.TrimSpace(config.APIKey) == "" {
+		// No key: still show patterns, named by their raw template text.
+		labeler = unnamedLabeler
+	}
 
 	record := DiscoveryRunRecord{
 		ID:          runID,
@@ -207,6 +212,12 @@ func discoveryLabeler(labeler PatternLabeler) PatternLabeler {
 	return semantic.Label
 }
 
+// unnamedLabeler leaves every pattern without a semantic name; the builder
+// falls back to the template text.
+func unnamedLabeler(_ context.Context, _ semantic.Config, _ []semantic.PatternInput) ([]semantic.SemanticLabel, error) {
+	return nil, nil
+}
+
 func labelConcurrency(value int) int {
 	if value > 0 {
 		return value
@@ -323,16 +334,54 @@ func tagFileLines(ctx context.Context, fileName string, lines []string) ([]Tagge
 	if err != nil {
 		return nil, errors.Errorf("multiline detector: %w", err)
 	}
-	merged := multiline.MergeSlice(ctx, lines, detector)
+	var merged []multiline.MergedLine
+	if startsWithEntry(lines, detector) {
+		merged = multiline.MergeSlice(ctx, lines, detector)
+	} else {
+		// Logs that don't open with a timestamp (e.g. `kubectl logs` without
+		// --timestamps) have no reliable entry boundaries: keep one entry per line.
+		for i, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			merged = append(merged, multiline.MergedLine{StartLine: i + 1, EndLine: i + 1, Content: line})
+		}
+	}
 	tagged := make([]TaggedLine, 0, len(merged))
 	for _, m := range merged {
-		tagged = append(tagged, TaggedLine{
+		tl := TaggedLine{
 			Content:  m.Content,
 			FileName: fileName,
 			LineNum:  m.StartLine,
-		})
+		}
+		// Mine patterns on the message body only: timestamps, hosts and pids
+		// in the header would split one event into many patterns.
+		first, rest, multi := strings.Cut(m.Content, "\n")
+		h := logheader.Strip(first)
+		if body := logheader.MaskInline(h.Body); body != first {
+			tl.ExtractedLine = body
+			if multi {
+				tl.ExtractedLine += "\n" + rest
+			}
+		}
+		if !h.Timestamp.IsZero() {
+			ts := h.Timestamp
+			tl.Timestamp = &ts
+		}
+		tagged = append(tagged, tl)
 	}
 	return tagged, nil
+}
+
+// startsWithEntry reports whether the first non-blank line looks like the
+// start of a timestamped log entry.
+func startsWithEntry(lines []string, detector *multiline.Detector) bool {
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			return detector.IsNewEntry(line)
+		}
+	}
+	return false
 }
 
 func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
@@ -646,4 +695,11 @@ func buildLabelInputs(ctx context.Context, templates []pattern.DrainCluster, lin
 		})
 	}
 	return inputs
+}
+
+// LoadTaggedLines reads every log file in a workspace and returns the
+// entries exactly as discovery sees them (merged, header-stripped).
+func LoadTaggedLines(ctx context.Context, dir string) ([]TaggedLine, error) {
+	tagged, _, _, err := mergeAllLogs(ctx, dir)
+	return tagged, err
 }

@@ -64,7 +64,7 @@ func TestStaticFileHandlerUsesEmbeddedFallback(t *testing.T) {
 	}
 
 	response := recordRequest(handler, "/")
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "LAPP") {
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "<title>lapp</title>") {
 		t.Fatalf("expected embedded fallback index, got status=%d body=%q", response.Code, response.Body.String())
 	}
 }

@@ -19,6 +19,7 @@ import {
   Pattern,
   WorkspaceStatus
 } from "./gen/lapp/web/v1/web_pb";
+import { DemoApp } from "./demo";
 import { ImportPanel } from "./import-panel";
 import { useAppStore } from "./store";
 import "./styles.css";
@@ -457,4 +458,6 @@ function formatTimestamp(value: { seconds: bigint | number; nanos: number } | un
   return new Date(seconds * 1000 + Math.floor(value.nanos / 1_000_000)).toLocaleString();
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+// The pattern/noise view is the main page; the previous workspace UI stays at /classic.
+const classic = window.location.pathname.startsWith("/classic");
+createRoot(document.getElementById("root")!).render(classic ? <App /> : <DemoApp />);

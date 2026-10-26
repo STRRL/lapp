@@ -1,0 +1,720 @@
+package webapp
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"math"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/go-errors/errors"
+	"github.com/strrl/lapp/pkg/pattern"
+	"github.com/strrl/lapp/pkg/workspace"
+)
+
+// The demo API is plain JSON over HTTP: it backs the "find patterns, filter
+// noise" pages (import + pattern list) without touching the proto service.
+
+const (
+	maxImportBytes  = 200 << 20
+	maxDetailLines  = 2000
+	maxBuckets      = 72
+	noiseMinShare   = 0.10
+	noiseMinPresent = 0.5
+)
+
+var levelPattern = regexp.MustCompile(`(?i)\b(fatal|panic|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\b`)
+
+type demoAPI struct {
+	root     string
+	rulesDir string
+	apiKey   string
+	model    string
+}
+
+func newDemoAPI(root, apiKey, model string) *demoAPI {
+	return &demoAPI{root: root, rulesDir: filepath.Join(filepath.Dir(root), "noise-rules"), apiKey: apiKey, model: model}
+}
+
+type demoWorkspace struct {
+	ID           string    `json:"id"`
+	Title        string    `json:"title"`
+	Service      string    `json:"service"`
+	LineCount    int       `json:"lineCount"`
+	PatternCount int       `json:"patternCount"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type demoPattern struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Named      bool     `json:"named"`
+	Template   string   `json:"template"`
+	Count      int      `json:"count"`
+	Level      string   `json:"level"`
+	Buckets    []int    `json:"buckets"`
+	Suggestion string   `json:"suggestion"` // "noise", "maybe" or ""
+	Reason     string   `json:"reason"`
+	Filtered   bool     `json:"filtered"`
+	SpikeAt    *int     `json:"spikeAt,omitempty"`
+	NewAt      *int     `json:"newAt,omitempty"`
+	Samples    []string `json:"samples"`
+}
+
+type demoUnmatched struct {
+	Count   int      `json:"count"`
+	Buckets []int    `json:"buckets"`
+	Samples []string `json:"samples"`
+}
+
+type demoPatternsResponse struct {
+	Workspace     demoWorkspace `json:"workspace"`
+	FileNames     []string      `json:"fileNames"`
+	From          *time.Time    `json:"from,omitempty"`
+	To            *time.Time    `json:"to,omitempty"`
+	BucketStart   *time.Time    `json:"bucketStart,omitempty"`
+	BucketSeconds int64         `json:"bucketSeconds"`
+	RulesSaved    bool          `json:"rulesSaved"`
+	Named         bool          `json:"named"`
+	Patterns      []demoPattern `json:"patterns"`
+	Unmatched     demoUnmatched `json:"unmatched"`
+}
+
+type noiseRules struct {
+	Filtered []string `json:"filtered"`
+	Shown    []string `json:"shown"`
+}
+
+func (d *demoAPI) register(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/demo/workspaces", d.handleWorkspaces)
+	mux.HandleFunc("POST /api/demo/import", d.handleImport)
+	mux.HandleFunc("GET /api/demo/patterns", d.handlePatterns)
+	mux.HandleFunc("POST /api/demo/rules", d.handleRules)
+	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
+	mux.HandleFunc("GET /api/demo/export", d.handleExport)
+}
+
+func (d *demoAPI) handleWorkspaces(w http.ResponseWriter, _ *http.Request) {
+	entries, err := os.ReadDir(d.root)
+	if err != nil && !os.IsNotExist(err) {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	out := []demoWorkspace{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(d.root, e.Name())
+		records, err := workspace.ListDiscoveryRunRecords(dir)
+		if err != nil {
+			continue
+		}
+		run := workspace.LatestSuccessfulDiscoveryRun(records)
+		if run == nil {
+			continue
+		}
+		out = append(out, d.workspaceInfo(e.Name(), run))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
+	writeJSON(w, out)
+}
+
+func (d *demoAPI) workspaceInfo(id string, run *workspace.DiscoveryRunRecord) demoWorkspace {
+	dir := filepath.Join(d.root, id)
+	info := demoWorkspace{ID: id, Title: id, Service: readService(dir, id), LineCount: run.LineCount, PatternCount: run.PatternCount}
+	if files, err := workspace.ListLogFiles(dir); err == nil && len(files) > 0 {
+		info.Title = files[0]
+	}
+	if run.FinishedAt != nil {
+		info.UpdatedAt = *run.FinishedAt
+	}
+	return info
+}
+
+// handleImport takes a raw log file body, lands it in a new workspace and
+// runs discovery synchronously, so one request gets you to the pattern list.
+func (d *demoAPI) handleImport(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancel()
+	id, err := d.importLog(ctx, r.URL.Query().Get("name"), http.MaxBytesReader(w, r.Body, maxImportBytes))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, map[string]string{"id": id})
+}
+
+func (d *demoAPI) importLog(ctx context.Context, name string, body io.Reader) (string, error) {
+	name = filepath.Base(name)
+	if name == "" || name == "." || name == "/" {
+		name = "stdin.log"
+	}
+	service := serviceFromFileName(name)
+	id, dir, err := d.newWorkspaceDir(service)
+	if err != nil {
+		return "", err
+	}
+	if err := d.landLog(ctx, dir, name, service, body); err != nil {
+		_ = os.RemoveAll(dir)
+		return "", err
+	}
+	return id, nil
+}
+
+func (d *demoAPI) landLog(ctx context.Context, dir, name, service string, body io.Reader) error {
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(filepath.Join(dir, "logs", name))
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(f, body)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "service"), []byte(service), 0o644); err != nil {
+		return err
+	}
+	_, err = workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.apiKey, Model: d.model})
+	return err
+}
+
+func (d *demoAPI) newWorkspaceDir(service string) (string, string, error) {
+	base := service
+	for i := 1; i < 1000; i++ {
+		id := base
+		if i > 1 {
+			id = fmt.Sprintf("%s-%d", base, i)
+		}
+		dir := filepath.Join(d.root, id)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return id, dir, os.MkdirAll(dir, 0o755)
+		}
+	}
+	return "", "", errors.New("too many workspaces for " + service)
+}
+
+// analysis is everything the pattern list, detail and export views need.
+type analysis struct {
+	resp    demoPatternsResponse
+	lines   []workspace.TaggedLine
+	owner   []int // pattern index per line, -1 for unmatched
+	service string
+}
+
+func (d *demoAPI) analyze(ctx context.Context, id string) (*analysis, error) {
+	if id == "" || strings.ContainsAny(id, `/\`) || strings.HasPrefix(id, ".") {
+		return nil, errors.New("invalid workspace")
+	}
+	dir := filepath.Join(d.root, id)
+	records, err := workspace.ListDiscoveryRunRecords(dir)
+	if err != nil {
+		return nil, err
+	}
+	run := workspace.LatestSuccessfulDiscoveryRun(records)
+	if run == nil {
+		return nil, errors.New("no patterns yet for " + id)
+	}
+	lines, err := workspace.LoadTaggedLines(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	a := &analysis{service: readService(dir, id)}
+	a.resp.Workspace = d.workspaceInfo(id, run)
+	a.resp.FileNames, _ = workspace.ListLogFiles(dir)
+
+	// Re-match lines against the run's templates so counts, buckets and
+	// export always agree with each other.
+	templates := make([]pattern.DrainCluster, len(run.Patterns))
+	for i, p := range run.Patterns {
+		templates[i] = pattern.DrainCluster{Pattern: p.Template}
+		templates[i].ID[0], templates[i].ID[1] = byte(i>>8), byte(i)
+	}
+	a.owner = make([]int, len(lines))
+	counts := make([]int, len(templates))
+	var from, to time.Time
+	for i, tl := range lines {
+		a.owner[i] = -1
+		if t, ok := pattern.MatchTemplate(tl.DrainLine(), templates); ok {
+			idx := int(t.ID[0])<<8 | int(t.ID[1])
+			a.owner[i] = idx
+			counts[idx]++
+		}
+		if tl.Timestamp != nil {
+			if from.IsZero() || tl.Timestamp.Before(from) {
+				from = *tl.Timestamp
+			}
+			if tl.Timestamp.After(to) {
+				to = *tl.Timestamp
+			}
+		}
+	}
+	a.lines = lines
+
+	bucketSeconds, bucketCount := int64(0), 0
+	var bucketStart time.Time
+	if !from.IsZero() {
+		bucketSeconds = chooseBucket(to.Sub(from))
+		bucketStart = time.Unix(from.Unix()-from.Unix()%bucketSeconds, 0).UTC()
+		bucketCount = int(to.Unix()-bucketStart.Unix())/int(bucketSeconds) + 1
+		a.resp.From, a.resp.To, a.resp.BucketStart = &from, &to, &bucketStart
+	}
+	a.resp.BucketSeconds = bucketSeconds
+
+	rules, rulesSaved := d.loadRules(a.service)
+	a.resp.RulesSaved = rulesSaved
+	a.resp.Named = d.apiKey != ""
+
+	total := len(lines)
+	patterns := make([]demoPattern, len(run.Patterns))
+	for i, p := range run.Patterns {
+		named := p.SemanticID != "" && p.SemanticID != p.Template
+		name := p.SemanticID
+		if !named {
+			name = p.Template
+		}
+		patterns[i] = demoPattern{
+			ID:       p.Template,
+			Name:     name,
+			Named:    named,
+			Template: p.Template,
+			Count:    counts[i],
+			Level:    detectLevel(p.Template),
+			Buckets:  make([]int, bucketCount),
+			Samples:  []string{},
+		}
+	}
+	unmatched := demoUnmatched{Buckets: make([]int, bucketCount), Samples: []string{}}
+	for i, tl := range lines {
+		b := -1
+		if tl.Timestamp != nil && bucketCount > 0 {
+			b = int(tl.Timestamp.Unix()-bucketStart.Unix()) / int(bucketSeconds)
+		}
+		if o := a.owner[i]; o >= 0 {
+			if b >= 0 {
+				patterns[o].Buckets[b]++
+			}
+			if len(patterns[o].Samples) < 5 {
+				patterns[o].Samples = append(patterns[o].Samples, tl.Content)
+			}
+			continue
+		}
+		unmatched.Count++
+		if b >= 0 {
+			unmatched.Buckets[b]++
+		}
+		if len(unmatched.Samples) < 200 {
+			unmatched.Samples = append(unmatched.Samples, tl.Content)
+		}
+	}
+	for i := range patterns {
+		p := &patterns[i]
+		suggestNoise(p, total, bucketCount, bucketUnit(bucketSeconds))
+		markTrends(p)
+		p.Filtered = p.Suggestion == "noise"
+		if rulesSaved {
+			p.Filtered = contains(rules.Filtered, p.ID) || (p.Filtered && !contains(rules.Shown, p.ID))
+		}
+	}
+	sort.SliceStable(patterns, func(i, j int) bool { return patterns[i].Count > patterns[j].Count })
+	// Keep owner indices valid after sorting.
+	pos := map[string]int{}
+	for i, p := range patterns {
+		pos[p.ID] = i
+	}
+	for i, o := range a.owner {
+		if o >= 0 {
+			a.owner[i] = pos[run.Patterns[o].Template]
+		}
+	}
+	a.resp.Patterns = patterns
+	a.resp.Unmatched = unmatched
+	return a, nil
+}
+
+func chooseBucket(span time.Duration) int64 {
+	for _, s := range []int64{60, 300, 900, 3600, 6 * 3600, 24 * 3600, 7 * 24 * 3600} {
+		if int64(span.Seconds())/s < maxBuckets {
+			return s
+		}
+	}
+	return 30 * 24 * 3600
+}
+
+// suggestNoise flags high-volume, steady, non-error patterns as likely noise.
+// High-volume error-looking patterns are only "maybe": the user decides.
+func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
+	if total == 0 {
+		return
+	}
+	share := float64(p.Count) / float64(total)
+	if share < noiseMinShare {
+		return
+	}
+	present := 0
+	for _, c := range p.Buckets {
+		if c > 0 {
+			present++
+		}
+	}
+	steady := bucketCount == 0 || float64(present)/float64(bucketCount) >= noiseMinPresent
+	parts := []string{formatPercent(share)}
+	switch {
+	case bucketCount == 0:
+	case present == bucketCount:
+		parts = append(parts, "every "+unit)
+	default:
+		parts = append(parts, fmt.Sprintf("%d of %d %ss", present, bucketCount, unit))
+	}
+	switch {
+	case isErrorLike(p.Template):
+		p.Suggestion = "maybe"
+		parts = append(parts, "looks like an error")
+	case !steady:
+		p.Suggestion = "maybe"
+		parts = append(parts, "comes in bursts")
+	default:
+		p.Suggestion = "noise"
+	}
+	p.Reason = strings.Join(parts, " · ")
+}
+
+func bucketUnit(seconds int64) string {
+	switch seconds {
+	case 60:
+		return "minute"
+	case 300:
+		return "5 minutes"
+	case 900:
+		return "15 minutes"
+	case 3600:
+		return "hour"
+	case 6 * 3600:
+		return "6 hours"
+	case 24 * 3600:
+		return "day"
+	case 7 * 24 * 3600:
+		return "week"
+	}
+	return "month"
+}
+
+func markTrends(p *demoPattern) {
+	if len(p.Buckets) < 4 {
+		return
+	}
+	first, peak, sum, nonzero := -1, 0, 0, 0
+	for i, c := range p.Buckets {
+		if c > 0 {
+			if first < 0 {
+				first = i
+			}
+			sum += c
+			nonzero++
+		}
+		if c > p.Buckets[peak] {
+			peak = i
+		}
+	}
+	if first > len(p.Buckets)/4 {
+		p.NewAt = &first
+	}
+	if nonzero > 1 {
+		mean := float64(sum) / float64(nonzero)
+		if p.Buckets[peak] >= 10 && float64(p.Buckets[peak]) >= 3*mean {
+			p.SpikeAt = &peak
+		}
+	}
+}
+
+func detectLevel(template string) string {
+	head := template
+	if len(head) > 48 {
+		head = head[:48]
+	}
+	m := levelPattern.FindString(head)
+	switch strings.ToLower(m) {
+	case "fatal", "panic", "crit", "critical":
+		return "fatal"
+	case "err", "error":
+		return "error"
+	case "warn", "warning":
+		return "warn"
+	case "notice":
+		return "notice"
+	case "info":
+		return "info"
+	case "debug", "trace":
+		return "debug"
+	}
+	if isErrorLike(template) {
+		return "error"
+	}
+	return ""
+}
+
+func isErrorLike(s string) bool {
+	return errorLikePattern.MatchString(s)
+}
+
+// formatPercent is the one place percentages are rounded (one decimal,
+// half away from zero) so every view shows the same number.
+func formatPercent(share float64) string {
+	return fmt.Sprintf("%.1f%%", math.Round(share*1000)/10)
+}
+
+func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
+	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, a.resp)
+}
+
+func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("ws")
+	a, err := d.analyze(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		Filtered []string `json:"filtered"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	rules, _ := d.loadRules(a.service)
+	rules.Filtered = without(rules.Filtered, a.resp.Patterns)
+	rules.Shown = without(rules.Shown, a.resp.Patterns)
+	for _, p := range a.resp.Patterns {
+		if contains(body.Filtered, p.ID) {
+			rules.Filtered = append(rules.Filtered, p.ID)
+		} else if p.Suggestion == "noise" {
+			rules.Shown = append(rules.Shown, p.ID)
+		}
+	}
+	if err := d.saveRules(a.service, rules); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, map[string]string{"service": a.service})
+}
+
+func (d *demoAPI) handleLines(w http.ResponseWriter, r *http.Request) {
+	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	want := r.URL.Query().Get("pattern")
+	out := []string{}
+	for i, tl := range a.lines {
+		o := a.owner[i]
+		if (want == "" && o < 0) || (o >= 0 && a.resp.Patterns[o].ID == want) {
+			out = append(out, tl.Content)
+			if len(out) >= maxDetailLines {
+				break
+			}
+		}
+	}
+	writeJSON(w, out)
+}
+
+// handleExport writes the original lines minus the filtered patterns. The
+// filtered set comes from the query (current page state) when present.
+func (d *demoAPI) handleExport(w http.ResponseWriter, r *http.Request) {
+	a, err := d.analyze(r.Context(), r.URL.Query().Get("ws"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var override []string
+	if q, ok := r.URL.Query()["filtered"]; ok {
+		override = q
+		if override == nil {
+			override = []string{}
+		}
+	}
+	name := strings.TrimSuffix(a.resp.Workspace.Title, filepath.Ext(a.resp.Workspace.Title)) + ".clean.log"
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
+	_ = a.writeRemaining(w, override)
+}
+
+// writeRemaining writes the original lines minus filtered patterns. A non-nil
+// override replaces the saved/suggested filter set (current page state).
+func (a *analysis) writeRemaining(w io.Writer, override []string) error {
+	filtered := make([]bool, len(a.resp.Patterns))
+	for i, p := range a.resp.Patterns {
+		filtered[i] = p.Filtered
+		if override != nil {
+			filtered[i] = contains(override, p.ID)
+		}
+	}
+	bw := bufio.NewWriter(w)
+	for i, tl := range a.lines {
+		if o := a.owner[i]; o >= 0 && filtered[o] {
+			continue
+		}
+		if _, err := bw.WriteString(tl.Content + "\n"); err != nil {
+			return err
+		}
+	}
+	return bw.Flush()
+}
+
+func (d *demoAPI) rulesPath(service string) string {
+	return filepath.Join(d.rulesDir, service+".json")
+}
+
+func (d *demoAPI) loadRules(service string) (noiseRules, bool) {
+	var rules noiseRules
+	data, err := os.ReadFile(d.rulesPath(service))
+	if err != nil {
+		return rules, false
+	}
+	if err := json.Unmarshal(data, &rules); err != nil {
+		slog.Warn("bad noise rules file", "service", service, "error", err)
+		return noiseRules{}, false
+	}
+	return rules, true
+}
+
+func (d *demoAPI) saveRules(service string, rules noiseRules) error {
+	path := d.rulesPath(service)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(rules, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+var serviceChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// serviceFromFileName derives the rule scope from a log file name:
+// "Apache_2k.log" and "apache-2024-10-20.log" both become "apache".
+func serviceFromFileName(name string) string {
+	stem := strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name)))
+	stem = serviceChars.ReplaceAllString(stem, "-")
+	parts := strings.Split(strings.Trim(stem, "-"), "-")
+	if len(parts) == 0 || parts[0] == "" {
+		return "logs"
+	}
+	return parts[0]
+}
+
+func readService(dir, fallback string) string {
+	if b, err := os.ReadFile(filepath.Join(dir, "service")); err == nil && strings.TrimSpace(string(b)) != "" {
+		return strings.TrimSpace(string(b))
+	}
+	return serviceFromFileName(fallback)
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// without drops entries that refer to patterns in this workspace, so a save
+// replaces this workspace's decisions but keeps rules for other patterns.
+func without(list []string, patterns []demoPattern) []string {
+	out := list[:0:0]
+	for _, v := range list {
+		keep := true
+		for _, p := range patterns {
+			if p.ID == v {
+				keep = false
+				break
+			}
+		}
+		if keep {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func writeError(w http.ResponseWriter, status int, err error) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+}
+
+// ImportLog lands a log in a new workspace under root and finds its patterns.
+// It returns the workspace id to open in the web app.
+func ImportLog(ctx context.Context, root, apiKey, model, name string, body io.Reader) (string, error) {
+	root, err := resolveRoot(root)
+	if err != nil {
+		return "", err
+	}
+	return newDemoAPI(root, apiKey, model).importLog(ctx, name, body)
+}
+
+// FilterLog finds patterns in a log without an LLM, applies the saved (or
+// suggested) noise rules for its service, and writes the remaining lines.
+// Nothing is kept: the scratch workspace is removed afterwards.
+func FilterLog(ctx context.Context, root, service, name string, body io.Reader, out io.Writer) error {
+	root, err := resolveRoot(root)
+	if err != nil {
+		return err
+	}
+	scratch, err := os.MkdirTemp("", "lapp-filter-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	d := newDemoAPI(root, "", "")
+	if service == "" {
+		service = serviceFromFileName(filepath.Base(name))
+	}
+	dir := filepath.Join(scratch, "ws")
+	if err := d.landLog(ctx, dir, filepath.Base(name), service, body); err != nil {
+		return err
+	}
+	scratchAPI := &demoAPI{root: scratch, rulesDir: d.rulesDir}
+	a, err := scratchAPI.analyze(ctx, "ws")
+	if err != nil {
+		return err
+	}
+	return a.writeRemaining(out, nil)
+}
+
+func resolveRoot(root string) (string, error) {
+	if root != "" {
+		return root, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.Errorf("resolve home dir: %w", err)
+	}
+	return filepath.Join(home, ".lapp", "workspaces"), nil
+}

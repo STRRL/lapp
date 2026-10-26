@@ -204,7 +204,8 @@ func workspaceDiscoverCmd() *cobra.Command {
 Drain clustering + LLM semantic labeling, writing run-scoped results under
 discovery-runs/<run-id>/.
 
-Requires OPENROUTER_API_KEY environment variable.`,
+Set OPENROUTER_API_KEY to give patterns readable names; without it,
+patterns are named by their raw text.`,
 		Args: cobra.NoArgs,
 		RunE: runWorkspaceDiscover,
 	}
@@ -237,7 +238,7 @@ func runWorkspaceDiscover(cmd *cobra.Command, _ []string) error {
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return errors.New("OPENROUTER_API_KEY environment variable is required")
+		slog.Warn("OPENROUTER_API_KEY not set; patterns will be named by their raw text")
 	}
 
 	ctx, span := otel.Tracer("lapp/cmd").Start(cmd.Context(), "cmd.WorkspaceDiscover")

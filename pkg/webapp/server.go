@@ -60,6 +60,7 @@ func NewHandler(config ServerConfig) (http.Handler, error) {
 	mux.Handle(path, otelhttp.NewHandler(handler, "connect.WorkspaceService"))
 	path, handler = longrunningpbconnect.NewOperationsHandler(service)
 	mux.Handle(path, otelhttp.NewHandler(handler, "connect.Operations"))
+	newDemoAPI(service.root, config.APIKey, config.Model).register(mux)
 	staticHandler, err := staticFileHandler(config.StaticDir)
 	if err != nil {
 		return nil, err
