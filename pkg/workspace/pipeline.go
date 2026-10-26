@@ -325,7 +325,7 @@ func TruncatedLinesMessage(n int) string {
 }
 
 func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content []string, fileCount, truncatedLines int, err error) {
-	allLogs, truncatedLines, err := ReadAllLogs(dir)
+	allLogs, err := ReadAllLogs(dir)
 	if err != nil {
 		return nil, nil, 0, 0, errors.Errorf("read all logs: %w", err)
 	}
@@ -339,7 +339,9 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 	var allTagged []TaggedLine
 	var allContent []string
 	for _, fileName := range fileNames {
-		fileTagged, err := tagFileLines(ctx, fileName, allLogs[fileName])
+		file := allLogs[fileName]
+		truncatedLines += len(file.Truncated)
+		fileTagged, err := tagFileLines(ctx, fileName, file)
 		if err != nil {
 			return nil, nil, 0, 0, err
 		}
@@ -353,11 +355,23 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 
 // tagFileLines converts one log file into tagged entries. NDJSON files keep
 // the raw JSON line as Content and carry an extracted text line for pattern
-// mining; plain text files go through multiline merging unchanged.
-func tagFileLines(ctx context.Context, fileName string, lines []string) ([]TaggedLine, error) {
-	switch ndjson.DetectFormat(lines) {
+// mining; plain text files go through multiline merging unchanged. The
+// format is detected from complete lines only, so a line cut at
+// logsource.MaxLineBytes never changes how the rest of the file is read.
+func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]TaggedLine, error) {
+	lines := file.Lines
+	complete := lines
+	if len(file.Truncated) > 0 {
+		complete = make([]string, 0, len(lines))
+		for i, line := range lines {
+			if !file.Truncated[i] {
+				complete = append(complete, line)
+			}
+		}
+	}
+	switch ndjson.DetectFormat(complete) {
 	case ndjson.FormatNDJSON:
-		return tagNDJSONLines(fileName, lines), nil
+		return tagNDJSONLines(fileName, file), nil
 	case ndjson.FormatUnrecognized:
 		return nil, errors.Errorf("read %s: %w", fileName, ErrFormatUnrecognized)
 	}
@@ -381,9 +395,10 @@ func tagFileLines(ctx context.Context, fileName string, lines []string) ([]Tagge
 	tagged := make([]TaggedLine, 0, len(merged))
 	for _, m := range merged {
 		tl := TaggedLine{
-			Content:  m.Content,
-			FileName: fileName,
-			LineNum:  m.StartLine,
+			Content:   m.Content,
+			FileName:  fileName,
+			LineNum:   m.StartLine,
+			Truncated: anyTruncated(file.Truncated, m.StartLine, m.EndLine),
 		}
 		// Mine patterns on the message body only: timestamps, hosts and pids
 		// in the header would split one event into many patterns.
@@ -415,9 +430,21 @@ func startsWithEntry(lines []string, detector *multiline.Detector) bool {
 	return false
 }
 
-func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
+// anyTruncated reports whether a line in the 1-based range start..end was cut.
+func anyTruncated(truncated map[int]bool, start, end int) bool {
+	for n := start; n <= end && len(truncated) > 0; n++ {
+		if truncated[n-1] {
+			return true
+		}
+	}
+	return false
+}
+
+// tagNDJSONLines tags each NDJSON line. A line cut at logsource.MaxLineBytes
+// is no longer valid JSON; ndjson.Extract then keeps its raw text.
+func tagNDJSONLines(fileName string, file LogFileLines) []TaggedLine {
 	var tagged []TaggedLine
-	for i, line := range lines {
+	for i, line := range file.Lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -427,6 +454,7 @@ func tagNDJSONLines(fileName string, lines []string) []TaggedLine {
 			FileName:      fileName,
 			LineNum:       i + 1,
 			ExtractedLine: extracted,
+			Truncated:     file.Truncated[i],
 		}
 		if !ts.IsZero() {
 			tl.Timestamp = &ts

@@ -25,7 +25,9 @@ func ScanLines(r io.Reader, fn func(line string, truncated bool) error) error {
 		if complete {
 			chunk = chunk[:len(chunk)-1]
 		}
-		room := MaxLineBytes - len(buf)
+		// Keep one byte past the limit so a "\r" before "\n" never counts
+		// toward it.
+		room := MaxLineBytes + 1 - len(buf)
 		if len(chunk) > room {
 			chunk, truncated = chunk[:room], true
 		}
@@ -38,6 +40,9 @@ func ScanLines(r io.Reader, fn func(line string, truncated bool) error) error {
 			line := buf
 			if !truncated && len(line) > 0 && line[len(line)-1] == '\r' {
 				line = line[:len(line)-1]
+			}
+			if len(line) > MaxLineBytes {
+				line, truncated = line[:MaxLineBytes], true
 			}
 			if ferr := fn(string(line), truncated); ferr != nil {
 				return ferr

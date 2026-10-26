@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-errors/errors"
+	"github.com/strrl/lapp/pkg/logsource"
 	"github.com/strrl/lapp/pkg/semantic"
 )
 
@@ -114,5 +115,32 @@ func TestDiscoverJSONArrayExportFailsAsFormatUnrecognized(t *testing.T) {
 	}
 	if record.State != DiscoveryRunStateFailed || record.Error == nil || record.Error.Code != "FORMAT_UNRECOGNIZED" {
 		t.Fatalf("unexpected record: state=%s error=%+v", record.State, record.Error)
+	}
+}
+
+func TestMergeAllLogsNDJSONWithTruncatedLine(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "logs"))
+	huge := `{"_time":"2026-06-06T10:00:01Z","_msg":"` + strings.Repeat("x", logsource.MaxLineBytes) + `"}`
+	mustWrite(t, filepath.Join(dir, "logs", "vl.ndjson"), strings.Join([]string{
+		`{"_time":"2026-06-06T10:00:00Z","_msg":"request served path=/a"}`,
+		huge,
+		`{"_time":"2026-06-06T10:00:02Z","_msg":"request served path=/b"}`,
+	}, "\n")+"\n")
+
+	tagged, _, _, truncatedLines, err := mergeAllLogs(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("mergeAllLogs: %v", err)
+	}
+	if truncatedLines != 1 || len(tagged) != 3 {
+		t.Fatalf("truncated = %d, entries = %d, want 1 and 3", truncatedLines, len(tagged))
+	}
+	for _, i := range []int{0, 2} {
+		if tagged[i].Truncated || tagged[i].Timestamp == nil || !strings.HasPrefix(tagged[i].ExtractedLine, "request served") {
+			t.Fatalf("entry %d lost NDJSON extraction: %+v", i+1, tagged[i])
+		}
+	}
+	if !tagged[1].Truncated || len(tagged[1].Content) != logsource.MaxLineBytes {
+		t.Fatalf("entry 2 truncated = %v, len = %d", tagged[1].Truncated, len(tagged[1].Content))
 	}
 }

@@ -3,10 +3,8 @@
 package ndjson
 
 import (
-	"bytes"
 	"encoding/json"
 	"strings"
-	"unicode/utf8"
 )
 
 // Format classifies the on-disk format of a log file.
@@ -79,25 +77,26 @@ func isJSONDocument(lines []string) bool {
 	return json.Valid([]byte(strings.Join(lines, "\n")))
 }
 
-// isBinary reports whether the start of the file has NUL bytes and is not
-// valid UTF-8. NUL padding alone (left by copytruncate) and Latin-1 text
-// alone stay readable.
+// isBinary reports whether the start of the file looks binary: more than
+// one in ten bytes are NUL or other control bytes. Leading NUL runs (the
+// padding copytruncate leaves), a stray NUL and non-UTF-8 text such as
+// Latin-1 stay readable.
 func isBinary(lines []string) bool {
-	var head []byte
+	sampled, control := 0, 0
 	for _, line := range lines {
-		head = append(head, line...)
-		head = append(head, '\n')
-		if len(head) >= binarySniffBytes {
-			head = head[:binarySniffBytes]
+		line = strings.TrimLeft(line, "\x00")
+		for i := 0; i < len(line) && sampled < binarySniffBytes; i++ {
+			sampled++
+			switch c := line[i]; {
+			case c == '\t' || c == '\r' || c == '\f' || c == '\v' || c == 0x1b:
+				// Whitespace and ANSI color escapes are text.
+			case c < 0x20 || c == 0x7f:
+				control++
+			}
+		}
+		if sampled >= binarySniffBytes {
 			break
 		}
 	}
-	if !bytes.ContainsRune(head, 0) {
-		return false
-	}
-	// Ignore a rune cut at the end of the sample.
-	for i := 0; i < utf8.UTFMax && len(head) > 0 && !utf8.Valid(head); i++ {
-		head = head[:len(head)-1]
-	}
-	return !utf8.Valid(head)
+	return sampled > 0 && control*10 > sampled
 }
