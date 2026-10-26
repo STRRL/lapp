@@ -1032,7 +1032,11 @@ function PatternList({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patterns: ids, decision })
     })
-      .then(() => toast(done, 2000))
+      .then(() => {
+        toast(done, 2000);
+        // Refetch so a pattern moving into the top 8 gets its collision-free color.
+        setReload((n) => n + 1);
+      })
       .catch((e) => toast(`Couldn't save: ${e instanceof Error ? e.message : String(e)}`));
   };
   const toggle = (id: string) => decide([id], filtered.has(id) ? "unhide" : "hide");
