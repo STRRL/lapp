@@ -85,7 +85,7 @@ workspace.Discover(ctx, cfg)
 
 ### Multiline Detection
 
-Uses a token graph trained on 70+ timestamp formats. Lines are tokenized (first 60 bytes), matched against a directed graph of valid token transitions, and scored 0.0-1.0. Score > 0.5 means "new log entry". In the pipeline, only lines whose leading timestamp has the file's dominant `logheader.StartShape` start entries; entries are capped at 500 lines or 1 MB. When fewer than 5% of a text file's lines (or fewer than 3) start an entry, the file is split line-by-line and the DiscoveryRun records `split_mode: PER_LINE` (ADR 0006).
+Uses a token graph trained on 70+ timestamp formats. Lines are tokenized (first 60 bytes), matched against a directed graph of valid token transitions, and scored 0.0-1.0. Score > 0.5 means "new log entry". In the pipeline, only lines whose leading timestamp has the file's dominant `logheader.StartShape` start entries; entries are capped at 2000 lines or 1 MB. When fewer than 5% of a text file's lines (or fewer than 3) start an entry, the file is split line-by-line and the DiscoveryRun records `split_mode: PER_LINE` (ADR 0006).
 
 ### Analyzer
 
