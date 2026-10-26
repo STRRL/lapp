@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-errors/errors"
+	"github.com/google/uuid"
 	"github.com/strrl/lapp/pkg/victorialogs"
 	"github.com/strrl/lapp/pkg/workspace"
 )
@@ -133,10 +134,19 @@ func (d *demoAPI) handleImportVictoriaLogs(w http.ResponseWriter, r *http.Reques
 	}
 	started := make([]victoriaLogsStarted, 0, len(plan))
 	dirs := make([]string, 0, len(plan))
+	records := make([]workspace.ImportRunRecord, 0, len(plan))
 	for _, svc := range plan {
 		id, dir, err := d.newWorkspaceDir(svc.Service)
 		if err == nil {
 			err = prepareImportWorkspace(dir, svc.Service)
+		}
+		var record workspace.ImportRunRecord
+		if err == nil {
+			// Persist a QUEUED record for every service before answering, as
+			// the GCP import does: services run one after another, and if the
+			// server stops midway, startup recovery can only mark runs it can
+			// find on disk.
+			record, err = queueVictoriaLogsRun(dir, fetch.URL, svc.Query, from, to)
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
@@ -144,15 +154,17 @@ func (d *demoAPI) handleImportVictoriaLogs(w http.ResponseWriter, r *http.Reques
 		}
 		started = append(started, victoriaLogsStarted{ID: id, Service: svc.Service})
 		dirs = append(dirs, dir)
+		records = append(records, record)
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
 		for i, svc := range plan {
 			dir := dirs[i]
+			record := records[i]
 			res, err := workspace.RunImport(ctx, workspace.ImportConfig{
-				Dir: dir, Provider: victorialogs.Provider, URL: fetch.URL, Filter: svc.Query,
-				From: from, To: to, Limit: providerImportLimit, Fetcher: d.fetcher,
+				Dir: dir, RunID: record.ID, Provider: record.Provider, URL: record.URL, Filter: record.Filter,
+				From: record.From, To: record.To, Limit: record.Limit, Fetcher: d.fetcher,
 			})
 			if err != nil {
 				slog.Error("victorialogs import failed", "workspace", started[i].ID, "error", err)
@@ -167,6 +179,26 @@ func (d *demoAPI) handleImportVictoriaLogs(w http.ResponseWriter, r *http.Reques
 		}
 	}()
 	writeJSON(w, map[string]any{"workspaces": started})
+}
+
+// queueVictoriaLogsRun writes the QUEUED ImportRun record for one service.
+func queueVictoriaLogsRun(dir, url, filter string, from, to time.Time) (workspace.ImportRunRecord, error) {
+	runID, err := uuid.NewV7()
+	if err != nil {
+		return workspace.ImportRunRecord{}, err
+	}
+	record := workspace.ImportRunRecord{
+		ID:        runID.String(),
+		Provider:  victorialogs.Provider,
+		URL:       url,
+		Filter:    filter,
+		From:      from.UTC(),
+		To:        to.UTC(),
+		Limit:     providerImportLimit,
+		State:     workspace.ImportRunStateQueued,
+		StartedAt: time.Now().UTC(),
+	}
+	return record, workspace.WriteImportRunRecord(dir, record)
 }
 
 // importTimeRange resolves the web app's "last <since>" or explicit range.
