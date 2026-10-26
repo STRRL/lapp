@@ -40,3 +40,19 @@ func TestMaskInline(t *testing.T) {
 		t.Errorf("MaskInline = %q, want %q", got, want)
 	}
 }
+
+func TestStartShape(t *testing.T) {
+	cases := []struct{ line, shape string }{
+		{"1792993307158\t2026-10-26T05:41:47.158Z\tcolumn \"x\" does not exist", "9\t9-9-9a9:9:9.9a"},
+		{"1792993300000\t2026-10-26T05:41:40.000Z\tcheckpoint complete", "9\t9-9-9a9:9:9.9a"},
+		{"2026-10-26 05:20:11.123+00 LOG:  checkpoint starting", "9-9-9 9:9:9.9+9"},
+		{"Oct 26 05:41:47 web01 sshd[2101]: Accepted publickey", "a 9 9:9:9"},
+		{"\tFilter: (created_at > '2026-10-26 05:20:11.123+00'::timestamp with time zone)", ""},
+		{"Filter: (created_at > '2026-10-26 05:20:11.123+00'::timestamp with time zone)", ""},
+	}
+	for _, c := range cases {
+		if got := StartShape(c.line); got != c.shape {
+			t.Errorf("StartShape(%q) = %q, want %q", c.line, got, c.shape)
+		}
+	}
+}

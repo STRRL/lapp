@@ -100,6 +100,43 @@ func Strip(line string) Result {
 	return Result{Body: line}
 }
 
+// StartShape returns the shape of the timestamp a line starts with: the
+// line up to the end of its leading timestamp (including any epoch prefix,
+// bracket, or quote), with each run of digits written as "9" and each run of
+// letters as "a". It is empty when the line does not start with a recognized
+// header. Lines of one log format share a shape, so a file's entry starts
+// can be told apart from continuation lines that start with another format.
+func StartShape(line string) string {
+	for _, f := range formats {
+		m := f.re.FindStringSubmatchIndex(line)
+		if m == nil {
+			continue
+		}
+		return collapseShape(line[:m[2*f.re.SubexpIndex("ts")+1]])
+	}
+	return ""
+}
+
+func collapseShape(prefix string) string {
+	var b strings.Builder
+	var last byte
+	for i := 0; i < len(prefix); i++ {
+		c := prefix[i]
+		switch {
+		case c >= '0' && c <= '9':
+			c = '9'
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+			c = 'a'
+		}
+		if (c == '9' || c == 'a') && c == last {
+			continue
+		}
+		b.WriteByte(c)
+		last = c
+	}
+	return b.String()
+}
+
 func parse(ts string, f format) time.Time {
 	ts = strings.Join(strings.Fields(ts), " ")
 	for _, layout := range f.layouts {
