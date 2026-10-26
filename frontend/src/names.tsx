@@ -13,8 +13,10 @@ import React from "react";
 export type PatternLabel = { text: string; fields: number[] };
 export type LabelOf = (p: { id: string; name: string }, n: number, compact?: boolean) => PatternLabel;
 
-// Character budgets per place; the list and Start here also cut on width.
-export const NAME_ROW = 72;
+// Character budgets per place. The list and Start here are wide: their names
+// run to the column edge and CSS cuts them (text-overflow), so NAME_ROW only
+// bounds very long templates.
+export const NAME_ROW = 300;
 export const NAME_NOTICE = 40;
 export const NAME_LEGEND = 32;
 export const NAME_TIP = 38;
