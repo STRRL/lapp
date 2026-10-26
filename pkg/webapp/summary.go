@@ -290,9 +290,5 @@ func atSlot(r demoPatternsResponse, i int) string {
 }
 
 func perUnit(seconds int64) string {
-	u := bucketUnit(seconds)
-	if strings.ContainsAny(u[:1], "0123456789") {
-		return " per " + u
-	}
-	return "/" + u
+	return " per " + bucketUnit(seconds)
 }

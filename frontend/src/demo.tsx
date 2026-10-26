@@ -145,8 +145,7 @@ function unitName(seconds: number) {
   return names[seconds] ?? "month";
 }
 function perUnit(seconds: number) {
-  const u = unitName(seconds);
-  return /^\d/.test(u) ? ` per ${u}` : `/${u}`;
+  return ` per ${unitName(seconds)}`;
 }
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;

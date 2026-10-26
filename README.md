@@ -2,7 +2,7 @@
 
 **Find the problem in your logs, not the noise.**
 
-Drop in a log file and lapp shows you where to look first: errors that suddenly spiked and patterns that never appeared before. Click any of them to see the lines behind it, or hand it to Claude Code or Codex to investigate. Every claim in the answer links back to the pattern, and the lines, it came from.
+Drop in a log file and lapp shows you where to look first: errors that suddenly spiked and patterns that never appeared before. Click any of them to see the lines behind it, or hand it to Claude Code or Codex to investigate. Every claim in the answer links to the pattern and lines behind it.
 
 ![lapp on a 2,000-line Apache log: the Start here card lists one spiking error and two new ones, above the chart of remaining lines and the pattern list with noise filtered out](docs/images/lapp-start-here.png)
 
