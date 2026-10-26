@@ -21,6 +21,7 @@ func TestStrip(t *testing.T) {
 		{"2026-10-26T05:41:47.158Z,api,request done", "api,request done", time.Date(2026, 10, 26, 5, 41, 47, 158e6, time.UTC)},
 		{"2026-10-26T05:41:47Z;api;request done", "api;request done", time.Date(2026, 10, 26, 5, 41, 47, 0, time.UTC)},
 		{"2026-10-26T05:41:47Z\tapi\trequest done", "api\trequest done", time.Date(2026, 10, 26, 5, 41, 47, 0, time.UTC)},
+		{"1792993307158\t2026-10-26T05:41:47.158Z\tcolumn \"x\" does not exist", "column \"x\" does not exist", time.Date(2026, 10, 26, 5, 41, 47, 158e6, time.UTC)},
 		{"no header here", "no header here", time.Time{}},
 	}
 	for _, c := range cases {
