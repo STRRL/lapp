@@ -226,8 +226,10 @@ const patternColor = (p: DemoPattern, charted: boolean) =>
 // apart from every other pattern in the workspace. Where two cut names would
 // read the same, each starts from its first difference with a leading "…"
 // ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
-// fieldOffset is the number of <*> fields cut off the front, for Template.
-type PatternLabel = { text: string; fieldOffset: number };
+// If those still read the same, the word where the names first differ is put
+// in front ("READ …alpha" and "SEND …alpha").
+// fields maps each <*> in text to its field index in the full name, for Template.
+type PatternLabel = { text: string; fields: number[] };
 type LabelOf = (p: { id: string; name: string }, n: number) => PatternLabel;
 
 // Character budgets per place; the list and Start here also cut on width.
@@ -244,27 +246,70 @@ function cutName(s: string, n: number) {
   return `${s.slice(0, end)}…`;
 }
 
+// Index of the first character where a and b differ.
+function firstDifference(a: string, b: string) {
+  let k = 0;
+  while (k < a.length && a[k] === b[k]) k++;
+  return k;
+}
+
+// Moves i back to the start of its word (when the word is short) and out of a <*>.
+function backToWord(name: string, i: number) {
+  const word = name.lastIndexOf(" ", i - 1) + 1;
+  if (i - word <= 12) i = word;
+  const field = name.lastIndexOf("<*>", i - 1);
+  return field >= 0 && field + 3 > i ? field : i;
+}
+
+const fieldsBefore = (name: string, i: number) => name.slice(0, i).split("<*>").length - 1;
+
+// A label shown from position from of name, optionally after a head word.
+function labelFrom(name: string, from: number, n: number, head?: [number, number]): PatternLabel {
+  const fields: number[] = [];
+  let text = "";
+  if (head) {
+    const h = name.slice(head[0], head[1]);
+    text = `${head[0] > 0 ? "…" : ""}${h} `;
+    h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, head[0]) + k));
+  }
+  const rest = from === 0 ? cutName(name, n) : `…${cutName(name.slice(from), Math.max(8, n - 1 - text.length))}`;
+  rest.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, from) + k));
+  return { text: text + rest, fields };
+}
+
+// Groups indexes whose labels read the same but whose names differ.
+function collisions(names: string[], labels: PatternLabel[]) {
+  const by = new Map<string, number[]>();
+  labels.forEach((l, i) => by.set(l.text, [...(by.get(l.text) ?? []), i]));
+  return [...by.values()].filter((g) => new Set(g.map((i) => names[i])).size > 1);
+}
+
 function patternLabels(names: string[], n: number): PatternLabel[] {
   const flat = names.map((s) => s.replace(/\s+/g, " ").trim());
-  const cut = flat.map((s) => cutName(s, n));
-  const byCut = new Map<string, number[]>();
-  cut.forEach((c, i) => byCut.set(c, [...(byCut.get(c) ?? []), i]));
-  return flat.map((name, i) => {
-    let from = 0;
-    for (const j of byCut.get(cut[i])!) {
-      const other = flat[j];
-      if (other === name) continue;
-      let k = 0;
-      while (k < name.length && name[k] === other[k]) k++;
-      from = Math.max(from, k);
+  const labels = flat.map((s) => labelFrom(s, 0, n));
+  const from = flat.map(() => 0);
+  for (const group of collisions(flat, labels)) {
+    for (const i of group) {
+      for (const j of group) if (flat[j] !== flat[i]) from[i] = Math.max(from[i], firstDifference(flat[i], flat[j]));
+      if (from[i] > 0) {
+        from[i] = backToWord(flat[i], from[i]);
+        labels[i] = labelFrom(flat[i], from[i], n);
+      }
     }
-    if (from === 0) return { text: cut[i], fieldOffset: 0 };
-    const word = name.lastIndexOf(" ", from - 1) + 1;
-    if (from - word <= 12) from = word;
-    const field = name.lastIndexOf("<*>", from - 1);
-    if (field >= 0 && field + 3 > from) from = field;
-    return { text: `…${cutName(name.slice(from), n - 1)}`, fieldOffset: name.slice(0, from).split("<*>").length - 1 };
-  });
+  }
+  // Same tail after a different start: put the first differing word in front.
+  for (const group of collisions(flat, labels)) {
+    for (const i of group) {
+      let d = flat[i].length;
+      for (const j of group) if (flat[j] !== flat[i]) d = Math.min(d, firstDifference(flat[i], flat[j]));
+      if (d >= from[i]) continue;
+      const start = backToWord(flat[i], d);
+      const space = flat[i].indexOf(" ", d);
+      const end = Math.min(space < 0 ? flat[i].length : space, start + 16, from[i]);
+      labels[i] = labelFrom(flat[i], from[i], n, [start, end]);
+    }
+  }
+  return labels;
 }
 
 // labelOf for one workspace's patterns: labels are computed once per length.
@@ -1748,7 +1793,7 @@ function StartHere({
                 </b>
               ) : (
                 <b className="unnamed ell" title={p.name}>
-                  <Template text={label.text} patternId={p.id} offset={levelOffset(p) + label.fieldOffset} />
+                  <Template text={label.text} patternId={p.id} offset={levelOffset(p)} fields={label.fields} />
                 </b>
               )}
               <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : p.steadyError ? "is-err" : "is-new"}`}>
@@ -1859,14 +1904,15 @@ function ListSkeleton({ navigate }: { navigate: (q: Record<string, string>) => v
 
 // Renders a template with <*> chips. With patternId (and the template being
 // the pattern's own text), hovering a chip shows the values it stands for.
-function Template({ text, active, patternId, offset = 0 }: { text: string; active?: number; patternId?: string; offset?: number }) {
+// fields maps the k-th <*> of text to its field index (a shortened name); by default the k-th.
+function Template({ text, active, patternId, offset = 0, fields }: { text: string; active?: number; patternId?: string; offset?: number; fields?: number[] }) {
   const parts = text.split("<*>");
   return (
     <>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
           {part}
-          {i < parts.length - 1 && <Placeholder patternId={patternId} index={i + offset} active={active === i} />}
+          {i < parts.length - 1 && <Placeholder patternId={patternId} index={(fields?.[i] ?? i) + offset} active={active === i} />}
         </React.Fragment>
       ))}
     </>
@@ -1952,7 +1998,7 @@ function Row({
             <i className="dot" style={{ background: color }} />
             {noiseTag}
             <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={label.text} patternId={p.id} offset={levelOffset(p) + label.fieldOffset} />
+              <Template text={label.text} patternId={p.id} offset={levelOffset(p)} fields={label.fields} />
             </b>
           </div>
         )}
