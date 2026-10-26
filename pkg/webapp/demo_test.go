@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -255,6 +256,19 @@ func TestDemoNoiseDecisionsPersistPerService(t *testing.T) {
 	decide(second, "unhide", got["health"].ID)
 	if got = byWord(second); got["health"].Filtered || got["health"].Suggestion != "noise" {
 		t.Fatalf("unhide: %+v", got["health"])
+	}
+	// Two Hide clicks sent at the same time must both be kept.
+	var wg sync.WaitGroup
+	for _, word := range []string{"health", "cache"} {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			decide(second, "hide", id)
+		}(got[word].ID)
+	}
+	wg.Wait()
+	if got = byWord(second); !got["health"].Filtered || !got["cache"].Filtered {
+		t.Fatalf("concurrent hides lost a decision: health=%v cache=%v", got["health"].Filtered, got["cache"].Filtered)
 	}
 }
 

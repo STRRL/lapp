@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -56,6 +57,9 @@ type demoAPI struct {
 	// so tests run without a VictoriaLogs instance.
 	victoriaLogsStreams func(context.Context, victorialogs.FetchRequest) ([]victorialogs.Stream, error)
 	jobs                *investigations
+	// rulesMu serializes read-modify-write of noise rules files: two quick
+	// Hide clicks arrive as concurrent requests and must not drop a decision.
+	rulesMu sync.Mutex
 }
 
 func newDemoAPI(root, apiKey, model string) *demoAPI {
@@ -877,20 +881,19 @@ func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 			ids = append(ids, p.ID)
 		}
 	}
-	rules, _ := d.loadRules(a.service)
-	switch body.Decision {
-	case "hide":
-		rules.Filtered = append(remove(rules.Filtered, ids), ids...)
-	case "unhide":
-		rules.Filtered = remove(rules.Filtered, ids)
-	case "not-noise":
-		rules.Filtered = remove(rules.Filtered, ids)
-		rules.NotNoise = append(remove(rules.NotNoise, ids), ids...)
-	default:
+	apply := map[string]func(*noiseRules){
+		"hide":   func(r *noiseRules) { r.Filtered = append(remove(r.Filtered, ids), ids...) },
+		"unhide": func(r *noiseRules) { r.Filtered = remove(r.Filtered, ids) },
+		"not-noise": func(r *noiseRules) {
+			r.Filtered = remove(r.Filtered, ids)
+			r.NotNoise = append(remove(r.NotNoise, ids), ids...)
+		},
+	}[body.Decision]
+	if apply == nil {
 		writeError(w, http.StatusBadRequest, errors.Errorf("unknown decision %q", body.Decision))
 		return
 	}
-	if err := d.saveRules(a.service, rules); err != nil {
+	if err := d.updateRules(a.service, apply); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -991,7 +994,31 @@ func (d *demoAPI) saveRules(service string, rules noiseRules) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	// Temp file + rename, like the workspace records, so a reader never sees
+	// a half-written file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// updateRules loads, changes and saves one service's rules under rulesMu.
+func (d *demoAPI) updateRules(service string, change func(*noiseRules)) error {
+	d.rulesMu.Lock()
+	defer d.rulesMu.Unlock()
+	rules, _ := d.loadRules(service)
+	change(&rules)
+	return d.saveRules(service, rules)
 }
 
 var serviceChars = regexp.MustCompile(`[^a-z0-9]+`)
