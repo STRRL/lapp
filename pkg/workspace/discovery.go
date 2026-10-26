@@ -11,6 +11,15 @@ import (
 
 const DiscoveryRunsDirName = "discovery-runs"
 
+// DiscoveryRunFormat versions how a run's templates were mined. Runs of
+// another format are not read: their templates cannot match lines extracted
+// today, so the log has to be imported again. Format 2 keeps the NDJSON
+// level out of templates; runs before it have no format.
+const DiscoveryRunFormat = 2
+
+// ErrOldDiscoveryRun is returned for a run of another DiscoveryRunFormat.
+var ErrOldDiscoveryRun = errors.New("made by an older lapp; import the log again")
+
 type DiscoveryRunState string
 
 const (
@@ -32,6 +41,7 @@ const (
 
 type DiscoveryRunRecord struct {
 	ID              string                `json:"id"`
+	Format          int                   `json:"format"`
 	State           DiscoveryRunState     `json:"state"`
 	CurrentStep     DiscoveryStep         `json:"current_step,omitempty"`
 	ProgressMessage string                `json:"progress_message,omitempty"`
@@ -106,6 +116,7 @@ func WriteDiscoveryRunRecord(workspaceDir string, record DiscoveryRunRecord) err
 	if record.ID == "" {
 		return errors.New("discovery run id is required")
 	}
+	record.Format = DiscoveryRunFormat
 	runDir := DiscoveryRunDir(workspaceDir, record.ID)
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return errors.Errorf("create discovery run dir: %w", err)
@@ -142,6 +153,9 @@ func ReadDiscoveryRunRecord(workspaceDir, runID string) (DiscoveryRunRecord, err
 	if err := json.Unmarshal(data, &record); err != nil {
 		return DiscoveryRunRecord{}, errors.Errorf("decode discovery run: %w", err)
 	}
+	if record.Format != DiscoveryRunFormat {
+		return DiscoveryRunRecord{}, errors.Errorf("discovery run %s: %w", runID, ErrOldDiscoveryRun)
+	}
 	return record, nil
 }
 
@@ -159,6 +173,9 @@ func ListDiscoveryRunRecords(workspaceDir string) ([]DiscoveryRunRecord, error) 
 			continue
 		}
 		record, err := ReadDiscoveryRunRecord(workspaceDir, entry.Name())
+		if errors.Is(err, ErrOldDiscoveryRun) {
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
