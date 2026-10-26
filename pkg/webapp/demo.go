@@ -1305,6 +1305,25 @@ type demoPatternDetail struct {
 
 var numberValue = regexp.MustCompile(`^-?\d+(?:\.\d+)?([a-zA-Zµ%]*)$`)
 
+// unmask puts the masked text back into a line's <*> tokens, in order, so
+// a field shows the real UUID or date-time rather than <*>.
+func unmask(toks, masked []string) []string {
+	if len(masked) == 0 {
+		return toks
+	}
+	out := make([]string, len(toks))
+	m := 0
+	for i, t := range toks {
+		// A mask can sit inside a token ("(<*>)"); fill each one in turn.
+		for strings.Contains(t, "<*>") && m < len(masked) {
+			t = strings.Replace(t, "<*>", masked[m], 1)
+			m++
+		}
+		out[i] = t
+	}
+	return out
+}
+
 func fieldTokens(s string) []string {
 	for _, d := range []string{"|", "=", ","} {
 		s = strings.ReplaceAll(s, d, " ")
@@ -1366,6 +1385,7 @@ func (a *analysis) patternDetail(idx int) demoPatternDetail {
 		if len(toks) != len(tmpl) {
 			continue
 		}
+		toks = unmask(toks, tl.Masked)
 		stamps = append(stamps, tl.Timestamp)
 		for k, s := range slots {
 			values[k] = append(values[k], toks[s])

@@ -609,3 +609,29 @@ func TestUUIDListsAreOnePattern(t *testing.T) {
 		t.Fatalf("patterns = %+v", s.Patterns)
 	}
 }
+
+// A masked UUID is still a field with its real values.
+func TestMaskedUUIDKeepsFieldValues(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 12; i++ {
+		line, _ := json.Marshal(map[string]string{"level": "info", "message": fmt.Sprintf("user %08x-0b7d-4e21-9a3c-%012x logged in", i, i)})
+		fmt.Fprintf(&body, "%s\n", line)
+	}
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	ctx := context.Background()
+	id, err := d.importLog(ctx, "users.ndjson", strings.NewReader(body.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := d.analyze(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.resp.Patterns) != 1 {
+		t.Fatalf("patterns = %+v", a.resp.Patterns)
+	}
+	detail := a.patternDetail(0)
+	if len(detail.Summary) != 1 || detail.Summary[0].Distinct != 12 || strings.Contains(detail.Summary[0].Top[0].Value, "<*>") {
+		t.Fatalf("summary = %+v", detail.Summary)
+	}
+}

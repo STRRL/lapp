@@ -460,7 +460,8 @@ func tagFileLines(ctx context.Context, fileName string, file LogFileLines) ([]Ta
 		if multi {
 			body += "\n" + rest
 		}
-		if body = logheader.MaskInline(body); body != m.Content {
+		body, tl.Masked = logheader.MaskInline(body)
+		if body != m.Content {
 			tl.ExtractedLine = body
 		}
 		if !h.Timestamp.IsZero() {
@@ -552,10 +553,11 @@ func tagNDJSONLines(fileName string, file LogFileLines) []TaggedLine {
 			Content:       line,
 			FileName:      fileName,
 			LineNum:       i + 1,
-			ExtractedLine: logheader.MaskInline(extracted),
+			ExtractedLine: extracted,
 			Severity:      severity,
 			Truncated:     file.Truncated[i],
 		}
+		tl.ExtractedLine, tl.Masked = logheader.MaskInline(extracted)
 		if !ts.IsZero() {
 			tl.Timestamp = &ts
 		}

@@ -5,6 +5,7 @@ package logheader
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -191,9 +192,37 @@ var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA
 
 // MaskInline replaces date-times and UUIDs (a list of UUIDs as a whole)
 // inside a message body with a single wildcard token so they don't split
-// patterns.
-func MaskInline(body string) string {
-	return uuidList.ReplaceAllString(inlineTimestamp.ReplaceAllString(body, "<*>"), "<*>")
+// patterns. It also returns the replaced text of each <*>, in order, so field
+// values can still be shown.
+func MaskInline(body string) (string, []string) {
+	spans := inlineTimestamp.FindAllStringIndex(body, -1)
+	for _, u := range uuidList.FindAllStringIndex(body, -1) {
+		overlaps := false
+		for _, t := range spans {
+			if u[0] < t[1] && t[0] < u[1] {
+				overlaps = true
+				break
+			}
+		}
+		if !overlaps {
+			spans = append(spans, u)
+		}
+	}
+	if len(spans) == 0 {
+		return body, nil
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
+	var b strings.Builder
+	values := make([]string, 0, len(spans))
+	last := 0
+	for _, s := range spans {
+		b.WriteString(body[last:s[0]])
+		b.WriteString("<*>")
+		values = append(values, body[s[0]:s[1]])
+		last = s[1]
+	}
+	b.WriteString(body[last:])
+	return b.String(), values
 }
 
 // ParseTime reads a standalone date-time value, such as a CSV column or a

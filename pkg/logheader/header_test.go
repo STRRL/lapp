@@ -35,9 +35,12 @@ func TestStrip(t *testing.T) {
 }
 
 func TestMaskInline(t *testing.T) {
-	got := MaskInline("connection from 1.2.3.4 () at Sun Jul  3 23:16:09 2005")
+	got, values := MaskInline("connection from 1.2.3.4 () at Sun Jul  3 23:16:09 2005")
 	if want := "connection from 1.2.3.4 () at <*>"; got != want {
 		t.Errorf("MaskInline = %q, want %q", got, want)
+	}
+	if len(values) != 1 || values[0] != "Sun Jul  3 23:16:09 2005" {
+		t.Errorf("MaskInline values = %q", values)
 	}
 }
 
@@ -49,7 +52,7 @@ func TestMaskInlineUUIDs(t *testing.T) {
 		{"build 3f2a9c1e0b7d not a uuid", "build 3f2a9c1e0b7d not a uuid"},
 	}
 	for _, c := range cases {
-		if got := MaskInline(c.in); got != c.want {
+		if got, _ := MaskInline(c.in); got != c.want {
 			t.Errorf("MaskInline(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
