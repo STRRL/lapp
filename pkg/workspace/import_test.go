@@ -80,6 +80,22 @@ func TestRunImportSuccessWritesFileAndRecord(t *testing.T) {
 	if record.FinishedAt == nil || record.Error != nil {
 		t.Fatalf("expected finished record without error: %+v", record)
 	}
+
+	// Discovery reads the imported envelope's ts as each entry's timestamp,
+	// so GCP imports get time ranges and buckets.
+	tagged, _, _, err := mergeAllLogs(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("mergeAllLogs: %v", err)
+	}
+	wantTimes := []string{"2026-07-25T00:00:01Z", "2026-07-25T00:00:02Z"}
+	if len(tagged) != len(wantTimes) {
+		t.Fatalf("tagged lines = %d, want %d", len(tagged), len(wantTimes))
+	}
+	for i, tl := range tagged {
+		if tl.Timestamp == nil || tl.Timestamp.UTC().Format(time.RFC3339) != wantTimes[i] {
+			t.Fatalf("line %d timestamp = %v, want %s", i+1, tl.Timestamp, wantTimes[i])
+		}
+	}
 }
 
 func TestRunImportZeroEntriesSucceedsWithoutFile(t *testing.T) {

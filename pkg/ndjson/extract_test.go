@@ -61,7 +61,8 @@ func TestExtractTimestampFromVictoriaLogsTime(t *testing.T) {
 	}{
 		{name: "_time is read", line: `{"_msg":"ok","_time":"2026-10-26T05:22:22Z"}`, want: "2026-10-26T05:22:22Z"},
 		{name: "a user ts field does not override _time", line: `{"_msg":"ok","_time":"2026-10-26T05:22:22Z","ts":"2020-01-01T00:00:00Z"}`, want: "2026-10-26T05:22:22Z"},
-		{name: "no _time gives zero time", line: `{"message":"ok"}`, want: ""},
+		{name: "GCP envelope ts is read", line: `{"ts":"2026-07-25T00:00:01Z","severity":"ERROR","payload":{"message":"a"}}`, want: "2026-07-25T00:00:01Z"},
+		{name: "no timestamp field gives zero time", line: `{"message":"ok"}`, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
