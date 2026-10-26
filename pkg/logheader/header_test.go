@@ -18,6 +18,9 @@ func TestStrip(t *testing.T) {
 		{"Jun 14 15:16:01 combo sshd(pam_unix)[19939]: check pass; user unknown", "sshd(pam_unix): check pass; user unknown", time.Date(2026, 6, 14, 15, 16, 1, 0, time.UTC)},
 		{"081109 203615 148 INFO dfs.DataNode: Receiving block", "INFO dfs.DataNode: Receiving block", time.Date(2008, 11, 9, 20, 36, 15, 0, time.UTC)},
 		{"2024-03-28T13:45:30.123Z INFO started", "INFO started", time.Date(2024, 3, 28, 13, 45, 30, 123e6, time.UTC)},
+		{"2026-10-26T05:41:47.158Z,api,request done", "api,request done", time.Date(2026, 10, 26, 5, 41, 47, 158e6, time.UTC)},
+		{"2026-10-26T05:41:47Z;api;request done", "api;request done", time.Date(2026, 10, 26, 5, 41, 47, 0, time.UTC)},
+		{"2026-10-26T05:41:47Z\tapi\trequest done", "api\trequest done", time.Date(2026, 10, 26, 5, 41, 47, 0, time.UTC)},
 		{"no header here", "no header here", time.Time{}},
 	}
 	for _, c := range cases {

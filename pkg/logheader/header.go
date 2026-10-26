@@ -32,8 +32,10 @@ var formats = []format{
 		layouts: []string{"Mon Jan _2 15:04:05 2006", "Mon Jan _2 15:04:05.000000 2006"},
 	},
 	// ISO-8601 / RFC 3339-ish, optional brackets, optional "host proc[pid]:".
+	// The timestamp may be followed by whitespace or, in CSV-like text, by a
+	// ",", ";" or tab separator.
 	{
-		re: regexp.MustCompile(`^\[?(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\]?\s+(?P<body>.*)$`),
+		re: regexp.MustCompile(`^\[?(?P<ts>\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\]?(?:\s+|\s*[,;]\s*)(?P<body>.*)$`),
 		layouts: []string{
 			time.RFC3339Nano, "2006-01-02T15:04:05.999999999Z0700", "2006-01-02T15:04:05.999999999",
 			"2006-01-02 15:04:05.999999999Z07:00", "2006-01-02 15:04:05.999999999Z0700", "2006-01-02 15:04:05.999999999",
