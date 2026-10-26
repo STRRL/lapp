@@ -156,7 +156,15 @@ func buildSummary(a *analysis) *Summary {
 		s.Patterns = append(s.Patterns, sp)
 	}
 	s.FilteredPercent = pct1(s.FilteredLines, total)
-	s.StartHere = startHere(r)
+	byID := map[string]demoPattern{}
+	for _, p := range r.Patterns {
+		byID[p.ID] = p
+	}
+	for _, c := range r.StartHere {
+		if p := byID[c.ID]; !p.Filtered && len(s.StartHere) < startHereShown {
+			s.StartHere = append(s.StartHere, SummaryFinding{Template: p.Template, Name: p.Name, Lines: p.Count, Reason: c.Reason})
+		}
+	}
 	if c := r.Compare; c != nil {
 		sc := &SummaryCompare{Previous: c.PreviousTitle, At: c.PreviousAt, New: c.New, Changed: c.Changed, Gone: []string{}}
 		for _, g := range c.Gone {
@@ -167,88 +175,109 @@ func buildSummary(a *analysis) *Summary {
 	return s
 }
 
+// startHereShown is how many "Start here" candidates are shown, on the
+// page and in `lapp summary`.
+const startHereShown = 5
+
 func pct1(part, total int) float64 { return round1(float64(part) * 100 / float64(total)) }
 
-// startHere mirrors the page's "Start here" card: spiking errors, steady
-// errors, errors new or up since last time, new errors, other spikes, other
-// new — at most 5, never filtered patterns, each pattern once.
-func startHere(r demoPatternsResponse) []SummaryFinding {
-	isErr := func(p demoPattern) bool { return p.Level == "error" || p.Level == "fatal" }
-	isNew := func(p demoPattern) bool { return p.NewAt != nil || p.SinceLast == "new" }
+// startHereCandidate is one pattern for the "Start here" card, in order,
+// with the reason it is there.
+type startHereCandidate struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// startHere is the one place the "Start here" rules live. It ranks every
+// pattern, hidden or not, so the page can drop hidden ones and show the next
+// without a new request: steady errors (by lines), spiking errors (by spike),
+// other errors (new or up since last time first, then by lines), warnings
+// (spiking first, then by lines), other spikes, then patterns new since the
+// last import of the service (non-errors only from 3 lines). Error means an
+// error level or error-like words. A pattern first seen within this import is
+// not a reason on its own: everything is new on a service's first import.
+func startHere(r demoPatternsResponse) []startHereCandidate {
+	isErr := func(p demoPattern) bool { return isErrorLevel(p.Level) || isErrorLike(p.Template) }
+	isWarn := func(p demoPattern) bool { return !isErr(p) && p.Level == "warn" }
 	spike := func(p demoPattern) int {
 		if p.SpikeAt == nil {
 			return 0
 		}
 		return p.Buckets[*p.SpikeAt]
 	}
-	vsLast := func(p demoPattern) bool {
-		return isErr(p) && p.SpikeAt == nil && (p.SinceLast == "new" || p.SinceLast == "up")
+	vsLast := func(p demoPattern) bool { return p.SinceLast == "new" || p.SinceLast == "up" }
+	byLines := func(a, b demoPattern) bool { return a.Count > b.Count }
+	bySpike := func(a, b demoPattern) bool { return spike(a) > spike(b) }
+	first := func(in func(demoPattern) bool, then func(a, b demoPattern) bool) func(a, b demoPattern) bool {
+		return func(a, b demoPattern) bool {
+			if in(a) != in(b) {
+				return in(a)
+			}
+			return then(a, b)
+		}
 	}
-	groups := []func(demoPattern) bool{
-		func(p demoPattern) bool { return isErr(p) && p.SpikeAt != nil },
-		func(p demoPattern) bool { return p.SteadyError && p.SpikeAt == nil },
-		vsLast,
-		func(p demoPattern) bool { return isErr(p) && p.SpikeAt == nil && !vsLast(p) && isNew(p) },
-		func(p demoPattern) bool { return !isErr(p) && p.SpikeAt != nil },
-		func(p demoPattern) bool { return !isErr(p) && p.SpikeAt == nil && isNew(p) },
+	steady := func(p demoPattern) bool { return isErr(p) && p.SteadyError && p.SpikeAt == nil }
+	groups := []struct {
+		in   func(demoPattern) bool
+		less func(a, b demoPattern) bool
+	}{
+		{steady, byLines},
+		{func(p demoPattern) bool { return isErr(p) && p.SpikeAt != nil }, bySpike},
+		{isErr, first(vsLast, byLines)},
+		{isWarn, first(func(p demoPattern) bool { return p.SpikeAt != nil }, func(a, b demoPattern) bool {
+			return spike(a) > spike(b) || spike(a) == spike(b) && a.Count > b.Count
+		})},
+		{func(p demoPattern) bool { return p.SpikeAt != nil }, bySpike},
+		{func(p demoPattern) bool { return p.SinceLast == "new" && p.Count >= 3 }, byLines},
 	}
-	var out []SummaryFinding
+	out := []startHereCandidate{}
 	seen := map[string]bool{}
-	for gi, in := range groups {
+	for _, grp := range groups {
 		var g []demoPattern
 		for _, p := range r.Patterns {
-			if !p.Filtered && !seen[p.ID] && in(p) {
+			if !seen[p.ID] && grp.in(p) {
 				g = append(g, p)
 				seen[p.ID] = true
 			}
 		}
-		sort.SliceStable(g, func(i, j int) bool {
-			if gi == 0 || gi == 4 {
-				return spike(g[i]) > spike(g[j])
-			}
-			return g[i].Count > g[j].Count
-		})
+		sort.SliceStable(g, func(i, j int) bool { return grp.less(g[i], g[j]) })
 		for _, p := range g {
-			if len(out) == 5 {
-				return out
-			}
-			out = append(out, SummaryFinding{Template: p.Template, Name: p.Name, Lines: p.Count, Reason: findingReason(p, r)})
+			out = append(out, startHereCandidate{ID: p.ID, Reason: startReason(p, r, isErr(p), isWarn(p), steady(p))})
 		}
-	}
-	if out == nil {
-		out = []SummaryFinding{}
 	}
 	return out
 }
 
-func findingReason(p demoPattern, r demoPatternsResponse) string {
-	isErr := p.Level == "error" || p.Level == "fatal"
-	if p.SteadyError && p.SpikeAt == nil {
-		return "Steady error · " + formatPercent(float64(p.Count)/float64(max(r.Workspace.LineCount, 1))) + " of lines"
+func startReason(p demoPattern, r demoPatternsResponse, isErr, isWarn, steady bool) string {
+	share := formatPercent(float64(p.Count)/float64(max(r.Workspace.LineCount, 1))) + " of lines"
+	if steady {
+		return "Steady error · " + share
 	}
-	if isErr && p.SpikeAt == nil && p.SinceLast == "new" {
-		return "New error since last time"
+	kind := ""
+	switch {
+	case isErr:
+		kind = "Error"
+	case isWarn:
+		kind = "Warning"
 	}
-	if isErr && p.SpikeAt == nil && p.SinceLast == "up" {
-		return fmt.Sprintf("Error · %g× last time", p.Ratio)
-	}
-	var parts []string
-	if isErr {
-		parts = append(parts, "Error")
+	if p.SpikeAt != nil && r.BucketStart != nil {
+		text := fmt.Sprintf("spiked to %d%s %s", p.Buckets[*p.SpikeAt], perUnit(r.BucketSeconds), atSlot(r, *p.SpikeAt))
+		if kind == "" {
+			return strings.ToUpper(text[:1]) + text[1:]
+		}
+		return kind + " · " + text
 	}
 	switch {
-	case p.SpikeAt != nil && r.BucketStart != nil:
-		parts = append(parts, fmt.Sprintf("spiked to %d%s %s", p.Buckets[*p.SpikeAt], perUnit(r.BucketSeconds), atSlot(r, *p.SpikeAt)))
-	case p.NewAt != nil && r.BucketStart != nil:
-		parts = append(parts, "first seen "+slotLabel(r, *p.NewAt))
+	case p.SinceLast == "new" && kind != "":
+		return "New " + strings.ToLower(kind) + " since last time"
 	case p.SinceLast == "new":
-		parts = append(parts, "new since last time")
+		return "New since last time"
+	case p.SinceLast == "up" && kind != "":
+		return fmt.Sprintf("%s · %g× last time", kind, p.Ratio)
+	case kind != "":
+		return kind + " · " + share
 	}
-	text := strings.Join(parts, " · ")
-	if text == "" {
-		return ""
-	}
-	return strings.ToUpper(text[:1]) + text[1:]
+	return ""
 }
 
 // WriteText prints the summary for people.

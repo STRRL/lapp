@@ -123,6 +123,9 @@ type demoPatternsResponse struct {
 	Patterns       []demoPattern `json:"patterns"`
 	Unmatched      demoUnmatched `json:"unmatched"`
 	Compare        *demoCompare  `json:"compare,omitempty"`
+	// StartHere ranks every "Start here" candidate, hidden ones included;
+	// the page drops hidden ones and shows the first startHereShown.
+	StartHere []startHereCandidate `json:"startHere"`
 	// SplitMode is the run's workspace.SplitMode: "MERGED" when continuation
 	// lines joined timestamped entries, "PER_LINE" when a text file had too
 	// few timestamps at line starts to merge entries.
@@ -576,6 +579,7 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	if compareTo != "none" {
 		a.resp.Compare = d.compareWithPrevious(ctx, id, compareTo, a.service, run, &a.resp)
 	}
+	a.resp.StartHere = startHere(a.resp)
 	return a, nil
 }
 
