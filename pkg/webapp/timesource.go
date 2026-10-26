@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	// Below this share of lines with a time, a volume chart would misstate
-	// the file, so the overview explains the gap instead.
-	minTimedShare = 0.01
+	// Below this share of entries (after merging multi-line entries) with a
+	// time, a volume chart would misstate the file, so the overview explains
+	// the gap instead. Between this and 100% the chart says how many are timed.
+	minTimedShare = 0.5
 	minTimedLines = 2
 	// Lines sampled to classify a file and list its columns or fields.
 	timeSourceSample = 200

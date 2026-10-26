@@ -1981,7 +1981,9 @@ function LogsVolume({
           <ChevronDown className="ico" />
         </button>
         <h2>Logs volume</h2>
-        <span className="sub tnum">{hasTrend ? `Per ${unitName(data.bucketSeconds)} · hidden noise not shown` : ""}</span>
+        <span className="sub tnum">{hasTrend
+            ? `Per ${unitName(data.bucketSeconds)}${data.time.timed < data.time.lines ? ` · ${fmtCount(data.time.timed)} of ${fmtCount(data.time.lines)} lines have a time` : ""} · hidden noise not shown`
+            : ""}</span>
         <div style={{ flex: 1 }} />
         {hasTrend && !collapsed && (
           <div className="legend">
@@ -2103,7 +2105,7 @@ function NoTimes({ data, onChoose }: { data: PatternsResponse; onChoose: (column
   const canPick = (t.format === "csv" || t.format === "json") && (t.columns?.length ?? 0) > 0;
   let reason: React.ReactNode;
   if (partial) {
-    reason = `Only ${fmtCount(t.timed)} of ${fmtCount(t.lines)} lines have a time, too few to draw a chart.`;
+    reason = `Only ${fmtCount(t.timed)} of ${fmtCount(t.lines)} lines ${t.timed === 1 ? "has" : "have"} a time, too few to draw a chart.`;
   } else if (t.format === "json") {
     reason = `None of the JSON lines have a time field lapp looks for (${(t.fields ?? []).join(", ")}).${canPick ? " Pick the time field below." : ""}`;
   } else if (t.format === "csv" && canPick) {
