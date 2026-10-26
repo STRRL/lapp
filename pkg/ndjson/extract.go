@@ -4,10 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"time"
 )
 
-// messageFields are checked in order; the first string value wins.
-var messageFields = []string{"message", "msg", "log", "error"}
+// messageFields are checked in order; the first string value wins. "_msg" is
+// the VictoriaLogs message field; it comes first because VictoriaLogs query
+// results may also carry user fields such as "error" next to it.
+var messageFields = []string{"_msg", "message", "msg", "log", "error"}
+
+// timestampFields are checked in order on the top-level entry; the first
+// RFC 3339 string wins. "ts" is the envelope timestamp (ADR 0006) and "_time"
+// the VictoriaLogs one.
+var timestampFields = []string{"ts", "_time"}
 
 // severityFields are checked in order; the first string value wins.
 // Numeric levels are ignored in v1.
@@ -19,11 +27,14 @@ var severityFields = []string{"severity", "level"}
 // "<severity> <message>", just "<message>" when no severity-like string field
 // exists, or the compact payload JSON when no message-like string field
 // exists. A line that does not parse as a JSON object is returned unchanged.
-func Extract(line string) string {
+// The timestamp is kept out of the extracted line and returned separately for
+// time-based metrics; it is zero when no timestamp field parses.
+func Extract(line string) (string, time.Time) {
 	var entry map[string]any
 	if err := json.Unmarshal([]byte(line), &entry); err != nil || entry == nil {
-		return line
+		return line, time.Time{}
 	}
+	timestamp := firstTimestampField(entry)
 
 	payload, severity := splitEnvelope(entry)
 	if severity == "" {
@@ -32,12 +43,12 @@ func Extract(line string) string {
 
 	message := firstStringField(payload, messageFields)
 	if message == "" {
-		return compactJSON(payload)
+		return compactJSON(payload), timestamp
 	}
 	if severity == "" {
-		return message
+		return message, timestamp
 	}
-	return severity + " " + message
+	return severity + " " + message, timestamp
 }
 
 // splitEnvelope returns the payload object and the envelope severity when the
@@ -67,6 +78,19 @@ func firstStringField(obj map[string]any, fields []string) string {
 		}
 	}
 	return ""
+}
+
+func firstTimestampField(obj map[string]any) time.Time {
+	for _, field := range timestampFields {
+		value, ok := obj[field].(string)
+		if !ok {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
 }
 
 func compactJSON(payload map[string]any) string {

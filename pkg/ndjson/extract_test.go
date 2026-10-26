@@ -29,7 +29,8 @@ func TestExtractFixtures(t *testing.T) {
 				if strings.TrimSpace(line) == "" {
 					continue
 				}
-				extracted = append(extracted, Extract(line))
+				text, _ := Extract(line)
+				extracted = append(extracted, text)
 			}
 			got := strings.Join(extracted, "\n") + "\n"
 
@@ -46,7 +47,7 @@ func TestExtractFixtures(t *testing.T) {
 
 func TestExtractNonJSONLineIsReturnedUnchanged(t *testing.T) {
 	line := "2026-06-06 10:00:00 INFO plain text line"
-	if got := Extract(line); got != line {
+	if got, _ := Extract(line); got != line {
 		t.Fatalf("Extract(%q) = %q, want unchanged", line, got)
 	}
 }

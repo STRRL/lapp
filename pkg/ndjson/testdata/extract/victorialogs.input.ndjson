@@ -1,0 +1,2 @@
+{"_msg":"workerEnv.init() ok /etc/httpd/conf/workers2.properties","_stream":"{app=\"apache\",env=\"prod\"}","_stream_id":"0000000000000000aecde1a68873b7bf63a249bb898f73b9","_time":"2026-10-26T05:22:22Z","app":"apache","env":"prod","level":"notice"}
+{"_msg":"payment declined order=1001","_stream":"{app=\"api\"}","_stream_id":"00000000000000001a2b3c4d5e6f708192a3b4c5d6e7f809","_time":"2026-10-26T05:22:23.125Z","app":"api","error":"card expired"}
