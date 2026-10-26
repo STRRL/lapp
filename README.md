@@ -19,6 +19,15 @@ kubectl logs deploy/api | lapp --name api.log   # a pipe
 
 lapp finds the patterns and opens them in your browser. To pull logs from GCP Cloud Logging or VictoriaLogs, use **Import logs** in the page. A VictoriaLogs import splits logs by stream into one service each, named by the stream's `service.name`, `service`, `app` or `job` label, so each service keeps its own noise rules. VictoriaLogs credentials come from `VICTORIALOGS_BEARER_TOKEN`, or `VICTORIALOGS_USERNAME` and `VICTORIALOGS_PASSWORD`, in the environment or `.env` where lapp runs; the page never asks for them.
 
+If VictoriaLogs is only reachable through Grafana, point `--url` at the Grafana data source proxy and use a Grafana service account token:
+
+```bash
+VICTORIALOGS_BEARER_TOKEN=<grafana-service-account-token> \
+  lapp workspace import victorialogs --topic prod --since 30m \
+  --url https://grafana.example.com/api/datasources/proxy/uid/<datasource-uid> \
+  --query 'service.name:postgres_logs'
+```
+
 1. **Start here.** A short list of the patterns most likely to be the problem: spiking errors first, then new errors, then other spikes.
 2. **Investigate.** Click **Investigate** on any of them. Your local Claude Code or Codex reads the filtered patterns and explains the likely cause, citing the patterns and times it relied on.
 3. **Filter.** Patterns that look like noise are already filtered, with the reason shown. Check or uncheck any pattern. The share filtered and the lines left update as you go.
