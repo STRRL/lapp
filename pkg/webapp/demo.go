@@ -92,9 +92,8 @@ type demoPattern struct {
 	Count       int      `json:"count"`
 	Level       string   `json:"level"`
 	Buckets     []int    `json:"buckets"`
-	Suggestion  string   `json:"suggestion"` // "noise", "maybe" or ""
+	Suggestion  string   `json:"suggestion"` // "noise" or ""
 	Reason      string   `json:"reason"`
-	KeptReason  string   `json:"keptReason,omitempty"`
 	Filtered    bool     `json:"filtered"`
 	SteadyError bool     `json:"steadyError,omitempty"` // error-like, high share, present most of the time
 	SpikeAt     *int     `json:"spikeAt,omitempty"`
@@ -593,7 +592,7 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 		markTrends(p)
 		// Suggestions are only marks: nothing is hidden unless a saved rule hides it.
 		if contains(rules.NotNoise, p.ID) && p.Suggestion != "" {
-			p.Suggestion, p.Reason, p.KeptReason = "", "", ""
+			p.Suggestion, p.Reason = "", ""
 		}
 		p.Filtered = contains(rules.Filtered, p.ID)
 		if p.Filtered {
@@ -768,7 +767,9 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		p.SteadyError = steady && share >= steadyErrorMinShare
 		return
 	}
-	if share < noiseMinShare {
+	// A pattern that comes in bursts is not marked: nothing is marked
+	// unless it is likely noise.
+	if share < noiseMinShare || !steady {
 		return
 	}
 	parts := []string{formatPercent(share)}
@@ -779,12 +780,7 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	default:
 		parts = append(parts, fmt.Sprintf("in %d of %d %s", present, bucketCount, pluralUnit(unit)))
 	}
-	switch {
-	case !steady:
-		p.Suggestion, p.KeptReason = "maybe", "comes in bursts"
-	default:
-		p.Suggestion = "noise"
-	}
+	p.Suggestion = "noise"
 	p.Reason = strings.Join(parts, " · ")
 }
 

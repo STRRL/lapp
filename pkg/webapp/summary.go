@@ -51,7 +51,7 @@ type SummaryPattern struct {
 }
 
 type SummaryNoise struct {
-	Suggestion string `json:"suggestion"` // likely, maybe
+	Suggestion string `json:"suggestion"` // likely
 	Reason     string `json:"reason"`
 }
 
@@ -140,11 +140,8 @@ func buildSummary(a *analysis) *Summary {
 		if p.Filtered {
 			s.FilteredLines += p.Count
 		}
-		switch p.Suggestion {
-		case "noise":
+		if p.Suggestion == "noise" {
 			sp.Noise = &SummaryNoise{Suggestion: "likely", Reason: p.Reason}
-		case "maybe":
-			sp.Noise = &SummaryNoise{Suggestion: "maybe", Reason: p.KeptReason}
 		}
 		if p.SpikeAt != nil && r.BucketStart != nil {
 			sp.Spike = &SummarySpike{At: slotTime(*p.SpikeAt), Lines: p.Buckets[*p.SpikeAt], Per: bucketUnit(r.BucketSeconds)}

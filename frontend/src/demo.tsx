@@ -10,7 +10,6 @@ import {
   Eye,
   EyeOff,
   File as FileIcon,
-  Info,
   KeyRound,
   LoaderCircle,
   OctagonAlert,
@@ -62,9 +61,8 @@ type DemoPattern = {
   count: number;
   level: string;
   buckets: number[];
-  suggestion: "noise" | "maybe" | "";
+  suggestion: "noise" | "";
   reason: string;
-  keptReason?: string;
   filtered: boolean;
   steadyError?: boolean;
   spikeAt?: number;
@@ -151,6 +149,11 @@ async function getJSON<T>(url: string, init?: RequestInit): Promise<T> {
 export function formatPercent(part: number, total: number) {
   if (total === 0) return "0.0%";
   return `${(Math.round((part / total) * 1000) / 10).toFixed(1)}%`;
+}
+
+// hiddenText says how much of an import is hidden as noise.
+function hiddenText(hiddenLines: number, total: number) {
+  return hiddenLines === 0 ? "Nothing hidden" : `${formatPercent(hiddenLines, total)} hidden`;
 }
 
 const fmtCount = (n: number) => n.toLocaleString("en-US");
@@ -612,7 +615,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
 
             <div className="field">
               <label htmlFor="svc">
-                Service <span>Saved noise rules for this service apply automatically</span>
+                Service <span>lapp remembers what you hide for this service.</span>
               </label>
               <div className="combo">
                 <input id="svc" value={service} placeholder="e.g. api" onChange={(e) => setService(e.target.value)} />
@@ -680,7 +683,7 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
               <b className="ell">{w.service}</b>
               <span className="mono ell">{w.title}</span>
               <span className="tnum">
-                {fmtCount(w.lineCount)} lines · {w.patternCount} patterns · {formatPercent(w.filteredLines, w.lineCount)} filtered
+                {fmtCount(w.lineCount)} lines · {w.patternCount} patterns · {hiddenText(w.filteredLines, w.lineCount)}
               </span>
               <span className="tnum">{timeAgo(w.updatedAt)}</span>
               <ChevronRight className="ico" />
@@ -809,7 +812,7 @@ function GCPForm({ onStarted }: { onStarted: (id: string, name: string) => void 
         </div>
         <div className="field">
           <label htmlFor="gcp-service">
-            Service <span>Saved noise rules for this service apply automatically</span>
+            Service <span>lapp remembers what you hide for this service.</span>
           </label>
           <input id="gcp-service" value={service} placeholder={project ? project.toLowerCase() : "e.g. api"} onChange={(e) => setService(e.target.value)} />
         </div>
@@ -896,7 +899,9 @@ function ServicesProcessing({
     <main className="imp">
       <h1>{name}</h1>
       <p className="lead">
-        {workspaces.length} {workspaces.length === 1 ? "service" : "services"}, one workspace each. Saved noise rules for each service apply automatically.
+        {workspaces.length === 1
+          ? "Found 1 service. lapp remembers what you hide for it."
+          : `Found ${workspaces.length} services. lapp remembers what you hide for each one.`}
       </p>
       <section className="recent">
         {workspaces.map((w) => {
@@ -970,7 +975,7 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
       </div>
       <div className="field">
         <label htmlFor="vl-query">
-          LogsQL filter <span>optional, defaults to all logs</span>
+          LogsQL filter <span>optional · leave empty for all logs</span>
         </label>
         <input id="vl-query" className="mono" value={query} placeholder="error OR warn" onChange={(e) => setQuery(e.target.value)} />
       </div>
@@ -990,8 +995,8 @@ function VictoriaLogsForm({ onStarted }: { onStarted: (name: string, workspaces:
           </div>
         )}
         <p className="hint">
-          Each log stream becomes a service, named by its service.name, service, app, or job label. Credentials come from VICTORIALOGS_* variables where lapp runs. Stops at
-          100,000 lines per service.
+          lapp makes one service per log stream, named by its service.name, service, app or job label. Credentials come from the VICTORIALOGS_* environment variables on the
+          machine running lapp. Stops at 100,000 lines per service.
         </p>
       </div>
       {error && <p className="err">Couldn't import from VictoriaLogs. {error}</p>}
@@ -1120,7 +1125,7 @@ function PatternList({
       setFiltered((prev) => edit(prev, false));
     }
     if (decision === "not-noise") {
-      setData({ ...data, patterns: data.patterns.map((p) => (ids.includes(p.id) ? { ...p, suggestion: "", reason: "", keptReason: "" } : p)) });
+      setData({ ...data, patterns: data.patterns.map((p) => (ids.includes(p.id) ? { ...p, suggestion: "", reason: "" } : p)) });
     }
     const done =
       decision === "hide"
@@ -1233,7 +1238,6 @@ function PatternList({
   const total = data.workspace.lineCount;
   const filteredLines = hidden.reduce((s, p) => s + p.count, 0);
   const left = total - filteredLines;
-  const hiddenText = filteredLines === 0 ? "Nothing hidden" : `${formatPercent(filteredLines, total)} hidden`;
   const likelyNoise = visible.filter((p) => p.suggestion === "noise" && !leaving.has(p.id));
   const likelyNoiseLines = likelyNoise.reduce((s, p) => s + p.count, 0);
   const fileName = data.fileNames[0] ?? data.workspace.title;
@@ -1336,12 +1340,12 @@ function PatternList({
           <div className="summary">
             <div className="meter">
               <div className="meter-num tnum">
-                <b>{hiddenText}</b>
+                <b>{hiddenText(filteredLines, total)}</b>
                 <span>
                   <b>{fmtCount(left)}</b> lines left · <b>{visible.length}</b> patterns · <b>{fmtCount(data.unmatched.count)}</b> unmatched lines
                 </span>
               </div>
-              <div className="meter-bar" role="img" aria-label={hiddenText}>
+              <div className="meter-bar" role="img" aria-label={hiddenText(filteredLines, total)}>
                 <i style={{ width: formatPercent(left, total) }} />
               </div>
             </div>
@@ -1936,19 +1940,12 @@ function Row({
               New since last time{p.newAt !== undefined ? ` · first seen ${bucketLabel(data, p.newAt)}` : ""}
             </span>
           )}
-          {p.suggestion === "maybe" && !filtered && (
-            <span className="badge b-maybe" title="Not filtered. Decide for yourself.">
-              <Info className="ico" />
-              Maybe noise
-            </span>
-          )}
         </div>
         {p.named && (
           <div className="ptpl mono">
             <Template text={p.template} patternId={p.id} />
           </div>
         )}
-        {p.suggestion === "maybe" && !filtered && <div className="why">Why it's not filtered: {p.keptReason}</div>}
       </div>
       <div className="cell-level col-level">
         <LevelBadge level={p.level} />
@@ -2481,7 +2478,6 @@ function Drawer({
             )}
           </div>
           {target.suggestion === "noise" && <div className="why">Why it looks like noise: {target.reason}</div>}
-          {target.suggestion === "maybe" && <div className="why">Why it's not filtered: {target.keptReason}</div>}
         </>
       )}
 
