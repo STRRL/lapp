@@ -1315,14 +1315,16 @@ func unmaskedTokens(line string, masks []logheader.Mask) []string {
 	if len(masks) == 0 {
 		return toks
 	}
-	// fieldTokens keeps every byte offset: delimiters become single spaces.
-	at := len(line) - len(strings.TrimLeftFunc(line, unicode.IsSpace))
+	// Offsets count in the text fieldTokens splits: delimiters become single
+	// spaces (same length), then leading spaces, delimiters included, go.
+	spaced := fieldText(line)
+	at := len(spaced) - len(strings.TrimLeftFunc(spaced, unicode.IsSpace))
 	m := 0
 	for i, t := range toks {
 		var b strings.Builder
 		last := 0
 		for m < len(masks) && masks[m].At < at+len(t) {
-			if p := masks[m].At - at; p >= last {
+			if p := masks[m].At - at; p >= last && p+len("<*>") <= len(t) && t[p:p+len("<*>")] == "<*>" {
 				b.WriteString(t[last:p])
 				b.WriteString(masks[m].Text)
 				last = p + len("<*>")
@@ -1337,10 +1339,15 @@ func unmaskedTokens(line string, masks []logheader.Mask) []string {
 }
 
 func fieldTokens(s string) []string {
+	return strings.Split(strings.TrimSpace(fieldText(s)), " ")
+}
+
+// fieldText replaces the field delimiters with spaces, keeping offsets.
+func fieldText(s string) string {
 	for _, d := range []string{"|", "=", ","} {
 		s = strings.ReplaceAll(s, d, " ")
 	}
-	return strings.Split(strings.TrimSpace(s), " ")
+	return s
 }
 
 // handlePatternDetail computes per-field metrics for one pattern: number
@@ -1387,7 +1394,7 @@ func (a *analysis) patternDetail(idx int) demoPatternDetail {
 		for k := range parts {
 			parts[k] = regexp.QuoteMeta(parts[k])
 		}
-		slots = append(slots, slot{i, regexp.MustCompile("^" + strings.Join(parts, "(.*?)") + "$")})
+		slots = append(slots, slot{i, regexp.MustCompile("(?s)^" + strings.Join(parts, "(.*?)") + "$")})
 		fields += len(parts) - 1
 	}
 	nb := len(a.resp.Patterns[idx].Buckets)

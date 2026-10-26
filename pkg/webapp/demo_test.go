@@ -613,7 +613,7 @@ func TestUUIDListsAreOnePattern(t *testing.T) {
 // A masked UUID is still a field with its real values: bare, inside a token,
 // or after a <*> the log itself contains.
 func TestMaskedUUIDKeepsFieldValues(t *testing.T) {
-	for _, format := range []string{"user %s logged in", "user (%s) logged in", "rule <*> matched user %s"} {
+	for _, format := range []string{"user %s logged in", "user (%s) logged in", "rule <*> matched user %s", "|request user %s completed", "ids in (%s,\n  " + "0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d) done"} {
 		t.Run(format, func(t *testing.T) {
 			var body strings.Builder
 			for i := 0; i < 12; i++ {
