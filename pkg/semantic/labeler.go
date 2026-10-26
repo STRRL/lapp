@@ -23,6 +23,9 @@ type Config struct {
 	APIKey     string
 	Model      string
 	HTTPClient *http.Client
+	// Mask replaces emails, IPs and tokens in patterns and samples before
+	// they are sent.
+	Mask bool
 }
 
 // PatternInput represents a log pattern to be labeled.
@@ -65,6 +68,9 @@ func Label(ctx context.Context, config Config, patterns []PatternInput) ([]Seman
 	config.Model = llmconfig.ResolveModel(config.Model)
 	span.SetAttributes(attribute.String("model", config.Model))
 
+	if config.Mask {
+		patterns = MaskInputs(patterns)
+	}
 	prompt := buildPrompt(patterns)
 	resp, err := callLLM(ctx, config, prompt)
 	if err != nil {

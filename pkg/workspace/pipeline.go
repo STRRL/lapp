@@ -40,6 +40,8 @@ type DiscoveryConfig struct {
 	LabelConcurrency int
 	LabelMaxAttempts int
 	Labeler          PatternLabeler
+	// Mask replaces emails, IPs and tokens before samples are sent for naming.
+	Mask bool
 }
 
 // DiscoveryResult summarizes a completed discovery run.
@@ -567,6 +569,7 @@ func labelPatternBatch(
 		labels, err := labeler(batchCtx, semantic.Config{
 			APIKey: config.APIKey,
 			Model:  config.Model,
+			Mask:   config.Mask,
 		}, batch)
 		cancel()
 		if err == nil {

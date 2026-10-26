@@ -7,40 +7,52 @@ type Preview = {
   patterns: { template: string; samples: string[] }[];
   sampleLines: number;
   tokens: number;
+  tokensMasked: number;
+  mask: boolean;
   requests: number;
 };
 
 // Bits worth a second look before they leave the machine.
-const SENSITIVE: { kind: string; re: RegExp }[] = [
-  { kind: "Looks like an email", re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
-  { kind: "Looks like an IP address", re: /\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b/gi },
-  { kind: "Looks like a token or key", re: /\b(?:eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{5,}|(?:sk|pk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{12,}|[A-Za-z0-9+/_-]{32,}={0,2})\b/g }
+// Keep in sync with pkg/semantic/mask.go, which masks the same bits server-side.
+const SENSITIVE: { kind: string; placeholder: string; re: RegExp }[] = [
+  { kind: "Looks like an email", placeholder: "<email>", re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g },
+  { kind: "Looks like an IP address", placeholder: "<ip>", re: /\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:[0-9a-f]{1,4}:){3,7}[0-9a-f]{1,4}\b/gi },
+  { kind: "Looks like a token or key", placeholder: "<token>", re: /\b(?:eyJ[\w-]{10,}\.[\w-]{10,}\.[\w-]{5,}|(?:sk|pk|ghp|gho|xox[abp])[-_][A-Za-z0-9_-]{12,}|[A-Za-z0-9+/_-]{32,}={0,2})\b/g }
 ];
 
-type Hit = { start: number; end: number; kind: string };
+type Hit = { start: number; end: number; kind: string; placeholder: string };
 
 function findHits(line: string): Hit[] {
   const hits: Hit[] = [];
-  for (const { kind, re } of SENSITIVE) {
+  for (const { kind, placeholder, re } of SENSITIVE) {
     for (const m of line.matchAll(re)) {
       const start = m.index ?? 0;
       const end = start + m[0].length;
-      if (!hits.some((h) => start < h.end && end > h.start)) hits.push({ start, end, kind });
+      if (!hits.some((h) => start < h.end && end > h.start)) hits.push({ start, end, kind, placeholder });
     }
   }
   return hits.sort((a, b) => a.start - b.start);
 }
 
-function Highlighted({ line }: { line: string }) {
+// With mask on, shows the placeholder that is actually sent; the original
+// is only in the tooltip.
+function Highlighted({ line, mask }: { line: string; mask: boolean }) {
   const hits = findHits(line);
   const out: React.ReactNode[] = [];
   let last = 0;
   hits.forEach((h, i) => {
     out.push(line.slice(last, h.start));
+    const original = line.slice(h.start, h.end);
     out.push(
-      <mark key={i} className="sens" title={h.kind}>
-        {line.slice(h.start, h.end)}
-      </mark>
+      mask ? (
+        <span key={i} className="ph masked" title={`${h.kind}: ${original} (not sent)`}>
+          {h.placeholder}
+        </span>
+      ) : (
+        <mark key={i} className="sens" title={h.kind}>
+          {original}
+        </mark>
+      )
     );
     last = h.end;
   });
@@ -62,11 +74,15 @@ export function PreviewDialog({
   const [data, setData] = useState<Preview | null>(null);
   const [error, setError] = useState("");
   const [remember, setRemember] = useState(false);
+  const [mask, setMask] = useState(true);
   const [sending, setSending] = useState(false);
   useEffect(() => {
     fetch(`/api/demo/llm-preview?ws=${encodeURIComponent(wsId)}`)
       .then(async (r) => (r.ok ? r.json() : Promise.reject(new Error((await r.json()).error))))
-      .then(setData)
+      .then((d: Preview) => {
+        setData(d);
+        setMask(d.mask);
+      })
       .catch((e) => setError(String(e.message ?? e)));
   }, [wsId]);
   useEffect(() => {
@@ -80,7 +96,7 @@ export function PreviewDialog({
   const send = async () => {
     setSending(true);
     setError("");
-    const res = await fetch(`/api/demo/name?ws=${encodeURIComponent(wsId)}${remember ? "&remember=1" : ""}`, { method: "POST" });
+    const res = await fetch(`/api/demo/name?ws=${encodeURIComponent(wsId)}&mask=${mask ? 1 : 0}${remember ? "&remember=1" : ""}`, { method: "POST" });
     if (!res.ok) {
       setError((await res.json()).error ?? res.statusText);
       setSending(false);
@@ -101,23 +117,34 @@ export function PreviewDialog({
         <p className="lead-plain">To name patterns, lapp sends these sample lines. Nothing else is sent.</p>
         {data && (
           <div className="modal-stats tnum">
-            {data.patterns.length} patterns · {data.sampleLines} sample lines · about {data.tokens.toLocaleString("en-US")} tokens · model {data.model}
+            {data.patterns.length} patterns · {data.sampleLines} sample lines · about {(mask ? data.tokensMasked : data.tokens).toLocaleString("en-US")} tokens ·
+            model {data.model}
           </div>
         )}
         {flagged > 0 && (
-          <div className="modal-warn">{flagged} highlighted bits look like emails, IP addresses or tokens. Check them before sending.</div>
+          <div className="modal-warn">
+            <span>
+              {mask
+                ? `${flagged} ${flagged === 1 ? "bit" : "bits"} will be masked.`
+                : `${flagged} highlighted ${flagged === 1 ? "bit looks" : "bits look"} like emails, IP addresses or tokens. Check them before sending.`}
+            </span>
+            <label className="mask-toggle" title="Replaces highlighted bits with <ip>, <email> or <token>. Naming only needs the sentence shape.">
+              <input type="checkbox" checked={mask} onChange={(e) => setMask(e.target.checked)} />
+              Mask before sending
+            </label>
+          </div>
         )}
         <div className="modal-body">
           {!data && !error && <p className="sub">Loading…</p>}
           {data?.patterns.map((p, i) => (
             <section key={i} className="pv-block">
               <div className="pv-tpl mono">
-                <Highlighted line={p.template} />
+                <Highlighted line={p.template} mask={mask} />
               </div>
               <pre className="pv-lines mono">
                 {p.samples.map((l, j) => (
                   <div key={j}>
-                    <Highlighted line={l} />
+                    <Highlighted line={l} mask={mask} />
                   </div>
                 ))}
               </pre>

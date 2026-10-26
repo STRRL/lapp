@@ -203,3 +203,8 @@
 .dz .pv-lines { margin: 6px 0 0; font-size: 12px; line-height: 18px; white-space: pre-wrap; word-break: break-all; }
 .dz mark.sens { background: var(--warning-soft); color: var(--warning-text); outline: 1px solid var(--warning); border-radius: 2px; cursor: help; }
 .dz .modal .chk .cb { font-size: 11px; display: inline-grid; place-items: center; }
+.dz .modal-warn { display: flex; align-items: center; gap: 12px; }
+.dz .modal-warn > span { flex: 1; }
+.dz .mask-toggle { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.dz .mask-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
+.dz .ph.masked { cursor: help; }

@@ -203,7 +203,7 @@ func (d *demoAPI) handleImport(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
-		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.namingKey(service), Model: d.model}); err != nil {
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.namingKey(service), Model: d.model, Mask: d.namingMask(service)}); err != nil {
 			slog.Error("import failed", "workspace", id, "error", err)
 		}
 	}()
@@ -216,7 +216,7 @@ func (d *demoAPI) importLog(ctx context.Context, name string, body io.Reader) (s
 	if err != nil {
 		return "", err
 	}
-	if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model}); err != nil {
+	if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model, Mask: d.namingMask(svc)}); err != nil {
 		return "", err
 	}
 	return id, nil
@@ -1323,7 +1323,7 @@ func (d *demoAPI) handleImportGCP(w http.ResponseWriter, r *http.Request) {
 		if res.EntryCount == 0 {
 			return
 		}
-		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model}); err != nil {
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, APIKey: d.namingKey(svc), Model: d.model, Mask: d.namingMask(svc)}); err != nil {
 			slog.Error("discovery failed", "workspace", id, "error", err)
 		}
 	}()
@@ -1432,6 +1432,22 @@ func (d *demoAPI) namingApproved(service string) bool {
 	return err == nil
 }
 
+// namingMask reports whether sensitive-looking bits are masked before naming
+// (the default; turned off only by approving with "Mask before sending" off).
+func (d *demoAPI) namingMask(service string) bool {
+	b, err := os.ReadFile(d.namingFlag(service))
+	if err != nil {
+		return true
+	}
+	var v struct {
+		Mask *bool `json:"mask"`
+	}
+	if json.Unmarshal(b, &v) != nil || v.Mask == nil {
+		return true
+	}
+	return *v.Mask
+}
+
 // namingKey returns the OpenRouter key only when naming is approved for the
 // service; otherwise discovery keeps raw-text names.
 func (d *demoAPI) namingKey(service string) string {
@@ -1458,15 +1474,19 @@ func (d *demoAPI) handleLLMPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := struct {
-		Model       string           `json:"model"`
-		KeySet      bool             `json:"keySet"`
-		Patterns    []previewPattern `json:"patterns"`
-		SampleLines int              `json:"sampleLines"`
-		Tokens      int              `json:"tokens"`
-		Requests    int              `json:"requests"`
-	}{Model: llmconfig.ResolveModel(d.model), KeySet: d.apiKey != "", Patterns: []previewPattern{}, Requests: len(batches)}
+		Model        string           `json:"model"`
+		KeySet       bool             `json:"keySet"`
+		Patterns     []previewPattern `json:"patterns"`
+		SampleLines  int              `json:"sampleLines"`
+		Tokens       int              `json:"tokens"`
+		TokensMasked int              `json:"tokensMasked"`
+		Mask         bool             `json:"mask"`
+		Requests     int              `json:"requests"`
+	}{Model: llmconfig.ResolveModel(d.model), KeySet: d.apiKey != "", Patterns: []previewPattern{}, Requests: len(batches),
+		Mask: d.namingMask(readService(filepath.Join(d.root, id), id))}
 	for _, batch := range batches {
 		out.Tokens += len(semantic.BuildPrompt(batch)) / 4
+		out.TokensMasked += len(semantic.BuildPrompt(semantic.MaskInputs(batch))) / 4
 		for _, p := range batch {
 			out.Patterns = append(out.Patterns, previewPattern{Template: p.Pattern, Samples: p.Samples})
 			out.SampleLines += len(p.Samples)
@@ -1489,12 +1509,14 @@ func (d *demoAPI) handleName(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := filepath.Join(d.root, id)
 	service := readService(dir, id)
+	mask := r.URL.Query().Get("mask") != "0"
 	if r.URL.Query().Get("remember") == "1" {
 		if err := os.MkdirAll(d.rulesDir, 0o755); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		if err := os.WriteFile(d.namingFlag(service), []byte(time.Now().UTC().Format(time.RFC3339)), 0o644); err != nil {
+		flag, _ := json.Marshal(map[string]any{"approvedAt": time.Now().UTC().Format(time.RFC3339), "mask": mask})
+		if err := os.WriteFile(d.namingFlag(service), flag, 0o644); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
@@ -1507,7 +1529,7 @@ func (d *demoAPI) handleName(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
-		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.apiKey, Model: d.model}); err != nil {
+		if _, err := workspace.Discover(ctx, workspace.DiscoveryConfig{Dir: dir, RunID: runID.String(), APIKey: d.apiKey, Model: d.model, Mask: mask}); err != nil {
 			slog.Error("naming failed", "workspace", id, "error", err)
 		}
 	}()
