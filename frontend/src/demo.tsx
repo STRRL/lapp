@@ -209,12 +209,73 @@ function serviceFromFileName(name: string) {
   return stem.split(/[^a-z0-9]+/).filter(Boolean)[0] ?? "logs";
 }
 
-// Series colors are the design tokens --s1…--s8 (values in design.css); hidden patterns use --s-other.
+// Series colors are the design tokens --s1…--s8 (values in design.css). Only the
+// patterns the volume chart draws as their own series (volumeSplit) show their
+// saved color; every other pattern, hidden ones included, uses --s-other.
 const SERIES_COLORS = 8;
 const OTHER = "var(--s-other)";
-// The one color for a pattern everywhere: list dot, volume chart, legend, Start here.
-const patternColor = (p: DemoPattern, hidden: boolean) =>
-  !hidden && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
+// The one color for a pattern everywhere: list dot, trend, volume chart, legend, Start here, detail, Investigate.
+const patternColor = (p: DemoPattern, charted: boolean) =>
+  charted && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
+
+// The one way a pattern name is shown: on one line, cut to n characters, and
+// apart from every other pattern in the workspace. Where two cut names would
+// read the same, each starts from its first difference with a leading "…"
+// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
+// fieldOffset is the number of <*> fields cut off the front, for Template.
+type PatternLabel = { text: string; fieldOffset: number };
+type LabelOf = (p: { id: string; name: string }, n: number) => PatternLabel;
+
+// Character budgets per place; the list and Start here also cut on width.
+const NAME_ROW = 72;
+const NAME_NOTICE = 40;
+const NAME_LEGEND = 32;
+const NAME_TIP = 38;
+
+// Cuts s to n characters with a trailing "…", never inside a <*> field.
+function cutName(s: string, n: number) {
+  if (s.length <= n) return s;
+  const field = s.lastIndexOf("<*>", n - 1);
+  const end = field >= 0 && field + 3 > n ? field : n;
+  return `${s.slice(0, end)}…`;
+}
+
+function patternLabels(names: string[], n: number): PatternLabel[] {
+  const flat = names.map((s) => s.replace(/\s+/g, " ").trim());
+  const cut = flat.map((s) => cutName(s, n));
+  const byCut = new Map<string, number[]>();
+  cut.forEach((c, i) => byCut.set(c, [...(byCut.get(c) ?? []), i]));
+  return flat.map((name, i) => {
+    let from = 0;
+    for (const j of byCut.get(cut[i])!) {
+      const other = flat[j];
+      if (other === name) continue;
+      let k = 0;
+      while (k < name.length && name[k] === other[k]) k++;
+      from = Math.max(from, k);
+    }
+    if (from === 0) return { text: cut[i], fieldOffset: 0 };
+    const word = name.lastIndexOf(" ", from - 1) + 1;
+    if (from - word <= 12) from = word;
+    const field = name.lastIndexOf("<*>", from - 1);
+    if (field >= 0 && field + 3 > from) from = field;
+    return { text: `…${cutName(name.slice(from), n - 1)}`, fieldOffset: name.slice(0, from).split("<*>").length - 1 };
+  });
+}
+
+// labelOf for one workspace's patterns: labels are computed once per length.
+function patternNamer(patterns: { id: string; name: string }[]): LabelOf {
+  const byLength = new Map<number, Map<string, PatternLabel>>();
+  return (p, n) => {
+    let labels = byLength.get(n);
+    if (!labels) {
+      const list = patternLabels(patterns.map((x) => x.name), n);
+      labels = new Map(patterns.map((x, i) => [x.id, list[i]]));
+      byLength.set(n, labels);
+    }
+    return labels.get(p.id) ?? patternLabels([p.name], n)[0];
+  };
+}
 
 function useToast() {
   const [toast, setToast] = useState<string | null>(null);
@@ -1115,6 +1176,9 @@ function PatternList({
     return b.count - a.count;
   };
   const visible = data ? data.patterns.filter((p) => !filtered.has(p.id)) : [];
+  const volume = volumeSplit(visible);
+  const charted = new Set(volume.top.map((p) => p.id));
+  const labelOf = useMemo(() => patternNamer(data?.patterns ?? []), [data?.patterns]);
   const hidden = data ? data.patterns.filter((p) => filtered.has(p.id)) : [];
   const visibleRows = visible.filter(matches).sort(sorter);
   const hiddenRows = hidden.filter(matches).sort(sorter);
@@ -1174,7 +1238,7 @@ function PatternList({
   const likelyNoiseLines = likelyNoise.reduce((s, p) => s + p.count, 0);
   const fileName = data.fileNames[0] ?? data.workspace.title;
   const service = data.workspace.service;
-  const colorOf = (p: DemoPattern) => patternColor(p, filtered.has(p.id));
+  const colorOf = (p: DemoPattern) => patternColor(p, charted.has(p.id));
 
   const exportHref =
     `/api/demo/export?ws=${encodeURIComponent(wsId)}` +
@@ -1192,7 +1256,7 @@ function PatternList({
             <React.Fragment key={p.id}>
               {i > 0 && ", "}
               <button className="noise-name" title={p.name} onClick={() => jumpTo(p.id)}>
-                {short(p.name, 40)}
+                {labelOf(p, NAME_NOTICE).text}
               </button>
             </React.Fragment>
           ))}
@@ -1319,12 +1383,14 @@ function PatternList({
             </div>
           )}
 
-          <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
+          <StartHere data={data} items={startHere(data, filtered)} colorOf={colorOf} labelOf={labelOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
 
           <LogsVolume
             data={data}
-            patterns={visible}
+            top={volume.top}
+            rest={volume.rest}
             colorOf={colorOf}
+            labelOf={labelOf}
             highlight={hoverId}
             onOpen={(id) => select(id)}
             onChooseTimeColumn={async (column) => {
@@ -1414,6 +1480,7 @@ function PatternList({
                 data={data}
                 total={total}
                 color={colorOf(p)}
+                labelOf={labelOf}
                 hidden={false}
                 leaving={leaving.has(p.id)}
                 flashKey={flash?.id === p.id ? flash.key : undefined}
@@ -1461,6 +1528,7 @@ function PatternList({
                       data={data}
                       total={total}
                       color={colorOf(p)}
+                labelOf={labelOf}
                       hidden
                       hovered={hoverId === p.id}
                       selected={selected !== "unmatched" && selected?.id === p.id}
@@ -1509,6 +1577,7 @@ function PatternList({
               data={data}
               start={inv}
               colorOf={(p) => colorOf(p as DemoPattern)}
+              labelOf={labelOf}
               filtered={filtered}
               onClose={() => setInv(null)}
               onCite={(p) => {
@@ -1575,30 +1644,6 @@ function PatternList({
   );
 }
 
-function short(s: string, n: number) {
-  return s.length > n ? `${s.slice(0, n)}…` : s;
-}
-
-// Labels cut to n characters that stay apart: where two cut labels would be
-// the same, each starts from its first difference with a leading "…"
-// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
-function distinctLabels(names: string[], n: number) {
-  const cut = names.map((s) => short(s, n));
-  return names.map((name, i) => {
-    let from = 0;
-    names.forEach((other, j) => {
-      if (j === i || cut[j] !== cut[i] || other === name) return;
-      let k = 0;
-      while (k < name.length && name[k] === other[k]) k++;
-      from = Math.max(from, k);
-    });
-    if (from === 0) return cut[i];
-    const word = name.lastIndexOf(" ", from - 1) + 1;
-    if (from - word <= 12) from = word;
-    return `…${short(name.slice(from), n - 1)}`;
-  });
-}
-
 // Unnamed display names drop a leading "[error]" marker; it never contains
 // <*>, so field positions line up with the template.
 const levelOffset = (p: DemoPattern) => (p.template.split("<*>").length - p.name.split("<*>").length);
@@ -1621,12 +1666,14 @@ function StartHere({
   data,
   items,
   colorOf,
+  labelOf,
   onOpen,
   onInvestigate
 }: {
   data: PatternsResponse;
   items: DemoPattern[];
   colorOf: (p: DemoPattern) => string;
+  labelOf: LabelOf;
   onOpen: (p: DemoPattern) => void;
   onInvestigate?: (p: DemoPattern) => void;
 }) {
@@ -1639,17 +1686,19 @@ function StartHere({
       {items.length === 0 ? (
         <p className="sub sh-empty">Nothing stands out: no errors, spikes or new patterns.</p>
       ) : (
-        items.map((p) => (
+        items.map((p) => {
+          const label = labelOf(p, NAME_ROW);
+          return (
           <div key={p.id} className="sh-row" role="button" tabIndex={0} onClick={() => onOpen(p)} onKeyDown={(e) => e.key === "Enter" && onOpen(p)}>
             <i className="dot" style={{ background: colorOf(p) }} />
             <div className="sh-main">
               {p.named ? (
                 <b className="ell" title={p.name}>
-                  {p.name.split("\n")[0]}
+                  {label.text}
                 </b>
               ) : (
                 <b className="unnamed ell" title={p.name}>
-                  <Template text={p.name.split("\n")[0]} patternId={p.id} offset={levelOffset(p)} />
+                  <Template text={label.text} patternId={p.id} offset={levelOffset(p) + label.fieldOffset} />
                 </b>
               )}
               <span className={`sh-why ${p.spikeAt !== undefined || p.sinceLast === "up" ? "is-up" : p.steadyError ? "is-err" : "is-new"}`}>
@@ -1677,7 +1726,8 @@ function StartHere({
             )}
             <ChevronRight className="ico cell-chev" />
           </div>
-        ))
+          );
+        })
       )}
     </section>
   );
@@ -1797,6 +1847,7 @@ function Row({
   data,
   total,
   color,
+  labelOf,
   hidden: filtered,
   leaving,
   flashKey,
@@ -1809,6 +1860,7 @@ function Row({
   data: PatternsResponse;
   total: number;
   color: string;
+  labelOf: LabelOf;
   hidden: boolean;
   leaving?: boolean;
   flashKey?: number;
@@ -1818,6 +1870,7 @@ function Row({
   onOpen: () => void;
 }) {
   const share = formatPercent(p.count, total);
+  const label = labelOf(p, NAME_ROW);
   const hasTrend = data.bucketSeconds > 0;
   const noise = p.suggestion === "noise";
   const noiseTag = noise && (
@@ -1849,7 +1902,7 @@ function Row({
             <i className="dot" style={{ background: color }} />
             {noiseTag}
             <b className="unnamed ell" title="Not named yet — add an OpenRouter key to get readable names">
-              <Template text={p.name} patternId={p.id} offset={levelOffset(p)} />
+              <Template text={label.text} patternId={p.id} offset={levelOffset(p) + label.fieldOffset} />
             </b>
           </div>
         )}
@@ -1858,7 +1911,7 @@ function Row({
             <>
               <i className="dot" style={{ background: color }} />
               {noiseTag}
-              <b>{p.name}</b>
+              <b title={p.name}>{label.text}</b>
             </>
           )}
           <span className="level-inline">
@@ -1979,6 +2032,12 @@ function useWidth<T extends HTMLElement>(fallback: number) {
 
 const VOLUME_COLLAPSED_KEY = "lapp-logs-volume-collapsed";
 const VOLUME_TOP = 8;
+// The volume chart draws the top VOLUME_TOP visible patterns (by lines, as the
+// server sorts them) as their own series and sums the rest into "Other". This
+// split is also the one source of which patterns show their own color.
+function volumeSplit(visible: DemoPattern[]) {
+  return { top: visible.slice(0, VOLUME_TOP), rest: visible.slice(VOLUME_TOP) };
+}
 // "Other" in the volume chart is darker than --s-other so it reads as a sum, not a pattern.
 const VOLUME_OTHER = "var(--ink-3)";
 const VOLUME_OTHER_ID = "~other";
@@ -1991,7 +2050,7 @@ const TICK_MIN_PX = 64;
 const TIP_GAP = 12;
 const TIP_FLIP = 0.6;
 
-// legend and tip are the series' labels in the legend and the tooltip (distinctLabels).
+// legend and tip are the series' labels in the legend and the tooltip (labelOf).
 type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean; hatched?: boolean; legend: string; tip: string };
 
 // Swatch for legends and tooltips: the same 45° hatch as the bars for unmatched lines.
@@ -2012,14 +2071,22 @@ function fmtAxis(v: number) {
   return Number.isInteger(v) ? String(v) : String(+v.toFixed(2));
 }
 
-// Top patterns by lines keep their list color; unmatched lines and the remaining patterns follow.
-function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: (p: DemoPattern) => string): VolumeSeries[] {
-  const top = patterns.slice(0, VOLUME_TOP);
-  const rest = patterns.slice(VOLUME_TOP);
-  const names = top.map((p) => p.name);
-  const legend = distinctLabels(names, 32);
-  const tip = distinctLabels(names, 38);
-  const series: VolumeSeries[] = top.map((p, i) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets, legend: legend[i], tip: tip[i] }));
+// Top patterns (volumeSplit) keep their list color; unmatched lines and the remaining patterns follow.
+function volumeSeries(
+  data: PatternsResponse,
+  top: DemoPattern[],
+  rest: DemoPattern[],
+  colorOf: (p: DemoPattern) => string,
+  labelOf: LabelOf
+): VolumeSeries[] {
+  const series: VolumeSeries[] = top.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: colorOf(p),
+    buckets: p.buckets,
+    legend: labelOf(p, NAME_LEGEND).text,
+    tip: labelOf(p, NAME_TIP).text
+  }));
   // Unmatched lines are hatched so they never read as one more pattern.
   if (data.unmatched.count > 0) {
     const name = "Unmatched lines";
@@ -2050,15 +2117,19 @@ function timeTicks(data: PatternsResponse, n: number, plotW: number) {
 
 function LogsVolume({
   data,
-  patterns,
+  top,
+  rest,
   colorOf,
+  labelOf,
   highlight,
   onOpen,
   onChooseTimeColumn
 }: {
   data: PatternsResponse;
-  patterns: DemoPattern[];
+  top: DemoPattern[];
+  rest: DemoPattern[];
   colorOf: (p: DemoPattern) => string;
+  labelOf: LabelOf;
   highlight?: string | null;
   onOpen: (id: string) => void;
   onChooseTimeColumn: (column: string) => Promise<void>;
@@ -2071,7 +2142,7 @@ function LogsVolume({
     });
   const [legendHover, setLegendHover] = useState<string | null>(null);
   const hasTrend = data.bucketSeconds > 0;
-  const series = hasTrend ? volumeSeries(data, patterns, colorOf) : [];
+  const series = hasTrend ? volumeSeries(data, top, rest, colorOf, labelOf) : [];
   return (
     <section className={`card overview${collapsed ? " is-collapsed" : ""}`}>
       <header>
