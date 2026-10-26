@@ -192,6 +192,9 @@ func TestSummarizeLog(t *testing.T) {
 	}
 	var text strings.Builder
 	s.WriteText(&text)
+	if !strings.Contains(text.String(), "\nNothing hidden · 3 patterns · ") {
+		t.Errorf("summary text should say nothing is hidden:\n%s", text.String())
+	}
 	for _, line := range strings.Split(text.String(), "\n") {
 		if strings.Contains(line, "does not exist") && strings.HasPrefix(line, " ?") {
 			t.Errorf("summary text marks an error as likely noise: %q", line)
