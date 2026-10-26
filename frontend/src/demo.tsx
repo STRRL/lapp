@@ -50,7 +50,7 @@ type DemoWorkspace = {
 };
 
 const OLDER_IMPORT_NOTE = "Made with an older version of lapp. Import it again to view.";
-const OLDER_IMPORT_HINT = "lapp now reads levels differently, so older imports can't be opened.";
+const OLDER_IMPORT_HINT = "lapp now reads logs differently, so imports made with older versions can't be opened.";
 
 type NoiseDecision = "hide" | "unhide" | "not-noise";
 

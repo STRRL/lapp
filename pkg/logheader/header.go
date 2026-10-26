@@ -5,6 +5,7 @@ package logheader
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -185,10 +186,50 @@ func glogLevel(l string) string {
 // "at Sun Jul 3 23:16:09 2005" or "2024-03-28T13:45:30Z".
 var inlineTimestamp = regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2}(?: \d{4})?\b|\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
 
-// MaskInline replaces date-times inside a message body with a single
-// wildcard token so they don't split patterns.
-func MaskInline(body string) string {
-	return inlineTimestamp.ReplaceAllString(body, "<*>")
+// uuidList matches a UUID, optionally quoted, or a comma-separated list of
+// them, e.g. "{3f2a…,9b1c…}" inside an IN list or array literal.
+var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?(?:\s*,\s*["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?)*`)
+
+// MaskInline replaces date-times and UUIDs (a list of UUIDs as a whole)
+// inside a message body with a single wildcard token so they don't split
+// patterns. It also returns where each <*> it wrote is and what it replaced,
+// so field values can still show the real text.
+func MaskInline(body string) (string, []Mask) {
+	spans := inlineTimestamp.FindAllStringIndex(body, -1)
+	for _, u := range uuidList.FindAllStringIndex(body, -1) {
+		overlaps := false
+		for _, t := range spans {
+			if u[0] < t[1] && t[0] < u[1] {
+				overlaps = true
+				break
+			}
+		}
+		if !overlaps {
+			spans = append(spans, u)
+		}
+	}
+	if len(spans) == 0 {
+		return body, nil
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
+	var b strings.Builder
+	masks := make([]Mask, 0, len(spans))
+	last := 0
+	for _, s := range spans {
+		b.WriteString(body[last:s[0]])
+		masks = append(masks, Mask{At: b.Len(), Text: body[s[0]:s[1]]})
+		b.WriteString("<*>")
+		last = s[1]
+	}
+	b.WriteString(body[last:])
+	return b.String(), masks
+}
+
+// Mask is one <*> written by MaskInline: its byte offset in the masked text
+// and the text it replaced. A <*> already in the log has no Mask.
+type Mask struct {
+	At   int    `json:"at"`
+	Text string `json:"text"`
 }
 
 // ParseTime reads a standalone date-time value, such as a CSV column or a

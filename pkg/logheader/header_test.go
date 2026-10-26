@@ -35,9 +35,26 @@ func TestStrip(t *testing.T) {
 }
 
 func TestMaskInline(t *testing.T) {
-	got := MaskInline("connection from 1.2.3.4 () at Sun Jul  3 23:16:09 2005")
+	got, values := MaskInline("connection from 1.2.3.4 () at Sun Jul  3 23:16:09 2005")
 	if want := "connection from 1.2.3.4 () at <*>"; got != want {
 		t.Errorf("MaskInline = %q, want %q", got, want)
+	}
+	if len(values) != 1 || values[0] != (Mask{At: 30, Text: "Sun Jul  3 23:16:09 2005"}) {
+		t.Errorf("MaskInline values = %+v", values)
+	}
+}
+
+func TestMaskInlineUUIDs(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"user 3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c not found", "user <*> not found"},
+		{`id IN ('3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c', '9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e')`, "id IN (<*>)"},
+		{"ids={3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c,9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e,0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d}", "ids={<*>}"},
+		{"build 3f2a9c1e0b7d not a uuid", "build 3f2a9c1e0b7d not a uuid"},
+	}
+	for _, c := range cases {
+		if got, _ := MaskInline(c.in); got != c.want {
+			t.Errorf("MaskInline(%q) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }
 

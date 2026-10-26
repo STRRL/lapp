@@ -588,3 +588,61 @@ func TestOlderImportIsListedButNotOpened(t *testing.T) {
 		t.Fatalf("patterns: %d %s", rec.Code, rec.Body)
 	}
 }
+
+// UUIDs are variables: lines that differ only in a UUID, or in how many
+// UUIDs a list has, are one pattern, and no UUID shows in its template.
+func TestUUIDListsAreOnePattern(t *testing.T) {
+	var body strings.Builder
+	for i := 0; i < 12; i++ {
+		ids := make([]string, 1+i%4)
+		for k := range ids {
+			ids[k] = fmt.Sprintf("'%08x-0b7d-4e21-9a3c-%012x'", i*7+k, i*13+k)
+		}
+		line, _ := json.Marshal(map[string]string{"level": "info", "message": "select * from items where id in (" + strings.Join(ids, ", ") + ")"})
+		fmt.Fprintf(&body, "%s\n", line)
+	}
+	s, err := SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", "items.ndjson", strings.NewReader(body.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(s.Patterns) != 1 || s.Patterns[0].Lines != 12 || strings.Contains(s.Patterns[0].Template, "0b7d") {
+		t.Fatalf("patterns = %+v", s.Patterns)
+	}
+}
+
+// A masked UUID is still a field with its real values: bare, inside a token,
+// or after a <*> the log itself contains.
+func TestMaskedUUIDKeepsFieldValues(t *testing.T) {
+	for _, format := range []string{"user %s logged in", "user (%s) logged in", "rule <*> matched user %s", "|request user %s completed", "ids in (%s,\n  " + "0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d) done"} {
+		t.Run(format, func(t *testing.T) {
+			var body strings.Builder
+			for i := 0; i < 12; i++ {
+				id := fmt.Sprintf("%08x-0b7d-4e21-9a3c-%012x", i, i)
+				line, _ := json.Marshal(map[string]string{"level": "info", "message": fmt.Sprintf(format, id)})
+				fmt.Fprintf(&body, "%s\n", line)
+			}
+			d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+			ctx := context.Background()
+			id, err := d.importLog(ctx, "users.ndjson", strings.NewReader(body.String()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			a, err := d.analyze(ctx, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(a.resp.Patterns) != 1 {
+				t.Fatalf("patterns = %+v", a.resp.Patterns)
+			}
+			var uuidField *fieldSummary
+			for k, f := range a.patternDetail(0).Summary {
+				if f.Distinct == 12 {
+					uuidField = &a.patternDetail(0).Summary[k]
+				}
+			}
+			if uuidField == nil || !strings.Contains(uuidField.Top[0].Value, "-0b7d-") {
+				t.Fatalf("template %q: summary = %+v", a.resp.Patterns[0].Template, a.patternDetail(0).Summary)
+			}
+		})
+	}
+}

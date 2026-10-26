@@ -17,11 +17,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/go-errors/errors"
 	"github.com/google/uuid"
 	llmconfig "github.com/strrl/lapp/pkg/config"
 	"github.com/strrl/lapp/pkg/gcplog"
+	"github.com/strrl/lapp/pkg/logheader"
 	"github.com/strrl/lapp/pkg/ndjson"
 	"github.com/strrl/lapp/pkg/pattern"
 	"github.com/strrl/lapp/pkg/semantic"
@@ -1305,11 +1307,47 @@ type demoPatternDetail struct {
 
 var numberValue = regexp.MustCompile(`^-?\d+(?:\.\d+)?([a-zA-Zµ%]*)$`)
 
+// unmaskedTokens splits a mined line like fieldTokens, then puts back the
+// text masking replaced (masks), by position, so a field shows the real
+// UUID or date-time while a <*> written in the log itself stays as it is.
+func unmaskedTokens(line string, masks []logheader.Mask) []string {
+	toks := fieldTokens(line)
+	if len(masks) == 0 {
+		return toks
+	}
+	// Offsets count in the text fieldTokens splits: delimiters become single
+	// spaces (same length), then leading spaces, delimiters included, go.
+	spaced := fieldText(line)
+	at := len(spaced) - len(strings.TrimLeftFunc(spaced, unicode.IsSpace))
+	m := 0
+	for i, t := range toks {
+		var b strings.Builder
+		last := 0
+		for m < len(masks) && masks[m].At < at+len(t) {
+			if p := masks[m].At - at; p >= last && p+len("<*>") <= len(t) && t[p:p+len("<*>")] == "<*>" {
+				b.WriteString(t[last:p])
+				b.WriteString(masks[m].Text)
+				last = p + len("<*>")
+			}
+			m++
+		}
+		b.WriteString(t[last:])
+		toks[i] = b.String()
+		at += len(t) + 1
+	}
+	return toks
+}
+
 func fieldTokens(s string) []string {
+	return strings.Split(strings.TrimSpace(fieldText(s)), " ")
+}
+
+// fieldText replaces the field delimiters with spaces, keeping offsets.
+func fieldText(s string) string {
 	for _, d := range []string{"|", "=", ","} {
 		s = strings.ReplaceAll(s, d, " ")
 	}
-	return strings.Split(strings.TrimSpace(s), " ")
+	return s
 }
 
 // handlePatternDetail computes per-field metrics for one pattern: number
@@ -1340,14 +1378,27 @@ func (d *demoAPI) handlePatternDetail(w http.ResponseWriter, r *http.Request) {
 // Investigate context, so the agent sees exactly the numbers the page shows.
 func (a *analysis) patternDetail(idx int) demoPatternDetail {
 	tmpl := fieldTokens(a.resp.Patterns[idx].Template)
-	var slots []int
+	// Every <*> is a field, including one inside a token ("(<*>)"), counted
+	// in order as the page counts them.
+	type slot struct {
+		tok int
+		re  *regexp.Regexp
+	}
+	var slots []slot
+	fields := 0
 	for i, t := range tmpl {
-		if t == "<*>" {
-			slots = append(slots, i)
+		if !strings.Contains(t, "<*>") {
+			continue
 		}
+		parts := strings.Split(t, "<*>")
+		for k := range parts {
+			parts[k] = regexp.QuoteMeta(parts[k])
+		}
+		slots = append(slots, slot{i, regexp.MustCompile("(?s)^" + strings.Join(parts, "(.*?)") + "$")})
+		fields += len(parts) - 1
 	}
 	nb := len(a.resp.Patterns[idx].Buckets)
-	values := make([][]string, len(slots))
+	values := make([][]string, fields)
 	stamps := []*time.Time{}
 	out := demoPatternDetail{Fields: []demoField{}, Summary: []fieldSummary{}}
 	for i, tl := range a.lines {
@@ -1362,13 +1413,24 @@ func (a *analysis) patternDetail(idx int) demoPatternDetail {
 				out.LastSeen = ts
 			}
 		}
-		toks := fieldTokens(tl.DrainLine())
+		toks := unmaskedTokens(tl.DrainLine(), tl.Masked)
 		if len(toks) != len(tmpl) {
 			continue
 		}
+		var vals []string
+		for _, s := range slots {
+			m := s.re.FindStringSubmatch(toks[s.tok])
+			if m == nil {
+				break
+			}
+			vals = append(vals, m[1:]...)
+		}
+		if len(vals) != fields {
+			continue
+		}
 		stamps = append(stamps, tl.Timestamp)
-		for k, s := range slots {
-			values[k] = append(values[k], toks[s])
+		for k, v := range vals {
+			values[k] = append(values[k], v)
 		}
 	}
 	for k, vals := range values {
