@@ -273,6 +273,10 @@ func runWorkspaceImportVictoriaLogs(cmd *cobra.Command, _ []string) error {
 		Topic:   filepath.Base(dir),
 		Request: request,
 		Client:  &victorialogs.Client{Auth: auth},
+		OnPlan: func(services []string) {
+			// --limit applies per service, so say the upper bound up front.
+			fmt.Printf("%d services x limit %d: at most %d lines\n", len(services), importVLLimit, len(services)*importVLLimit)
+		},
 	})
 	if err != nil {
 		span.RecordError(err)

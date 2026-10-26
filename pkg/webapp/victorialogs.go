@@ -193,6 +193,9 @@ type VictoriaLogsImport struct {
 	Topic   string
 	Request victorialogs.FetchRequest
 	Client  *victorialogs.Client
+	// OnPlan, if set, is called with the services found before any rows are
+	// fetched, so callers can say how much is about to be pulled.
+	OnPlan func(services []string)
 }
 
 // VictoriaLogsServiceImport is the outcome for one service.
@@ -217,6 +220,13 @@ func ImportVictoriaLogs(ctx context.Context, imp VictoriaLogsImport) ([]Victoria
 	plan, err := listVictoriaLogsServices(ctx, imp.Client.Streams, imp.Request)
 	if err != nil {
 		return nil, err
+	}
+	if imp.OnPlan != nil {
+		names := make([]string, 0, len(plan))
+		for _, svc := range plan {
+			names = append(names, svc.Service)
+		}
+		imp.OnPlan(names)
 	}
 	fetcher := victoriaLogsFetcher(imp.Client)
 	out := make([]VictoriaLogsServiceImport, 0, len(plan))

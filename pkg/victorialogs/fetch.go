@@ -95,7 +95,35 @@ func (r FetchRequest) Validate() error {
 	if r.Limit < 0 {
 		return errors.New("limit must not be negative")
 	}
+	if hasPipe(r.Query) {
+		return errors.New("query must be a LogsQL filter without pipes (|): it is combined with a per-service stream filter")
+	}
 	return nil
+}
+
+// hasPipe reports whether a LogsQL query uses a pipe outside quoted strings.
+// The query is wrapped in parentheses and joined with a stream filter, which
+// only works for filters; a pipe would silently change what is returned.
+func hasPipe(query string) bool {
+	var quote rune
+	escaped := false
+	for _, c := range query {
+		switch {
+		case escaped:
+			escaped = false
+		case c == '\\':
+			escaped = true
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '|':
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateURL accepts an http(s) base URL without credentials, query, or

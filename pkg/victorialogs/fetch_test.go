@@ -128,6 +128,8 @@ func TestFetchRequestValidate(t *testing.T) {
 		{name: "query in url", req: FetchRequest{URL: "http://localhost:9428?token=x", From: testFrom, To: testTo}},
 		{name: "non numeric tenant", req: FetchRequest{URL: "http://localhost:9428", Tenant: "a:b", From: testFrom, To: testTo}},
 		{name: "from after to", req: FetchRequest{URL: "http://localhost:9428", From: testTo, To: testFrom}},
+		{name: "filter query", req: FetchRequest{URL: "http://localhost:9428", Query: `error OR "a|b"`, From: testFrom, To: testTo}, ok: true},
+		{name: "query with a pipe", req: FetchRequest{URL: "http://localhost:9428", Query: `error | stats count()`, From: testFrom, To: testTo}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
