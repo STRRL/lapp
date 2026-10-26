@@ -208,3 +208,4 @@
 .dz .mask-toggle { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .dz .mask-toggle input { accent-color: var(--accent); width: 15px; height: 15px; }
 .dz .ph.masked { cursor: help; }
+.dz .modal .chk { white-space: nowrap; } .dz .key-hint { margin: 0; text-align: right; }

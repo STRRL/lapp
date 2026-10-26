@@ -152,6 +152,7 @@ export function PreviewDialog({
           ))}
         </div>
         {error && <p className="err">{error}</p>}
+        {data && !data.keySet && <p className="sub key-hint">Set OPENROUTER_API_KEY and restart lapp to name patterns.</p>}
         <footer>
           <label className="chk">
             <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
@@ -159,7 +160,6 @@ export function PreviewDialog({
             Don't ask again for {service}
           </label>
           <div style={{ flex: 1 }} />
-          {data && !data.keySet && <span className="sub">Set OPENROUTER_API_KEY and restart lapp to name patterns.</span>}
           <button className="btn" onClick={onClose}>
             Not now
           </button>
