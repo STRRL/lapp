@@ -27,6 +27,7 @@ import {
   X
 } from "lucide-react";
 import { InvestigatePanel } from "./investigate";
+import { NAME_LEGEND, NAME_NOTICE, NAME_ROW, NAME_TIP, patternNamer, Skips, type LabelOf } from "./names";
 import { PreviewDialog } from "./preview";
 import { Placeholder, ValueHoverProvider } from "./valuepop";
 import "./design.css";
@@ -221,131 +222,6 @@ const OTHER = "var(--s-other)";
 // The one color for a pattern everywhere: list dot, trend, volume chart, legend, Start here, detail, Investigate.
 const patternColor = (p: DemoPattern, charted: boolean) =>
   charted && p.color >= 0 && p.color < SERIES_COLORS ? `var(--s${p.color + 1})` : OTHER;
-
-// The one way a pattern name is shown: on one line, cut to n characters, and
-// apart from every other pattern in the workspace. Where two cut names would
-// read the same, each starts from its first difference with a leading "…"
-// ("…SELECT * FROM public.get_sample…"), backed up to the start of that word.
-// If those still read the same, the words where the names differ are put in
-// front ("READ …alpha" and "SEND …alpha"; "READ …tenantA …alpha").
-// fields maps each <*> in text to its field index in the full name, for Template.
-type PatternLabel = { text: string; fields: number[] };
-type LabelOf = (p: { id: string; name: string }, n: number) => PatternLabel;
-
-// Character budgets per place; the list and Start here also cut on width.
-const NAME_ROW = 72;
-const NAME_NOTICE = 40;
-const NAME_LEGEND = 32;
-const NAME_TIP = 38;
-
-// Cuts s to n characters with a trailing "…", never inside a <*> field.
-function cutName(s: string, n: number) {
-  if (s.length <= n) return s;
-  const field = s.lastIndexOf("<*>", n - 1);
-  const end = field >= 0 && field + 3 > n ? field : n;
-  return `${s.slice(0, end)}…`;
-}
-
-// Index of the first character where a and b differ.
-function firstDifference(a: string, b: string) {
-  let k = 0;
-  while (k < a.length && a[k] === b[k]) k++;
-  return k;
-}
-
-// Moves i back to the start of its word (when the word is short) and out of a <*>.
-function backToWord(name: string, i: number) {
-  const word = name.lastIndexOf(" ", i - 1) + 1;
-  if (i - word <= 12) i = word;
-  const field = name.lastIndexOf("<*>", i - 1);
-  return field >= 0 && field + 3 > i ? field : i;
-}
-
-const fieldsBefore = (name: string, i: number) => name.slice(0, i).split("<*>").length - 1;
-
-// A label shown from position from of name, after the words in heads.
-function labelFrom(name: string, from: number, n: number, heads: [number, number][] = []): PatternLabel {
-  const fields: number[] = [];
-  let text = "";
-  let shown = 0;
-  for (const [a, b] of heads) {
-    const h = name.slice(a, b);
-    text += `${a > shown ? "…" : ""}${h} `;
-    h.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, a) + k));
-    shown = b;
-  }
-  const rest = from === 0 ? cutName(name, n) : `…${cutName(name.slice(from), Math.max(8, n - 1 - text.length))}`;
-  rest.split("<*>").slice(1).forEach((_, k) => fields.push(fieldsBefore(name, from) + k));
-  return { text: text + rest, fields };
-}
-
-// Groups indexes whose labels read the same but whose names differ.
-function collisions(names: string[], labels: PatternLabel[]) {
-  const by = new Map<string, number[]>();
-  labels.forEach((l, i) => by.set(l.text, [...(by.get(l.text) ?? []), i]));
-  return [...by.values()].filter((g) => new Set(g.map((i) => names[i])).size > 1);
-}
-
-function patternLabels(names: string[], n: number): PatternLabel[] {
-  const flat = names.map((s) => s.replace(/\s+/g, " ").trim());
-  const labels = flat.map((s) => labelFrom(s, 0, n));
-  const from = flat.map(() => 0);
-  for (const group of collisions(flat, labels)) {
-    for (const i of group) {
-      for (const j of group) if (flat[j] !== flat[i]) from[i] = Math.max(from[i], firstDifference(flat[i], flat[j]));
-      if (from[i] > 0) {
-        from[i] = backToWord(flat[i], from[i]);
-        labels[i] = labelFrom(flat[i], from[i], n);
-      }
-    }
-  }
-  // Same tail after a different start: put the earliest word not shown yet
-  // where the names differ in front, until every label reads differently.
-  const heads: [number, number][][] = flat.map(() => []);
-  const shown = (i: number, k: number) => k >= from[i] || heads[i].some(([a, b]) => k >= a && k < b);
-  for (let round = 0; round < 6; round++) {
-    const groups = collisions(flat, labels);
-    if (groups.length === 0) break;
-    let changed = false;
-    for (const group of groups) {
-      for (const i of group) {
-        let d = from[i];
-        for (const j of group) {
-          if (flat[j] === flat[i]) continue;
-          for (let k = 0; k < d; k++) {
-            if (!shown(i, k) && flat[i][k] !== flat[j][k]) {
-              d = k;
-              break;
-            }
-          }
-        }
-        if (d >= from[i]) continue;
-        const start = backToWord(flat[i], d);
-        const space = flat[i].indexOf(" ", d);
-        const end = Math.min(space < 0 ? flat[i].length : space, Math.max(d + 1, start + 16), from[i]);
-        heads[i] = [...heads[i], [start, end] as [number, number]].sort((x, y) => x[0] - y[0]);
-        labels[i] = labelFrom(flat[i], from[i], n, heads[i]);
-        changed = true;
-      }
-    }
-    if (!changed) break;
-  }
-  return labels;
-}
-
-// labelOf for one workspace's patterns: labels are computed once per length.
-function patternNamer(patterns: { id: string; name: string }[]): LabelOf {
-  const byLength = new Map<number, Map<string, PatternLabel>>();
-  return (p, n) => {
-    let labels = byLength.get(n);
-    if (!labels) {
-      const list = patternLabels(patterns.map((x) => x.name), n);
-      labels = new Map(patterns.map((x, i) => [x.id, list[i]]));
-      byLength.set(n, labels);
-    }
-    return labels.get(p.id) ?? patternLabels([p.name], n)[0];
-  };
-}
 
 function useToast() {
   const [toast, setToast] = useState<string | null>(null);
@@ -1372,7 +1248,7 @@ function PatternList({
             <React.Fragment key={p.id}>
               {i > 0 && ", "}
               <button className="noise-name" title={p.name} onClick={() => jumpTo(p.id)}>
-                {labelOf(p, NAME_NOTICE).text}
+                <Skips text={labelOf(p, NAME_NOTICE).text} />
               </button>
             </React.Fragment>
           ))}
@@ -1810,7 +1686,7 @@ function StartHere({
             <div className="sh-main">
               {p.named ? (
                 <b className="ell" title={p.name}>
-                  {label.text}
+                  <Skips text={label.text} />
                 </b>
               ) : (
                 <b className="unnamed ell" title={p.name}>
@@ -1932,7 +1808,7 @@ function Template({ text, active, patternId, offset = 0, fields }: { text: strin
     <>
       {parts.map((part, i) => (
         <React.Fragment key={i}>
-          {part}
+          <Skips text={part} />
           {i < parts.length - 1 && <Placeholder patternId={patternId} index={(fields?.[i] ?? i) + offset} active={active === i} />}
         </React.Fragment>
       ))}
@@ -2028,7 +1904,9 @@ function Row({
             <>
               <i className="dot" style={{ background: color }} />
               {noiseTag}
-              <b title={p.name}>{label.text}</b>
+              <b title={p.name}>
+                <Skips text={label.text} />
+              </b>
             </>
           )}
           <span className="level-inline">
@@ -2194,8 +2072,8 @@ function volumeSeries(
     name: p.name,
     color: colorOf(p),
     buckets: p.buckets,
-    legend: labelOf(p, NAME_LEGEND).text,
-    tip: labelOf(p, NAME_TIP).text
+    legend: labelOf(p, NAME_LEGEND, true).text,
+    tip: labelOf(p, NAME_TIP, true).text
   }));
   // Unmatched lines are hatched so they never read as one more pattern.
   if (data.unmatched.count > 0) {
@@ -2269,7 +2147,7 @@ function LogsVolume({
             {series.map((s) => (
               <span key={s.id} title={s.name} onMouseEnter={() => setLegendHover(s.id)} onMouseLeave={() => setLegendHover(null)}>
                 <i style={swatchStyle(s)} />
-                {s.legend}
+                <Skips text={s.legend} />
               </span>
             ))}
           </div>
@@ -2400,7 +2278,7 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
             .map((s) => (
               <div key={s.id} className={`tt-row${hover.id === s.id ? " is-on" : ""}`}>
                 <i style={swatchStyle(s)} />
-                <span>{s.tip}</span>
+                <span><Skips text={s.tip} /></span>
                 <b>{fmtCount(s.buckets[hover.i])}</b>
               </div>
             ))}

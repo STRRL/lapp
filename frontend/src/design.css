@@ -85,7 +85,7 @@
 .dz h2{font-size:14px;line-height:20px;margin:0;font-weight:600}
 .dz .sub{color:var(--muted);font-size:12px}
 .dz .legend{display:flex;gap:14px;font-size:12px;color:var(--ink-2)}
-.dz .legend span{display:flex;align-items:center;gap:6px}
+.dz .legend>span{display:flex;align-items:center;gap:6px}
 .dz .legend i{width:10px;height:10px;border-radius:2px}
 .dz .chart-wrap{position:relative}
 .dz .axis{font-size:11px;fill:var(--muted);font-family:var(--font)}
@@ -214,6 +214,6 @@
 @keyframes sp{to{transform:rotate(360deg)}}
 .dz .overview header{flex-wrap:wrap;row-gap:4px}
 .dz .legend{flex-wrap:wrap}
-.dz .legend span{white-space:nowrap}
+.dz .legend>span{white-space:nowrap}
 .dz .why{font-size:12px;color:var(--ink-2);margin-top:2px}
 .dz .dsec h3 .sub{font-weight:400}

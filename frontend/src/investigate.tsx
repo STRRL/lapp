@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, Download, Info, LoaderCircle, OctagonAlert, Sparkles, X } from "lucide-react";
+import { Skips, type LabelOf } from "./names";
 
 // Shapes shared with demo.tsx (kept structural to avoid a circular import).
 export type InvPattern = {
@@ -115,7 +116,7 @@ export function InvestigatePanel({
   data: InvData;
   start: { pattern?: InvPattern; question: string; reason?: string; spike?: boolean; jobId?: string };
   colorOf: (p: InvPattern) => string;
-  labelOf: (p: InvPattern, n: number) => { text: string };
+  labelOf: LabelOf;
   filtered: Set<string>;
   onClose: () => void;
   onCite: (p: InvPattern) => void;
@@ -209,7 +210,10 @@ export function InvestigatePanel({
       </header>
       {start.pattern && start.reason && (
         <span className={`badge ${start.spike ? "b-spike" : "b-new"} inv-ctx`}>
-          <b className="ell">{labelOf(start.pattern, 36).text}</b> · {start.reason}
+          <b className="ell">
+            <Skips text={labelOf(start.pattern, 36).text} />
+          </b>{" "}
+          · {start.reason}
         </span>
       )}
 
@@ -364,7 +368,7 @@ function RunView({
   now: number;
   data: InvData;
   colorOf: (p: InvPattern) => string;
-  labelOf: (p: InvPattern, n: number) => { text: string };
+  labelOf: LabelOf;
   filtered: Set<string>;
   onCite: (p: InvPattern) => void;
   onHoverPattern: (id: string | null) => void;
@@ -402,7 +406,7 @@ function RunView({
             onMouseLeave={() => onHoverPattern(null)}
           >
             <i style={{ background: colorOf(p) }} />
-            {labelOf(p, 28).text}
+            <Skips text={labelOf(p, 28).text} />
             {m[2] ? ` · ${rangeText(m[2])}` : ""}
           </button>
         );
