@@ -1761,7 +1761,7 @@ function Row({
   const hasTrend = data.bucketSeconds > 0;
   const noise = p.suggestion === "noise";
   const noiseTag = noise && (
-    <span className="badge b-noise" title={`Repeats often: ${fmtCount(p.count)} lines, ${share} of this log.`}>
+    <span className="badge b-noise" title={`Repeats often${p.level === "warn" || p.level === "warning" ? " (a warning, not an error)" : ""}: ${fmtCount(p.count)} lines, ${share} of this log.`}>
       <EyeOff className="ico" />
       Likely noise
     </span>
