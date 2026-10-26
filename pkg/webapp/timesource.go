@@ -60,8 +60,9 @@ const maxCSVHeaderName = 64
 // applyTimeSource fills missing line times from the service's chosen time
 // column and reports the time facts. A column is only applied when no line
 // has a time of its own, so automatic detection always wins. dir is the
-// workspace directory; CSV files are read from its logs, and their header
-// rows are dropped from the returned lines since they are not log entries.
+// workspace directory; CSV files are read from its logs, and once a CSV time
+// column is chosen their header rows are dropped from the returned lines,
+// since they are not log entries.
 func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) ([]workspace.TaggedLine, demoTimeSource) {
 	src := demoTimeSource{Format: timeFormatText, Lines: len(lines)}
 	for _, tl := range lines {
@@ -85,24 +86,29 @@ func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) ([
 		return lines, src
 	}
 	var valueOf func(tl workspace.TaggedLine) (string, bool)
+	var table *csvLogs
 	if isJSON {
 		src.Columns = jsonFieldNames(sample)
 		valueOf = jsonFieldValue(column)
 	} else {
-		logs := readCSVLogs(dir)
-		if logs == nil {
+		table = readCSVLogs(dir)
+		if table == nil {
 			return lines, src
 		}
 		src.Format = timeFormatCSV
-		src.Columns = logs.names
-		lines = logs.dropHeaders(lines)
-		src.Lines = len(lines)
-		valueOf = logs.value(column)
+		src.Columns = table.names
+		valueOf = table.value(column)
 	}
 	if column == "" || !contains(src.Columns, column) {
 		return lines, src
 	}
 	src.Column = column
+	if table != nil {
+		// Only once a time column is chosen is the first row known to be a
+		// header rather than a log line that happens to contain a comma.
+		lines = table.dropHeaders(lines)
+		src.Lines = len(lines)
+	}
 	for i := range lines {
 		value, ok := valueOf(lines[i])
 		if !ok {

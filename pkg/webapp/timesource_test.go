@@ -188,3 +188,21 @@ func TestTimeColumnKeepsNoiseDecisions(t *testing.T) {
 		t.Fatalf("rules = %+v", rules)
 	}
 }
+
+// TestCommaTextKeepsFirstLine checks that a plain log whose lines happen to
+// contain one comma keeps its first line while no time column is chosen.
+func TestCommaTextKeepsFirstLine(t *testing.T) {
+	d := newDemoAPI(filepath.Join(t.TempDir(), "workspaces"), "", "")
+	text := "worker started,job ready\nworker running,job active\nworker stopped,job done\n"
+	id, err := d.importLog(context.Background(), "worker.log", strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := d.analyze(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.lines) != 3 || a.resp.Workspace.LineCount != 3 || a.resp.Time.Lines != 3 {
+		t.Fatalf("lines = %d, lineCount = %d, time = %+v", len(a.lines), a.resp.Workspace.LineCount, a.resp.Time)
+	}
+}
