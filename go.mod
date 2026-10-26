@@ -17,7 +17,7 @@ require (
 	github.com/jaeyo/go-drain3 v0.1.2
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.10.2
-	github.com/strrl/eino-acp v0.0.0-20260320032654-943782f485e5
+	github.com/strrl/eino-acp v0.0.0-20260626060343-0718863e3a1b
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.40.0
@@ -45,7 +45,7 @@ require (
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/cloudwego/eino-ext/libs/acl/langfuse v0.0.0-20251124083837-ce2e7e196f9f // indirect
 	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.13 // indirect
-	github.com/coder/acp-go-sdk v0.6.3 // indirect
+	github.com/coder/acp-go-sdk v0.13.5 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.3.3 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-amd64 v0.3.3 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/darwin-arm64 v0.3.3 // indirect

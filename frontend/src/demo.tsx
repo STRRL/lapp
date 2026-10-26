@@ -25,6 +25,7 @@ import {
   VolumeX,
   X
 } from "lucide-react";
+import { InvestigatePanel } from "./investigate";
 import "./design.css";
 import "./demo.css";
 
@@ -210,7 +211,17 @@ export function DemoApp() {
   );
 }
 
-function TopBar({ crumb, navigate, full = true }: { crumb?: React.ReactNode; navigate: (q: Record<string, string>) => void; full?: boolean }) {
+function TopBar({
+  crumb,
+  navigate,
+  full = true,
+  extra
+}: {
+  crumb?: React.ReactNode;
+  navigate: (q: Record<string, string>) => void;
+  full?: boolean;
+  extra?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [recent, setRecent] = useState<DemoWorkspace[]>([]);
   useEffect(() => {
@@ -224,6 +235,7 @@ function TopBar({ crumb, navigate, full = true }: { crumb?: React.ReactNode; nav
       </button>
       {crumb}
       <div style={{ flex: 1 }} />
+      {extra}
       {full && (
         <>
           <div className="menu-anchor">
@@ -480,7 +492,10 @@ function ImportPage({ navigate }: { navigate: (q: Record<string, string>, replac
 
         <div className="privacy">
           <Shield className="ico" />
-          <span>To name patterns, lapp sends a few sample lines from each pattern to OpenRouter. Everything else stays on this machine.</span>
+          <span>
+            To name patterns, lapp sends a few sample lines from each pattern to OpenRouter. Investigate sends what your agent reads to its provider. Nothing else leaves
+            this machine.
+          </span>
         </div>
         <div className="clihint">
           <span className="sub">Or from a terminal</span>
@@ -675,6 +690,9 @@ function PatternList({
   const [sort, setSort] = useState<"lines" | "spiking" | "new">("lines");
   const [showFiltered, setShowFiltered] = useState<boolean | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [inv, setInv] = useState<{ pattern?: DemoPattern; question: string; reason?: string; spike?: boolean; key: number; jobId?: string } | null>(null);
+  const [invHidden, setInvHidden] = useState(false);
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const filteredGroupRef = useRef<HTMLButtonElement>(null);
   const { show: toast, node: toastNode } = useToast();
@@ -684,6 +702,16 @@ function PatternList({
       .then((d) => {
         setData(d);
         setFiltered(new Set(d.patterns.filter((p) => p.filtered).map((p) => p.id)));
+        const jobId = new URLSearchParams(window.location.search).get("investigate");
+        if (jobId) {
+          fetch(`/api/demo/investigate?id=${encodeURIComponent(jobId)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((job) => {
+              if (!job) return;
+              const p = d.patterns.find((x) => x.id === job.pattern);
+              setInv({ pattern: p, question: job.question, reason: p ? startReason(p, d) : undefined, spike: p?.spikeAt !== undefined, key: Date.now(), jobId });
+            });
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, [wsId]);
@@ -701,7 +729,30 @@ function PatternList({
     return data.patterns.find((p) => p.id === patternParam) ?? null;
   }, [data, patternParam]);
 
-  const select = useCallback((id: string | null) => navigate(id ? { ws: wsId, pattern: id } : { ws: wsId }, true), [navigate, wsId]);
+  const select = useCallback(
+    (id: string | null) => navigate(id ? { ws: wsId, pattern: id } : { ws: wsId }, true),
+    [navigate, wsId]
+  );
+  const openInvestigate = (p?: DemoPattern) => {
+    let question = "";
+    let reason: string | undefined;
+    let spike = false;
+    if (p && data) {
+      const name = p.named ? p.name : p.template;
+      if (p.spikeAt !== undefined) {
+        spike = true;
+        question = `Why did "${name}" spike ${atBucket(data, p.spikeAt)}? What else changed around then?`;
+      } else if (p.newAt !== undefined) {
+        question = `Why did "${name}" start appearing ${atBucket(data, p.newAt)}? What else changed around then?`;
+      } else {
+        question = `What is causing "${name}"? What else changed around then?`;
+      }
+      reason = startReason(p, data);
+    }
+    setInv({ pattern: p, question, reason, spike, key: Date.now() });
+    setInvHidden(false);
+    select(null);
+  };
 
   const toggle = useCallback((id: string) => {
     setFiltered((prev) => {
@@ -744,6 +795,8 @@ function PatternList({
         searchRef.current?.focus();
       } else if (e.key === "Escape" && selected && !typing) {
         select(null);
+      } else if (e.key === "Escape" && inv && !invHidden && !typing) {
+        setInv(null);
       } else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && selected && selected !== "unmatched" && !typing) {
         e.preventDefault();
         const i = order.findIndex((p) => p.id === selected.id);
@@ -830,6 +883,11 @@ function PatternList({
     <>
       <TopBar
         navigate={navigate}
+        extra={
+          <button className="btn sm" onClick={() => openInvestigate()}>
+            <Sparkles className="ico" /> Ask about these logs
+          </button>
+        }
         crumb={
           <>
             <span className="sep">/</span>
@@ -856,7 +914,7 @@ function PatternList({
           </>
         }
       />
-      <main className={`lp ${selected ? "with-drawer" : ""}`}>
+      <main className={`lp ${selected || (inv && !invHidden) ? "with-drawer" : ""}`}>
         <section className="lp-main">
           <div className="summary">
             <div className="meter">
@@ -888,6 +946,8 @@ function PatternList({
             </div>
           )}
 
+          <StartHere data={data} items={startHere(visible)} colorOf={colorOf} onOpen={(p) => select(p.id)} onInvestigate={(p) => openInvestigate(p)} />
+
           <section className="card overview">
             <header>
               <h2>Remaining lines over time</h2>
@@ -911,7 +971,7 @@ function PatternList({
               )}
             </header>
             {hasTrend ? (
-              <Overview data={data} patterns={visible} colorOf={colorOf} />
+              <Overview data={data} patterns={visible} colorOf={colorOf} highlight={hoverId} />
             ) : (
               <div className="notime-chart">
                 <span className="sub">
@@ -920,8 +980,6 @@ function PatternList({
               </div>
             )}
           </section>
-
-          <StartHere data={data} items={startHere(visible)} colorOf={colorOf} onOpen={(p) => select(p.id)} />
 
           {banner}
 
@@ -1002,6 +1060,7 @@ function PatternList({
                 color={colorOf(p)}
                 filtered={false}
                 selected={selected !== "unmatched" && selected?.id === p.id}
+                hovered={hoverId === p.id}
                 onToggle={toggle}
                 onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
               />
@@ -1045,6 +1104,7 @@ function PatternList({
                       total={total}
                       color={OTHER}
                       filtered
+                      hovered={hoverId === p.id}
                       selected={selected !== "unmatched" && selected?.id === p.id}
                       onToggle={toggle}
                       onOpen={() => select(selected !== "unmatched" && selected?.id === p.id ? null : p.id)}
@@ -1054,10 +1114,41 @@ function PatternList({
             )}
           </section>
         </section>
+        {inv && !selected && (
+          <>
+            <div className="scrim" onClick={() => setInv(null)} />
+            <InvestigatePanel
+              key={inv.key}
+              wsId={wsId}
+              data={data}
+              start={inv}
+              colorOf={(p) => colorOf(p as DemoPattern)}
+              filtered={filtered}
+              onClose={() => setInv(null)}
+              onCite={(p) => {
+                setInvHidden(true);
+                setHoverId(null);
+                select(p.id);
+              }}
+              onHoverPattern={setHoverId}
+              onJob={(id) => window.history.replaceState(null, "", `?ws=${encodeURIComponent(wsId)}&investigate=${id}`)}
+              toast={toast}
+            />
+          </>
+        )}
         {selected && (
           <>
             <div className="scrim" onClick={() => select(null)} />
             <Drawer
+              onBack={
+                inv
+                  ? () => {
+                      setInvHidden(false);
+                      select(null);
+                    }
+                  : undefined
+              }
+              onInvestigate={selected !== "unmatched" ? () => openInvestigate(selected) : undefined}
               key={selected === "unmatched" ? "unmatched" : selected.id}
               wsId={wsId}
               data={data}
@@ -1146,13 +1237,13 @@ function StartHere({
             <span className="sh-count tnum">{fmtCount(p.count)} lines</span>
             {onInvestigate && (
               <button
-                className="btn sm"
+                className="btn sm inv-btn"
                 onClick={(e) => {
                   e.stopPropagation();
                   onInvestigate(p);
                 }}
               >
-                Investigate
+                <Sparkles className="ico" /> Investigate
               </button>
             )}
             <ChevronRight className="ico cell-chev" />
@@ -1228,6 +1319,7 @@ function Row({
   color,
   filtered,
   selected,
+  hovered,
   onToggle,
   onOpen
 }: {
@@ -1237,6 +1329,7 @@ function Row({
   color: string;
   filtered: boolean;
   selected: boolean;
+  hovered?: boolean;
   onToggle: (id: string) => void;
   onOpen: () => void;
 }) {
@@ -1244,7 +1337,7 @@ function Row({
   const hasTrend = data.bucketSeconds > 0;
   return (
     <div
-      className={`prow ${filtered ? "filtered" : ""} ${selected ? "selected" : ""}`}
+      className={`prow ${filtered ? "filtered" : ""} ${selected ? "selected" : ""} ${hovered ? "hovered" : ""}`}
       role="row"
       tabIndex={0}
       onClick={onOpen}
@@ -1371,7 +1464,17 @@ function useWidth<T extends HTMLElement>(fallback: number) {
   return [ref, w] as const;
 }
 
-function Overview({ data, patterns, colorOf }: { data: PatternsResponse; patterns: DemoPattern[]; colorOf: (p: DemoPattern) => string }) {
+function Overview({
+  data,
+  patterns,
+  colorOf,
+  highlight
+}: {
+  data: PatternsResponse;
+  patterns: DemoPattern[];
+  colorOf: (p: DemoPattern) => string;
+  highlight?: string | null;
+}) {
   const [ref, W] = useWidth<HTMLDivElement>(1000);
   const [hover, setHover] = useState<number | null>(null);
   const n = data.unmatched.buckets.length;
@@ -1411,7 +1514,9 @@ function Overview({ data, patterns, colorOf }: { data: PatternsResponse; pattern
                 const y0 = y(acc);
                 acc += v;
                 const h = Math.max(0.5, y0 - y(acc) - (acc > v ? 1 : 0));
-                return <rect key={s.id} x={x + 1} width={Math.max(1, bw - 2)} y={y(acc)} height={h} rx={1.5} fill={s.color} />;
+                return (
+                  <rect key={s.id} x={x + 1} width={Math.max(1, bw - 2)} y={y(acc)} height={h} rx={1.5} fill={s.color} opacity={highlight && highlight !== s.id ? 0.3 : 1} />
+                );
               })}
               {i % every === 0 && (
                 <text x={x} y={H + top + 16} className="axis">
@@ -1456,8 +1561,12 @@ function Drawer({
   onToggle,
   onShowOnly,
   onClose,
+  onBack,
+  onInvestigate,
   toast
 }: {
+  onBack?: () => void;
+  onInvestigate?: () => void;
   wsId: string;
   data: PatternsResponse;
   target: DemoPattern | "unmatched";
@@ -1483,6 +1592,11 @@ function Drawer({
 
   return (
     <aside className="drawer" aria-label="Pattern detail">
+      {onBack && (
+        <button className="btn ghost sm backlink" onClick={onBack}>
+          ← Back to investigation
+        </button>
+      )}
       <header>
         <div>
           <div className="pname">
@@ -1543,6 +1657,11 @@ function Drawer({
             <button className="btn sm ghost" onClick={() => copyText(target.template, toast)}>
               <Copy className="ico" /> Copy template
             </button>
+            {onInvestigate && (
+              <button className="btn sm inv-btn" onClick={onInvestigate}>
+                <Sparkles className="ico" /> Investigate
+              </button>
+            )}
           </div>
           {target.suggestion === "noise" && <div className="why">Why it looks like noise: {target.reason}</div>}
           {target.suggestion === "maybe" && <div className="why">Why it's not filtered: {target.keptReason}</div>}

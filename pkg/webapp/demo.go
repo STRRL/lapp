@@ -43,10 +43,12 @@ type demoAPI struct {
 	apiKey   string
 	model    string
 	fetcher  workspace.ImportFetcher
+	jobs     *investigations
 }
 
 func newDemoAPI(root, apiKey, model string) *demoAPI {
-	return &demoAPI{root: root, rulesDir: filepath.Join(filepath.Dir(root), "noise-rules"), apiKey: apiKey, model: model}
+	return &demoAPI{root: root, rulesDir: filepath.Join(filepath.Dir(root), "noise-rules"), apiKey: apiKey, model: model,
+		jobs: &investigations{jobs: map[string]*investigation{}}}
 }
 
 type demoWorkspace struct {
@@ -113,6 +115,10 @@ func (d *demoAPI) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/demo/service", d.handleRenameService)
 	mux.HandleFunc("POST /api/demo/import-gcp", d.handleImportGCP)
 	mux.HandleFunc("GET /api/demo/gcp-recent", d.handleGCPRecent)
+	mux.HandleFunc("POST /api/demo/investigate", d.handleInvestigateStart)
+	mux.HandleFunc("GET /api/demo/investigate", d.handleInvestigateGet)
+	mux.HandleFunc("POST /api/demo/investigate/stop", d.handleInvestigateStop)
+	mux.HandleFunc("GET /api/demo/agents", d.handleAgents)
 	mux.HandleFunc("GET /api/demo/lines", d.handleLines)
 	mux.HandleFunc("GET /api/demo/pattern", d.handlePatternDetail)
 	mux.HandleFunc("GET /api/demo/export", d.handleExport)

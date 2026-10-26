@@ -125,3 +125,34 @@
 .dz .sh-why .ico { width: 12px; height: 12px; }
 .dz .sh-count { font-size: 12px; color: var(--ink-2); }
 .dz .sh-empty { margin: 6px 0 10px; }
+
+/* Investigate */
+.dz .inv-btn { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+.dz .prow.hovered { background: var(--surface-hover); }
+.dz .backlink { align-self: flex-start; color: var(--accent-text); padding: 0; height: auto; }
+.dz .inv header { display: flex; justify-content: space-between; align-items: center; }
+.dz .inv-ctx { height: auto; padding: 3px 8px; max-width: 100%; white-space: normal; line-height: 16px; align-self: flex-start; }
+.dz .inv-ctx b { font-weight: 700; }
+.dz .askbox { border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px; background: var(--surface); }
+.dz .askbox textarea { width: 100%; border: 0; outline: 0; resize: none; font: 14px/20px var(--font); background: transparent; color: var(--ink); }
+.dz .askbar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.dz .askbar .seg button { height: 26px; font-size: 12px; }
+.dz .inv-run { display: flex; flex-direction: column; gap: 10px; }
+.dz .inv-q { display: flex; gap: 8px; align-items: flex-start; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.dz .inv-q .ico { margin-top: 2px; color: var(--accent); }
+.dz .inv-progress { display: flex; flex-direction: column; gap: 2px; }
+.dz .inv-progress .step { grid-template-columns: 32px 1fr; height: 32px; padding: 0; }
+.dz .inv-progress .skel { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.dz .inv-err { display: flex; gap: 8px; align-items: flex-start; background: var(--critical-soft); color: var(--critical-text); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.dz .inv-guess { display: flex; gap: 6px; align-items: center; background: var(--warning-soft); color: var(--warning-text); border-radius: 6px; padding: 6px 10px; font-size: 12px; }
+.dz .inv-answer h3 { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 14px 0 6px; }
+.dz .inv-cause { font-size: 14px; line-height: 21px; margin: 0; }
+.dz .inv-answer ol, .dz .inv-answer ul { margin: 0; padding-left: 20px; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 6px; }
+.dz .inv-raw { white-space: pre-wrap; font: 12px/18px var(--mono); background: var(--surface-2); padding: 10px; border-radius: 6px; }
+.dz .cite { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 6px; margin: 0 2px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); font-size: 11px; font-weight: 600; color: var(--ink); vertical-align: middle; max-width: 100%; }
+.dz .cite i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.dz .cite:hover { border-color: var(--accent); background: var(--accent-soft); }
+.dz .cite-missing { text-decoration: underline dashed var(--muted); text-underline-offset: 3px; }
+.dz .inv-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px; }
+.dz .inv-follow { display: flex; gap: 8px; }
+.dz .inv-follow input { flex: 1; height: 32px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 10px; font: inherit; background: var(--surface); color: var(--ink); }

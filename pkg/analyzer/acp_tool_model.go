@@ -2,6 +2,9 @@ package analyzer
 
 import (
 	"context"
+	"errors"
+	"io"
+	"strings"
 
 	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
@@ -28,8 +31,28 @@ func (m *acpToolCallingModel) IsCallbacksEnabled() bool {
 	return true
 }
 
+// Generate collects the agent's streamed text. ACP is streaming-only; tool
+// calls run inside the agent's own runtime, so only the assistant text is kept.
 func (m *acpToolCallingModel) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.Message, error) {
-	return m.base.Generate(ctx, input, opts...)
+	stream, err := m.base.Stream(ctx, input, opts...)
+	if err != nil {
+		return nil, err
+	}
+	defer stream.Close()
+	var text strings.Builder
+	for {
+		chunk, err := stream.Recv()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if chunk != nil {
+			text.WriteString(chunk.Content)
+		}
+	}
+	return schema.AssistantMessage(text.String(), nil), nil
 }
 
 func (m *acpToolCallingModel) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (*schema.StreamReader[*schema.Message], error) {

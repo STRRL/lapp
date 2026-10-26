@@ -24,6 +24,12 @@ type Config struct {
 	Model    string
 	// TapePath overrides the default workspace tape file.
 	TapePath string
+	// OnProgress, when set, is told "reading" while the agent uses tools and
+	// "writing" once it starts producing the answer.
+	OnProgress func(phase string)
+	// RawQuestion sends the question as the whole user message instead of
+	// wrapping it in the default "Analyze the log files…" prompt.
+	RawQuestion bool
 }
 
 // BuildWorkspaceSystemPrompt builds a system prompt for the structured workspace layout.
@@ -132,7 +138,15 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 	if question != "" {
 		userMessage = "Analyze the log files in the workspace. The user's question: " + question
 	}
+	if config.RawQuestion && question != "" {
+		userMessage = question
+	}
+	progress := func(string) {}
+	if config.OnProgress != nil {
+		progress = config.OnProgress
+	}
 
+	progress("reading")
 	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
 	iter := runner.Query(ctx, userMessage, adk.WithCallbacks(tracing.NewSlogEinoHandler(nil), tapeHandler))
 
@@ -150,7 +164,10 @@ func RunAgentWithPrompt(ctx context.Context, config Config, workDir, question, s
 			continue
 		}
 		if msg != nil && msg.Role == "assistant" && msg.Content != "" {
+			progress("writing")
 			result.WriteString(msg.Content)
+		} else {
+			progress("reading")
 		}
 	}
 
