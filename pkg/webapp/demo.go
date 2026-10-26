@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-errors/errors"
@@ -37,6 +38,9 @@ const (
 	maxBuckets      = 72
 	noiseMinShare   = 0.10
 	noiseMinPresent = 0.5
+	// steadyErrorMinShare is the share from which a persistent error-like
+	// pattern goes to "Start here" even without a spike or anything new.
+	steadyErrorMinShare = 0.05
 )
 
 var leadingLevel = regexp.MustCompile(`(?i)^\[?(?:fatal|panic|crit(?:ical)?|err(?:or)?|warn(?:ing)?|notice|info|debug|trace)\]?:?\s+`)
@@ -53,6 +57,9 @@ type demoAPI struct {
 	// so tests run without a VictoriaLogs instance.
 	victoriaLogsStreams func(context.Context, victorialogs.FetchRequest) ([]victorialogs.Stream, error)
 	jobs                *investigations
+	// rulesMu serializes read-modify-write of noise rules files: two quick
+	// Hide clicks arrive as concurrent requests and must not drop a decision.
+	rulesMu sync.Mutex
 }
 
 func newDemoAPI(root, apiKey, model string) *demoAPI {
@@ -86,6 +93,7 @@ type demoPattern struct {
 	Reason      string   `json:"reason"`
 	KeptReason  string   `json:"keptReason,omitempty"`
 	Filtered    bool     `json:"filtered"`
+	SteadyError bool     `json:"steadyError,omitempty"` // error-like, high share, present most of the time
 	SpikeAt     *int     `json:"spikeAt,omitempty"`
 	NewAt       *int     `json:"newAt,omitempty"`
 	Samples     []string `json:"samples"`
@@ -123,9 +131,15 @@ type demoPatternsResponse struct {
 	CappedEntryCount  int    `json:"cappedEntryCount,omitempty"`
 }
 
+// noiseRules are a service's saved noise decisions, keyed by pattern
+// template: Filtered patterns are hidden, NotNoise patterns are never
+// suggested as noise again.
 type noiseRules struct {
 	Filtered []string `json:"filtered"`
-	Shown    []string `json:"shown"`
+	NotNoise []string `json:"notNoise"`
+	// Shown is the legacy name for NotNoise (suggested noise kept visible);
+	// it is read once and folded into NotNoise.
+	Shown []string `json:"shown,omitempty"`
 }
 
 func (d *demoAPI) register(mux *http.ServeMux) {
@@ -537,12 +551,13 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 		p := &patterns[i]
 		suggestNoise(p, total, bucketCount, bucketUnit(bucketSeconds))
 		markTrends(p)
-		p.Filtered = p.Suggestion == "noise"
-		if rulesSaved {
-			p.Filtered = contains(rules.Filtered, p.ID) || (p.Filtered && !contains(rules.Shown, p.ID))
-			if contains(rules.Filtered, p.ID) {
-				a.resp.RulesApplied++
-			}
+		// Suggestions are only marks: nothing is hidden unless a saved rule hides it.
+		if contains(rules.NotNoise, p.ID) && p.Suggestion != "" {
+			p.Suggestion, p.Reason, p.KeptReason = "", "", ""
+		}
+		p.Filtered = contains(rules.Filtered, p.ID)
+		if p.Filtered {
+			a.resp.RulesApplied++
 		}
 	}
 	sort.SliceStable(patterns, func(i, j int) bool { return patterns[i].Count > patterns[j].Count })
@@ -693,15 +708,14 @@ func chooseBucket(span time.Duration) int64 {
 }
 
 // suggestNoise flags high-volume, steady, non-error patterns as likely noise.
-// High-volume error-looking patterns are only "maybe": the user decides.
+// Error-like patterns are never noise: when they are steady and high-volume
+// they are marked SteadyError for "Start here" instead, since an error on
+// every line of every minute is an ongoing incident, not background.
 func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 	if total == 0 {
 		return
 	}
 	share := float64(p.Count) / float64(total)
-	if share < noiseMinShare {
-		return
-	}
 	present := 0
 	for _, c := range p.Buckets {
 		if c > 0 {
@@ -709,6 +723,13 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		}
 	}
 	steady := bucketCount == 0 || float64(present)/float64(bucketCount) >= noiseMinPresent
+	if isErrorLevel(p.Level) || isErrorLike(p.Template) {
+		p.SteadyError = steady && share >= steadyErrorMinShare
+		return
+	}
+	if share < noiseMinShare {
+		return
+	}
 	parts := []string{formatPercent(share)}
 	switch {
 	case bucketCount == 0:
@@ -718,8 +739,6 @@ func suggestNoise(p *demoPattern, total, bucketCount int, unit string) {
 		parts = append(parts, fmt.Sprintf("in %d of %d %s", present, bucketCount, pluralUnit(unit)))
 	}
 	switch {
-	case isErrorLike(p.Template):
-		p.Suggestion, p.KeptReason = "maybe", "looks like an error"
 	case !steady:
 		p.Suggestion, p.KeptReason = "maybe", "comes in bursts"
 	default:
@@ -810,10 +829,18 @@ func detectLevel(template string) string {
 	return ""
 }
 
-var failureLike = regexp.MustCompile(`(?i)\b(failure|denied|refused|abnormal)`)
+// errorWords is the one list of words and phrases that make a message look
+// like an error, whatever its log level. Patterns matching it are never
+// suggested as noise. Keep it short: every entry can keep real noise visible.
+var errorWords = regexp.MustCompile(`(?i)\b(?:errors?|fatal|panic|critical|exceptions?|does not exist|invalid|failed|failures?|timeouts?|timed out|refused|denied|cannot|could not|unable to|traceback|stack ?trace|abnormal)\b|\b\w*(?:error|exception)\b`)
 
 func isErrorLike(s string) bool {
-	return errorLikePattern.MatchString(s) || failureLike.MatchString(s)
+	return errorWords.MatchString(s)
+}
+
+// isErrorLevel reports whether a detected level (see detectLevel) is an error.
+func isErrorLevel(level string) bool {
+	return level == "error" || level == "fatal"
 }
 
 // formatPercent is the one place percentages are rounded (one decimal,
@@ -831,6 +858,8 @@ func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, a.resp)
 }
 
+// handleRules saves one noise decision for patterns of this workspace's
+// service right away: "hide", "unhide" or "not-noise".
 func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("ws")
 	a, err := d.analyze(r.Context(), id)
@@ -839,23 +868,32 @@ func (d *demoAPI) handleRules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Filtered []string `json:"filtered"`
+		Patterns []string `json:"patterns"`
+		Decision string   `json:"decision"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	rules, _ := d.loadRules(a.service)
-	rules.Filtered = without(rules.Filtered, a.resp.Patterns)
-	rules.Shown = without(rules.Shown, a.resp.Patterns)
+	var ids []string
 	for _, p := range a.resp.Patterns {
-		if contains(body.Filtered, p.ID) {
-			rules.Filtered = append(rules.Filtered, p.ID)
-		} else if p.Suggestion == "noise" {
-			rules.Shown = append(rules.Shown, p.ID)
+		if contains(body.Patterns, p.ID) {
+			ids = append(ids, p.ID)
 		}
 	}
-	if err := d.saveRules(a.service, rules); err != nil {
+	apply := map[string]func(*noiseRules){
+		"hide":   func(r *noiseRules) { r.Filtered = append(remove(r.Filtered, ids), ids...) },
+		"unhide": func(r *noiseRules) { r.Filtered = remove(r.Filtered, ids) },
+		"not-noise": func(r *noiseRules) {
+			r.Filtered = remove(r.Filtered, ids)
+			r.NotNoise = append(remove(r.NotNoise, ids), ids...)
+		},
+	}[body.Decision]
+	if apply == nil {
+		writeError(w, http.StatusBadRequest, errors.Errorf("unknown decision %q", body.Decision))
+		return
+	}
+	if err := d.updateRules(a.service, apply); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -942,6 +980,8 @@ func (d *demoAPI) loadRules(service string) (noiseRules, bool) {
 		slog.Warn("bad noise rules file", "service", service, "error", err)
 		return noiseRules{}, false
 	}
+	rules.NotNoise = append(remove(rules.NotNoise, rules.Shown), rules.Shown...)
+	rules.Shown = nil
 	return rules, true
 }
 
@@ -954,7 +994,31 @@ func (d *demoAPI) saveRules(service string, rules noiseRules) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	// Temp file + rename, like the workspace records, so a reader never sees
+	// a half-written file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// updateRules loads, changes and saves one service's rules under rulesMu.
+func (d *demoAPI) updateRules(service string, change func(*noiseRules)) error {
+	d.rulesMu.Lock()
+	defer d.rulesMu.Unlock()
+	rules, _ := d.loadRules(service)
+	change(&rules)
+	return d.saveRules(service, rules)
 }
 
 var serviceChars = regexp.MustCompile(`[^a-z0-9]+`)
@@ -1017,19 +1081,11 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// without drops entries that refer to patterns in this workspace, so a save
-// replaces this workspace's decisions but keeps rules for other patterns.
-func without(list []string, patterns []demoPattern) []string {
+// remove returns list without the given entries.
+func remove(list, drop []string) []string {
 	out := list[:0:0]
 	for _, v := range list {
-		keep := true
-		for _, p := range patterns {
-			if p.ID == v {
-				keep = false
-				break
-			}
-		}
-		if keep {
+		if !contains(drop, v) {
 			out = append(out, v)
 		}
 	}
@@ -1057,8 +1113,8 @@ func ImportLog(ctx context.Context, root, apiKey, model, name string, body io.Re
 	return newDemoAPI(root, apiKey, model).importLog(ctx, name, body)
 }
 
-// FilterLog finds patterns in a log without an LLM, applies the saved (or
-// suggested) noise rules for its service, and writes the remaining lines.
+// FilterLog finds patterns in a log without an LLM, drops the patterns the
+// saved noise rules for its service hide, and writes the remaining lines.
 // Nothing is kept: the scratch workspace is removed afterwards.
 func FilterLog(ctx context.Context, root, service, name string, body io.Reader, out io.Writer) error {
 	root, err := resolveRoot(root)

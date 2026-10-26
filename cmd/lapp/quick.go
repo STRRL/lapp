@@ -52,10 +52,10 @@ func runQuick(cmd *cobra.Command, args []string) error {
 func filterCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "filter [file|-]",
-		Short: "Print a log without the lines of patterns filtered as noise",
-		Long: `Find patterns in the log, drop the lines of patterns filtered as noise
-(the rules saved for this service, or lapp's suggestions when none are saved),
-and print the rest. The input file is never modified.`,
+		Short: "Print a log without the lines of patterns hidden as noise",
+		Long: `Find patterns in the log, drop the lines of patterns you hid as noise
+for this service (in the web app), and print the rest. Patterns lapp only
+suggests as likely noise are kept. The input file is never modified.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, body, closeFn, err := openInput(args)

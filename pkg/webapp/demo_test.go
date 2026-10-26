@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,8 +144,131 @@ func TestSummarizeLog(t *testing.T) {
 	if len(s.StartHere) == 0 || !strings.HasPrefix(s.StartHere[0].Reason, "Error") {
 		t.Fatalf("startHere = %+v", s.StartHere)
 	}
-	if !s.Patterns[0].Filtered || s.Patterns[0].Noise == nil {
-		t.Fatalf("health checks should be filtered as noise: %+v", s.Patterns[0])
+	if s.Patterns[0].Filtered || s.Patterns[0].Noise == nil || s.Patterns[0].Noise.Suggestion != "likely" {
+		t.Fatalf("health checks should be marked likely noise but not hidden: %+v", s.Patterns[0])
+	}
+
+	// Shaped like a plain-text Postgres export (no level field): two steady,
+	// high-share error messages are an incident, never noise; health checks are.
+	b.Reset()
+	for m := 0; m < 60; m++ {
+		at := base.Add(time.Duration(m) * time.Minute)
+		for i := 0; i < 15; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main column \"member_created_here\" does not exist at character %d\n", at.Add(time.Duration(i)*time.Second).Format(time.RFC3339), 4000+i, 40+i)
+		}
+		for i := 0; i < 3; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main invalid input syntax for type uuid: \"x%d\"\n", at.Add(time.Duration(20+i)*time.Second).Format(time.RFC3339), 5000+i, i)
+		}
+		for i := 0; i < 4; i++ {
+			fmt.Fprintf(&b, "%s [%d] app@main health check ok from 10.0.0.%d\n", at.Add(time.Duration(30+i)*time.Second).Format(time.RFC3339), 6000+i, i)
+		}
+	}
+	s, err = SummarizeLog(context.Background(), filepath.Join(t.TempDir(), "workspaces"), "", "pg.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marks := map[string]string{}
+	for _, p := range s.Patterns {
+		marks[p.Name] = ""
+		if p.Noise != nil {
+			marks[p.Name] = p.Noise.Suggestion
+		}
+	}
+	starts := map[string]bool{}
+	for _, f := range s.StartHere {
+		starts[f.Name] = true
+	}
+	for name, mark := range marks {
+		isErr := strings.Contains(name, "does not exist") || strings.Contains(name, "invalid input")
+		switch {
+		case isErr && (mark != "" || !starts[name]):
+			t.Errorf("%q: noise mark %q, in Start here %v; want no mark and in Start here", name, mark, starts[name])
+		case strings.Contains(name, "health check") && mark != "likely":
+			t.Errorf("%q: noise mark %q, want likely", name, mark)
+		}
+	}
+	if len(marks) != 3 {
+		t.Fatalf("patterns = %v", marks)
+	}
+	var text strings.Builder
+	s.WriteText(&text)
+	for _, line := range strings.Split(text.String(), "\n") {
+		if strings.Contains(line, "does not exist") && strings.HasPrefix(line, " ?") {
+			t.Errorf("summary text marks an error as likely noise: %q", line)
+		}
+	}
+}
+
+func TestDemoNoiseDecisionsPersistPerService(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "workspaces")
+	d := newDemoAPI(root, "", "")
+	var b strings.Builder
+	base := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 300; i++ {
+		fmt.Fprintf(&b, "%s INFO health check ok from 10.0.0.%d\n", base.Add(time.Duration(i)*time.Minute).Format(time.RFC3339), i%7)
+		fmt.Fprintf(&b, "%s INFO cache refreshed in %d ms\n", base.Add(time.Duration(i)*time.Minute).Format(time.RFC3339), i%9)
+	}
+	ctx := context.Background()
+	mux := http.NewServeMux()
+	d.register(mux)
+	decide := func(ws, decision string, ids ...string) {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"patterns": ids, "decision": decision})
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/demo/rules?ws="+ws, strings.NewReader(string(body))))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", decision, rec.Code, rec.Body)
+		}
+	}
+	byWord := func(ws string) map[string]demoPattern {
+		t.Helper()
+		a, err := d.analyze(ctx, ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]demoPattern{}
+		for _, p := range a.resp.Patterns {
+			out[strings.Fields(p.Template)[1]] = p
+		}
+		return out
+	}
+
+	first, err := d.importLog(ctx, "api-1.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := byWord(first)
+	if got["health"].Suggestion != "noise" || got["health"].Filtered || got["cache"].Suggestion != "noise" {
+		t.Fatalf("suggestions should only mark, not hide: %+v", got)
+	}
+	decide(first, "hide", got["health"].ID)
+	decide(first, "not-noise", got["cache"].ID)
+
+	// A later import of the same service applies both decisions.
+	second, err := d.importLog(ctx, "api-2.log", strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = byWord(second)
+	if !got["health"].Filtered || got["cache"].Filtered || got["cache"].Suggestion != "" {
+		t.Fatalf("decisions not applied: %+v", got)
+	}
+	decide(second, "unhide", got["health"].ID)
+	if got = byWord(second); got["health"].Filtered || got["health"].Suggestion != "noise" {
+		t.Fatalf("unhide: %+v", got["health"])
+	}
+	// Two Hide clicks sent at the same time must both be kept.
+	var wg sync.WaitGroup
+	for _, word := range []string{"health", "cache"} {
+		wg.Add(1)
+		go func(id string) {
+			defer wg.Done()
+			decide(second, "hide", id)
+		}(got[word].ID)
+	}
+	wg.Wait()
+	if got = byWord(second); !got["health"].Filtered || !got["cache"].Filtered {
+		t.Fatalf("concurrent hides lost a decision: health=%v cache=%v", got["health"].Filtered, got["cache"].Filtered)
 	}
 }
 

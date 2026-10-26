@@ -44,7 +44,6 @@
 /* Pattern list */
 .dz .lp { position: relative; }
 .dz .grouptoggle { width: 100%; border: 0; text-align: left; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; }
-.dz .cell-check { position: relative; height: 100%; min-height: 40px; align-items: center; cursor: pointer; }
 .dz .prow { cursor: pointer; outline-offset: -2px; }
 .dz .level-inline { display: none; }
 .dz .unnamed { max-width: 100%; }
@@ -77,7 +76,7 @@
   .dz .with-drawer .scrim { display: block; position: fixed; inset: 52px 0 0 0; background: rgba(11,11,11,.2); z-index: 20; }
   .dz .col-level { display: none; }
   .dz .level-inline { display: inline-flex; }
-  .dz .thead, .dz .prow { grid-template-columns: 48px minmax(0,1fr) 184px 132px 32px; }
+  .dz .thead, .dz .prow { grid-template-columns: minmax(0,1fr) 184px 132px 124px 32px; }
 }
 @media (max-width: 1099px) {
   .dz .hide-narrow { display: none; }
@@ -114,6 +113,24 @@
 /* Filtered rows: count and share both dimmed, in both themes. */
 .dz .prow.filtered .cell-count b, .dz .prow.filtered .cell-count span { color: var(--ink-3); }
 .dz .field .seg { display: inline-flex; }
+
+/* Noise: row actions, notice, hide and jump-to animations */
+.dz .btn.xs { height: 24px; padding: 0 8px; font-size: 12px; }
+.dz .cell-act { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.dz .cell-act .linkbtn { font-size: 12px; }
+.dz .cell-act:not(.pinned) > * { visibility: hidden; }
+.dz .prow:hover .cell-act > *, .dz .prow:focus-within .cell-act > * { visibility: visible; }
+.dz .noise-notice > div { min-width: 0; }
+.dz .noise-name { border: 0; background: none; padding: 0; color: inherit; font: 13px var(--mono); text-decoration: underline dotted; text-underline-offset: 3px; }
+.dz .prow.leaving { opacity: 0; transition: opacity 200ms ease-out; }
+.dz .prow.flash { animation: row-flash 1.9s ease-out; }
+@keyframes row-flash {
+  0%, 79% { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dz .prow.leaving { transition: none; }
+}
 
 /* Start here card */
 .dz .starthere { padding: 12px 16px 6px; }
