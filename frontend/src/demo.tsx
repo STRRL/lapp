@@ -132,6 +132,8 @@ export function formatPercent(part: number, total: number) {
 }
 
 const fmtCount = (n: number) => n.toLocaleString("en-US");
+// "1 line" / "2,140 lines": counts shown to people agree with their noun.
+const countOf = (n: number, noun: string) => `${fmtCount(n)} ${noun}${n === 1 ? "" : "s"}`;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const pad = (n: number) => String(n).padStart(2, "0");
 const formatDate = (t: Date) => `${MONTHS[t.getUTCMonth()]} ${t.getUTCDate()}`;
@@ -1123,7 +1125,7 @@ function PatternList({
               </button>
             </React.Fragment>
           ))}
-          {n > 3 && ` +${n - 3} more`} · {fmtCount(likelyNoiseLines)} lines ({formatPercent(likelyNoiseLines, total)}).
+          {n > 3 && ` +${n - 3} more`} · {countOf(likelyNoiseLines, "line")} ({formatPercent(likelyNoiseLines, total)}).
         </div>
         <button className="btn sm" onClick={() => decide(likelyNoise.map((p) => p.id), "hide")}>
           {n === 1 ? "Hide it?" : "Hide all"}
@@ -1150,7 +1152,7 @@ function PatternList({
                 value={service}
                 onRenamed={(s) => {
                   setData({ ...data, workspace: { ...data.workspace, service: s } });
-                  toast(`Noise decisions will be saved for ${s}.`);
+                  toast(`Renamed to ${s}. Your Hide and Not noise choices are saved under this name.`);
                 }}
               />
               <span className="tnum">
@@ -1391,7 +1393,7 @@ function PatternList({
             {hidden.length > 0 && (
               <>
                 <button ref={filteredGroupRef} className="group-h filt grouptoggle" onClick={() => setShowFiltered(!filteredOpen)} aria-expanded={filteredOpen}>
-                  {filteredOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Hidden as noise · {hidden.length} patterns · {fmtCount(filteredLines)} lines
+                  {filteredOpen ? <ChevronDown className="ico" /> : <ChevronRight className="ico" />} Hidden as noise · {countOf(hidden.length, "pattern")} · {countOf(filteredLines, "line")}
                 </button>
                 {filteredOpen &&
                   hiddenRows.map((p) => (
