@@ -185,10 +185,15 @@ func glogLevel(l string) string {
 // "at Sun Jul 3 23:16:09 2005" or "2024-03-28T13:45:30Z".
 var inlineTimestamp = regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) +\d{1,2} \d{2}:\d{2}:\d{2}(?: \d{4})?\b|\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?`)
 
-// MaskInline replaces date-times inside a message body with a single
-// wildcard token so they don't split patterns.
+// uuidList matches a UUID, optionally quoted, or a comma-separated list of
+// them, e.g. "{3f2a…,9b1c…}" inside an IN list or array literal.
+var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?(?:\s*,\s*["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?)*`)
+
+// MaskInline replaces date-times and UUIDs (a list of UUIDs as a whole)
+// inside a message body with a single wildcard token so they don't split
+// patterns.
 func MaskInline(body string) string {
-	return inlineTimestamp.ReplaceAllString(body, "<*>")
+	return uuidList.ReplaceAllString(inlineTimestamp.ReplaceAllString(body, "<*>"), "<*>")
 }
 
 // ParseTime reads a standalone date-time value, such as a CSV column or a

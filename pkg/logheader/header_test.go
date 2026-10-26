@@ -41,6 +41,20 @@ func TestMaskInline(t *testing.T) {
 	}
 }
 
+func TestMaskInlineUUIDs(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"user 3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c not found", "user <*> not found"},
+		{`id IN ('3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c', '9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e')`, "id IN (<*>)"},
+		{"ids={3f2a9c1e-0b7d-4e21-9a3c-5d6e7f8a9b0c,9b1c2d3e-4f5a-4b6c-8d7e-0f1a2b3c4d5e,0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d}", "ids={<*>}"},
+		{"build 3f2a9c1e0b7d not a uuid", "build 3f2a9c1e0b7d not a uuid"},
+	}
+	for _, c := range cases {
+		if got := MaskInline(c.in); got != c.want {
+			t.Errorf("MaskInline(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
 func TestStartShape(t *testing.T) {
 	cases := []struct{ line, shape string }{
 		{"1792993307158\t2026-10-26T05:41:47.158Z\tcolumn \"x\" does not exist", "9\t9-9-9a9:9:9"},
