@@ -1943,6 +1943,11 @@ const swatchStyle = (s: VolumeSeries): React.CSSProperties =>
     ? { background: "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface-2) 1.5px 5.5px)" }
     : { background: s.color };
 
+// Y-axis ticks: 0, the middle and the top, all whole numbers (line counts
+// are integers, so "2.5" would read as a bug).
+function axisTicks(max: number) {
+  return [...new Set([0, Math.ceil(max / 2), max])];
+}
 // Axis numbers: 1000 → "1K", 1500 → "1.5K".
 function fmtAxis(v: number) {
   if (v >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
@@ -2092,11 +2097,11 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
             <line x1="0" y1="0" x2="0" y2="4" stroke="var(--muted)" strokeWidth="1.5" />
           </pattern>
         </defs>
-        {[0, 0.5, 1].map((f) => (
-          <g key={f}>
-            <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
-            <text x={padL - 8} y={y(maxV * f) + 4} textAnchor="end" className="axis">
-              {fmtAxis(maxV * f)}
+        {axisTicks(maxV).map((v) => (
+          <g key={v}>
+            <line x1={padL} x2={W} y1={y(v)} y2={y(v)} stroke="var(--line)" />
+            <text x={padL - 8} y={y(v) + 4} textAnchor="end" className="axis">
+              {fmtAxis(v)}
             </text>
           </g>
         ))}
@@ -2427,11 +2432,11 @@ function OverTime({ data, buckets, color, spikeAt }: { data: PatternsResponse; b
       </h3>
       <div className="chart-wrap" onMouseLeave={() => setHover(null)}>
         <svg width={W} height={H + top + 22} role="img" aria-label={`Lines per ${unitName(data.bucketSeconds)}`}>
-          {[0, 0.5, 1].map((f) => (
-            <g key={f}>
-              <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
-              <text x={padL - 6} y={y(maxV * f) + 4} textAnchor="end" className="axis">
-                {fmtNum(maxV * f)}
+          {axisTicks(maxV).map((v) => (
+            <g key={v}>
+              <line x1={padL} x2={W} y1={y(v)} y2={y(v)} stroke="var(--line)" />
+              <text x={padL - 6} y={y(v) + 4} textAnchor="end" className="axis">
+                {fmtNum(v)}
               </text>
             </g>
           ))}
