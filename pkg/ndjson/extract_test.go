@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestExtractFixtures extracts every line of every input fixture under
@@ -49,5 +50,29 @@ func TestExtractNonJSONLineIsReturnedUnchanged(t *testing.T) {
 	line := "2026-06-06 10:00:00 INFO plain text line"
 	if got, _ := Extract(line); got != line {
 		t.Fatalf("Extract(%q) = %q, want unchanged", line, got)
+	}
+}
+
+func TestExtractTimestampFromVictoriaLogsTime(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		want string
+	}{
+		{name: "_time is read", line: `{"_msg":"ok","_time":"2026-10-26T05:22:22Z"}`, want: "2026-10-26T05:22:22Z"},
+		{name: "a user ts field does not override _time", line: `{"_msg":"ok","_time":"2026-10-26T05:22:22Z","ts":"2020-01-01T00:00:00Z"}`, want: "2026-10-26T05:22:22Z"},
+		{name: "no _time gives zero time", line: `{"message":"ok"}`, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ts := Extract(tt.line)
+			got := ""
+			if !ts.IsZero() {
+				got = ts.UTC().Format(time.RFC3339)
+			}
+			if got != tt.want {
+				t.Fatalf("timestamp = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

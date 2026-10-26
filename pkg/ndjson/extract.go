@@ -13,9 +13,8 @@ import (
 var messageFields = []string{"_msg", "message", "msg", "log", "error"}
 
 // timestampFields are checked in order on the top-level entry; the first
-// RFC 3339 string wins. "ts" is the envelope timestamp (ADR 0006) and "_time"
-// the VictoriaLogs one.
-var timestampFields = []string{"ts", "_time"}
+// RFC 3339 string wins. "_time" is the VictoriaLogs record time.
+var timestampFields = []string{"_time"}
 
 // severityFields are checked in order; the first string value wins.
 // Numeric levels are ignored in v1.
