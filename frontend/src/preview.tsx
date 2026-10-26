@@ -128,7 +128,7 @@ export function PreviewDialog({
                 ? `${flagged} ${flagged === 1 ? "item" : "items"} will be masked.`
                 : `${flagged} highlighted ${flagged === 1 ? "item looks" : "items look"} like emails, IP addresses or tokens. Check them before sending.`}
             </span>
-            <label className="mask-toggle" title="Replaces highlighted bits with <ip>, <email> or <token>. Naming only needs the sentence shape.">
+            <label className="mask-toggle" title="Replaces highlighted items with <ip>, <email> or <token>. Naming only needs the sentence shape.">
               <input type="checkbox" checked={mask} onChange={(e) => setMask(e.target.checked)} />
               Mask before sending
             </label>
