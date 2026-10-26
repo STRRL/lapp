@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  History,
   CloudDownload,
   Copy,
   Download,
@@ -371,11 +372,9 @@ function TopBar({
                     onClick={() => { setOpen(false); navigate(w.olderVersion ? { service: w.service } : { ws: w.id }); }}
                   >
                     <b>{w.service}</b>
-                    <span className="ell">
-                      <span className="mono">{w.title}</span>
-                      {w.olderVersion && <small>{OLDER_IMPORT_NOTE}</small>}
-                    </span>
+                    <span className="mono ell">{w.title}</span>
                     <em className="tnum">{timeAgo(w.updatedAt)}</em>
+                    {w.olderVersion && <small>{OLDER_IMPORT_NOTE}</small>}
                   </button>
                 ))}
               </div>
@@ -1060,7 +1059,7 @@ function PatternList({
   const [data, setData] = useState<PatternsResponse | null>(null);
   const [error, setError] = useState("");
   // Set when this import was made with an older lapp and has to be imported again.
-  const [olderService, setOlderService] = useState<string | null>(null);
+  const [older, setOlder] = useState<DemoWorkspace | null>(null);
   const [filtered, setFiltered] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [errorsOnly, setErrorsOnly] = useState(false);
@@ -1107,7 +1106,7 @@ function PatternList({
         }
       })
       .catch((e) => {
-        if (e?.body?.olderVersion) setOlderService(e.body.service ?? "");
+        if (e?.body?.olderVersion) setOlder(e.body.workspace);
         else setError(e instanceof Error ? e.message : String(e));
       });
   }, [wsId, compareTo, reload]);
@@ -1249,16 +1248,26 @@ function PatternList({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (olderService !== null) {
+  if (older) {
     return (
       <>
         <TopBar navigate={navigate} />
-        <div className="pad older-import">
-          <p>This import was made with an older version of lapp.</p>
-          <button className="btn" onClick={() => navigate(olderService ? { service: olderService } : {})}>
-            Import again
-          </button>
-        </div>
+        <main className="older-import">
+          <History className="ico" />
+          <h2>This import was made with an older version of lapp.</h2>
+          <p className="meta">
+            {older.service} · {older.title} · {timeAgo(older.updatedAt)}
+          </p>
+          <p>{OLDER_IMPORT_HINT}</p>
+          <div className="actions">
+            <button className="btn primary" onClick={() => navigate({ service: older.service })}>
+              Import again
+            </button>
+            <button className="linkbtn" onClick={() => navigate({})}>
+              Back to Recent
+            </button>
+          </div>
+        </main>
       </>
     );
   }

@@ -911,7 +911,12 @@ func (d *demoAPI) handlePatterns(w http.ResponseWriter, r *http.Request) {
 		// The page offers Import again with the service filled in.
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusGone)
-		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "olderVersion": true, "service": readService(filepath.Join(d.root, id), id)})
+		older := demoWorkspace{ID: id, Service: readService(filepath.Join(d.root, id), id)}
+		if run := workspace.LatestOldDiscoveryRun(filepath.Join(d.root, id)); run != nil {
+			older = d.workspaceInfo(id, run)
+		}
+		older.OlderVersion = true
+		_ = json.NewEncoder(w).Encode(map[string]any{"error": err.Error(), "olderVersion": true, "workspace": older})
 		return
 	}
 	if err != nil {
