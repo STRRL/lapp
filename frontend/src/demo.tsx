@@ -1909,9 +1909,16 @@ const VOLUME_OTHER_ID = "~other";
 const VOLUME_UNMATCHED_ID = "~unmatched";
 // Candidate x-axis tick steps in seconds; the smallest that leaves room for a label wins.
 const TICK_STEPS = [60, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 2 * 86400, 7 * 86400, 14 * 86400, 30 * 86400];
-const TICK_MIN_PX = 36;
+// Wide enough for "Oct 26" plus a gap, so neighbouring labels never touch.
+const TICK_MIN_PX = 64;
 
-type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean };
+type VolumeSeries = { id: string; name: string; color: string; buckets: number[]; other?: boolean; hatched?: boolean };
+
+// Swatch for legends and tooltips: the same 45° hatch as the bars for unmatched lines.
+const swatchStyle = (s: VolumeSeries): React.CSSProperties =>
+  s.hatched
+    ? { background: "repeating-linear-gradient(45deg, var(--muted) 0 1.5px, var(--surface-2) 1.5px 5.5px)" }
+    : { background: s.color };
 
 function plural(n: number, word: string) {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -1928,7 +1935,8 @@ function volumeSeries(data: PatternsResponse, patterns: DemoPattern[], colorOf: 
   const top = patterns.slice(0, VOLUME_TOP);
   const rest = patterns.slice(VOLUME_TOP);
   const series: VolumeSeries[] = top.map((p) => ({ id: p.id, name: p.name, color: colorOf(p), buckets: p.buckets }));
-  if (data.unmatched.count > 0) series.push({ id: VOLUME_UNMATCHED_ID, name: "Unmatched lines", color: "var(--muted)", buckets: data.unmatched.buckets });
+  // Unmatched lines are hatched so they never read as one more pattern.
+  if (data.unmatched.count > 0) series.push({ id: VOLUME_UNMATCHED_ID, name: "Unmatched lines", color: "url(#vol-unmatched-hatch)", buckets: data.unmatched.buckets, hatched: true });
   if (rest.length > 0) {
     const n = data.unmatched.buckets.length;
     const buckets = Array.from({ length: n }, (_, i) => rest.reduce((s, p) => s + p.buckets[i], 0));
@@ -1989,7 +1997,7 @@ function LogsVolume({
           <div className="legend">
             {series.map((s) => (
               <span key={s.id}>
-                <i style={{ background: s.color }} />
+                <i style={swatchStyle(s)} />
                 {s.other || s.id === VOLUME_UNMATCHED_ID ? s.name : short(s.name, 32)}
               </span>
             ))}
@@ -2023,6 +2031,12 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
   return (
     <div className="chart-wrap" ref={ref} onMouseLeave={() => setHover(null)}>
       <svg width={W} height={H + top + 22} role="img" aria-label="Logs volume over time, stacked by pattern">
+        <defs>
+          <pattern id="vol-unmatched-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="4" height="4" fill="var(--surface-2)" />
+            <line x1="0" y1="0" x2="0" y2="4" stroke="var(--muted)" strokeWidth="1.5" />
+          </pattern>
+        </defs>
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line x1={padL} x2={W} y1={y(maxV * f)} y2={y(maxV * f)} stroke="var(--line)" />
@@ -2083,7 +2097,7 @@ function Overview({ data, series, highlight, onOpen }: { data: PatternsResponse;
             .sort((a, b) => Number(!!a.other) - Number(!!b.other) || b.buckets[hover.i] - a.buckets[hover.i])
             .map((s) => (
               <div key={s.id} className={`tt-row${hover.id === s.id ? " is-on" : ""}`}>
-                <i style={{ background: s.color }} />
+                <i style={swatchStyle(s)} />
                 <span>{short(s.name, 38)}</span>
                 <b>{fmtCount(s.buckets[hover.i])}</b>
               </div>
