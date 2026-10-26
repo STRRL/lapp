@@ -69,8 +69,10 @@ func TestTagFileLinesCapsMergedEntries(t *testing.T) {
 	for i := 0; i < 2*maxEntryLines+9; i++ {
 		lines = append(lines, "    ->  Seq Scan on orders")
 	}
-	// Enough timestamped lines that the file is merged, not split per line.
-	for i := 0; i < 60; i++ {
+	// Enough timestamped lines (about a tenth of the file) that it is merged,
+	// not split per line.
+	checkpoints := len(lines) / 9
+	for i := 0; i < checkpoints; i++ {
 		lines = append(lines, "2026-10-26 05:41:41.000 LOG:  checkpoint complete")
 	}
 
@@ -78,9 +80,9 @@ func TestTagFileLinesCapsMergedEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tagFileLines: %v", err)
 	}
-	// 1 + 1009 plan lines: 500 + 500 + 10, then the 60 checkpoints.
-	if len(tagged) != 63 || split.cappedEntries != 2 || split.physicalLines != len(lines) {
-		t.Fatalf("entries = %d, split = %+v; want 63 entries, 2 capped, %d lines", len(tagged), split, len(lines))
+	// 1 + (2*maxEntryLines+9) plan lines: max + max + 10, then the checkpoints.
+	if want := 3 + checkpoints; len(tagged) != want || split.cappedEntries != 2 || split.physicalLines != len(lines) {
+		t.Fatalf("entries = %d, split = %+v; want %d entries, 2 capped, %d lines", len(tagged), split, want, len(lines))
 	}
 	for i, want := range []int{maxEntryLines, maxEntryLines, 10, 1} {
 		if got := strings.Count(tagged[i].Content, "\n") + 1; got != want {

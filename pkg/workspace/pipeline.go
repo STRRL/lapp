@@ -387,7 +387,7 @@ func mergeAllLogs(ctx context.Context, dir string) (tagged []TaggedLine, content
 // maxEntryLines and maxEntryBytes cap one merged text entry; the line that
 // would exceed either starts a new entry.
 const (
-	maxEntryLines = 500
+	maxEntryLines = 2000
 	maxEntryBytes = 1 << 20
 )
 
