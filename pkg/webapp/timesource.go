@@ -60,8 +60,9 @@ const maxCSVHeaderName = 64
 // applyTimeSource fills missing line times from the service's chosen time
 // column and reports the time facts. A column is only applied when no line
 // has a time of its own, so automatic detection always wins. dir is the
-// workspace directory; CSV files are read from its logs.
-func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) demoTimeSource {
+// workspace directory; CSV files are read from its logs, and their header
+// rows are dropped from the returned lines since they are not log entries.
+func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) ([]workspace.TaggedLine, demoTimeSource) {
 	src := demoTimeSource{Format: timeFormatText, Lines: len(lines)}
 	for _, tl := range lines {
 		if tl.Timestamp != nil {
@@ -81,7 +82,7 @@ func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) de
 		src.Fields = ndjson.TimestampFields()
 	}
 	if src.Timed > 0 {
-		return src
+		return lines, src
 	}
 	var valueOf func(tl workspace.TaggedLine) (string, bool)
 	if isJSON {
@@ -90,14 +91,16 @@ func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) de
 	} else {
 		logs := readCSVLogs(dir)
 		if logs == nil {
-			return src
+			return lines, src
 		}
 		src.Format = timeFormatCSV
 		src.Columns = logs.names
+		lines = logs.dropHeaders(lines)
+		src.Lines = len(lines)
 		valueOf = logs.value(column)
 	}
 	if column == "" || !contains(src.Columns, column) {
-		return src
+		return lines, src
 	}
 	src.Column = column
 	for i := range lines {
@@ -111,7 +114,7 @@ func applyTimeSource(dir string, lines []workspace.TaggedLine, column string) de
 		}
 	}
 	src.ColumnUnreadable = src.Timed == 0
-	return src
+	return lines, src
 }
 
 // enoughTimes reports whether the timed lines can draw a volume chart.
@@ -180,6 +183,8 @@ type csvLogs struct {
 type csvFile struct {
 	rows     [][]string
 	recordAt map[int]int
+	// headerEnd is the last physical line of the header row, 0 without one.
+	headerEnd int
 }
 
 // readCSVLogs reads every log file in the workspace with ndjson.ReadCSV and
@@ -264,10 +269,23 @@ func parseCSVLog(data []byte) ([]string, csvFile, bool) {
 			for k := 0; k < span; k++ {
 				file.recordAt[line+k+1] = row
 			}
+		} else {
+			file.headerEnd = line + span
 		}
 		line += span
 	}
 	return names, file, true
+}
+
+// dropHeaders returns lines without the CSV header rows.
+func (l *csvLogs) dropHeaders(lines []workspace.TaggedLine) []workspace.TaggedLine {
+	kept := lines[:0:0]
+	for _, tl := range lines {
+		if tl.LineNum > l.files[tl.FileName].headerEnd {
+			kept = append(kept, tl)
+		}
+	}
+	return kept
 }
 
 // value returns a function reading the named column of the record an entry

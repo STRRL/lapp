@@ -456,6 +456,11 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 	a.resp.PhysicalLineCount = run.PhysicalLineCount
 	a.resp.CappedEntryCount = run.CappedEntryCount
 	a.resp.FileNames, _ = workspace.ListLogFiles(dir)
+	// A CSV header row is not a log entry: it leaves the lines before they
+	// are counted, as a Grafana CSV export's header does on import.
+	rules, rulesSaved := d.loadRules(a.service)
+	lines, a.resp.Time = applyTimeSource(dir, lines, rules.TimeColumn)
+	a.resp.Workspace.LineCount = len(lines)
 
 	// Re-match lines against the run's templates so counts, buckets and
 	// export always agree with each other.
@@ -474,8 +479,6 @@ func (d *demoAPI) analyzeWith(ctx context.Context, id, compareTo string) (*analy
 			counts[idx]++
 		}
 	}
-	rules, rulesSaved := d.loadRules(a.service)
-	a.resp.Time = applyTimeSource(dir, lines, rules.TimeColumn)
 	var from, to time.Time
 	for _, tl := range lines {
 		if tl.Timestamp != nil && a.resp.Time.enoughTimes() {

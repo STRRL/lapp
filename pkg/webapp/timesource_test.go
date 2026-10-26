@@ -129,8 +129,9 @@ func TestTimeColumnTwoColumnCSV(t *testing.T) {
 		t.Fatalf("before choosing: time = %+v, bucket = %d", got, a.resp.BucketSeconds)
 	}
 	resp := chooseTimeColumn(t, mux, id, "when")
-	if resp.Time.Timed != 40 || resp.Time.Lines != 41 || resp.BucketSeconds != 3600 || !resp.From.Equal(base) {
-		t.Fatalf("after choosing: time = %+v, bucket = %d, from = %v", resp.Time, resp.BucketSeconds, resp.From)
+	// The header row is not a log entry: 40 lines, all timed, none unmatched.
+	if resp.Time.Timed != 40 || resp.Time.Lines != 40 || resp.Workspace.LineCount != 40 || resp.Unmatched.Count != 0 || resp.BucketSeconds != 3600 || !resp.From.Equal(base) {
+		t.Fatalf("after choosing: time = %+v, lines = %d, unmatched = %d, bucket = %d, from = %v", resp.Time, resp.Workspace.LineCount, resp.Unmatched.Count, resp.BucketSeconds, resp.From)
 	}
 }
 
@@ -165,8 +166,9 @@ func TestTimeColumnMultilineCSV(t *testing.T) {
 		t.Fatalf("before choosing: time = %+v", got)
 	}
 	resp := chooseTimeColumn(t, mux, id, "ts")
-	// All lines but the header have a time: 30 records, 10 of them three lines.
-	if resp.Time.Lines != 51 || resp.Time.Timed != 50 || !resp.From.Equal(base) || !resp.To.Equal(base.Add(29*time.Minute)) {
+	// Every line has a time: 30 records, 10 of them three lines; the header
+	// row is not counted.
+	if resp.Time.Lines != 50 || resp.Time.Timed != 50 || resp.Workspace.LineCount != 50 || !resp.From.Equal(base) || !resp.To.Equal(base.Add(29*time.Minute)) {
 		t.Fatalf("after choosing: time = %+v, from = %v, to = %v", resp.Time, resp.From, resp.To)
 	}
 }
