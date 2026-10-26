@@ -54,6 +54,26 @@
 .dz .cli { white-space: nowrap; }
 .dz .scrim { display: none; }
 
+/* Logs volume */
+.dz .overview header { align-items: center; }
+.dz .vol-toggle { display: inline-flex; border: 0; background: none; padding: 2px; margin: 0 -4px 0 -2px; border-radius: 4px; color: var(--ink-2); }
+.dz .vol-toggle:hover { background: var(--surface-hover); }
+.dz .overview.is-collapsed { padding-bottom: 14px; }
+.dz .overview.is-collapsed header { margin-bottom: 0; }
+.dz .overview.is-collapsed .vol-toggle .ico { transform: rotate(-90deg); }
+.dz .vol-seg { cursor: pointer; }
+.dz .tt-row.is-on { font-weight: 700; color: var(--ink); }
+.dz .notime-chart { height: auto; min-height: 72px; justify-content: flex-start; align-items: flex-start; gap: 10px; padding: 12px 0; color: var(--muted); }
+.dz .notime-chart > .ico { margin-top: 2px; }
+.dz .notime-main { font-size: 14px; color: var(--ink); }
+.dz .notime-text .mono { font-size: 12px; }
+.dz .timecol { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.dz .timecol .sel { font-size: 12px; color: var(--muted); }
+.dz .timecol select { width: 200px; height: 28px; }
+.dz .timecol select.is-bad { border-color: var(--critical); }
+.dz .timecol-err { display: flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; color: var(--critical-text); }
+.dz .timecol-err .ico { width: 12px; height: 12px; }
+
 /* Detail panel */
 .dz .drawer { position: sticky; top: 0; align-self: flex-start; max-height: calc(100vh - 52px); overflow: auto; }
 .dz .chk { cursor: pointer; position: relative; }

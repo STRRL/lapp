@@ -190,3 +190,19 @@ var inlineTimestamp = regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )
 func MaskInline(body string) string {
 	return inlineTimestamp.ReplaceAllString(body, "<*>")
 }
+
+// ParseTime reads a standalone date-time value, such as a CSV column or a
+// JSON field picked as the time. It accepts the same layouts as line
+// headers, and like headers it ignores text after the time ("... UTC").
+func ParseTime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}
+	}
+	for _, f := range formats {
+		if t := parse(value, f); !t.IsZero() {
+			return t
+		}
+	}
+	return Strip(value + " ").Timestamp
+}
