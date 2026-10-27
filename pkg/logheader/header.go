@@ -191,9 +191,11 @@ var inlineTimestamp = regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )
 var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?(?:\s*,\s*["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?)*`)
 
 // longNumberList matches a number of 15 or more digits, such as a 64-bit
-// ID, optionally quoted, or a list of them separated by commas or spaces,
-// e.g. `"7495738030435460753" "7494133…"` in an execution plan.
-var longNumberList = regexp.MustCompile(`["']?\b\d{15,}\b["']?(?:(?:\s*,\s*|\s+)["']?\b\d{15,}\b["']?)*`)
+// ID, optionally quoted, or a comma-separated list of them. Double-quoted
+// numbers separated only by spaces, as in an execution plan's array
+// `"7495738030435460753" "7494133…"`, are a list too; unquoted numbers
+// next to each other stay separate fields.
+var longNumberList = regexp.MustCompile(`"\d{15,}"(?:[ \t]+"\d{15,}")+|["']?\b\d{15,}\b["']?(?:\s*,\s*["']?\b\d{15,}\b["']?)*`)
 
 // MaskInline replaces date-times, UUIDs and long numbers (a list of them as
 // a whole)
