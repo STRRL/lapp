@@ -190,13 +190,19 @@ var inlineTimestamp = regexp.MustCompile(`\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) )
 // them, e.g. "{3f2a…,9b1c…}" inside an IN list or array literal.
 var uuidList = regexp.MustCompile(`["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?(?:\s*,\s*["']?\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b["']?)*`)
 
-// MaskInline replaces date-times and UUIDs (a list of UUIDs as a whole)
+// longNumberList matches a number of 15 or more digits, such as a 64-bit
+// ID, optionally quoted, or a list of them separated by commas or spaces,
+// e.g. `"7495738030435460753" "7494133…"` in an execution plan.
+var longNumberList = regexp.MustCompile(`["']?\b\d{15,}\b["']?(?:(?:\s*,\s*|\s+)["']?\b\d{15,}\b["']?)*`)
+
+// MaskInline replaces date-times, UUIDs and long numbers (a list of them as
+// a whole)
 // inside a message body with a single wildcard token so they don't split
 // patterns. It also returns where each <*> it wrote is and what it replaced,
 // so field values can still show the real text.
 func MaskInline(body string) (string, []Mask) {
 	spans := inlineTimestamp.FindAllStringIndex(body, -1)
-	for _, u := range uuidList.FindAllStringIndex(body, -1) {
+	for _, u := range append(uuidList.FindAllStringIndex(body, -1), longNumberList.FindAllStringIndex(body, -1)...) {
 		overlaps := false
 		for _, t := range spans {
 			if u[0] < t[1] && t[0] < u[1] {

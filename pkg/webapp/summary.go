@@ -193,6 +193,7 @@ type startHereCandidate struct {
 // last import of the service (non-errors only from 3 lines). Error means an
 // error level or error-like words. A pattern first seen within this import is
 // not a reason on its own: everything is new on a service's first import.
+// A pattern with no lines in this import is never a candidate.
 func startHere(r demoPatternsResponse) []startHereCandidate {
 	isErr := func(p demoPattern) bool { return isErrorLevel(p.Level) || isErrorLike(p.Template) }
 	isWarn := func(p demoPattern) bool { return !isErr(p) && p.Level == "warn" }
@@ -232,7 +233,7 @@ func startHere(r demoPatternsResponse) []startHereCandidate {
 	for _, grp := range groups {
 		var g []demoPattern
 		for _, p := range r.Patterns {
-			if !seen[p.ID] && grp.in(p) {
+			if p.Count > 0 && !seen[p.ID] && grp.in(p) {
 				g = append(g, p)
 				seen[p.ID] = true
 			}
