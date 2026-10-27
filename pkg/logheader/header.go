@@ -200,6 +200,11 @@ var longNumberList = regexp.MustCompile(`["']?\b\d{15,}\b["']?(?:\s*,\s*["']?\b\
 // numbers separated by spaces outside such braces stay separate fields.
 var longNumberArray = regexp.MustCompile(`\{((?:"\d{15,}"|\d{15,})(?:(?:\s*,\s*|\s+)(?:"\d{15,}"|\d{15,}))*)\}`)
 
+// prefixedLongNumber matches a long number after a word prefix and an
+// underscore, such as `tiktok_7365904670252975110`; group 1 is the number,
+// which is masked on its own so the prefix stays: `tiktok_<*>`.
+var prefixedLongNumber = regexp.MustCompile(`\b[A-Za-z][A-Za-z0-9_]*_(\d{15,})\b`)
+
 // MaskInline replaces date-times, UUIDs and long numbers (a list of them as
 // a whole)
 // inside a message body with a single wildcard token so they don't split
@@ -209,6 +214,9 @@ func MaskInline(body string) (string, []Mask) {
 	spans := inlineTimestamp.FindAllStringIndex(body, -1)
 	var more [][]int
 	for _, m := range longNumberArray.FindAllStringSubmatchIndex(body, -1) {
+		more = append(more, m[2:4])
+	}
+	for _, m := range prefixedLongNumber.FindAllStringSubmatchIndex(body, -1) {
 		more = append(more, m[2:4])
 	}
 	more = append(more, uuidList.FindAllStringIndex(body, -1)...)
