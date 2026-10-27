@@ -15,8 +15,9 @@ const DiscoveryRunsDirName = "discovery-runs"
 // another format are not read: their templates cannot match lines extracted
 // today, so the log has to be imported again. Format 2 keeps the NDJSON
 // level out of templates; format 3 masks UUIDs (and UUID lists) and masks
-// the whole entry, not only its first line. Runs before format 2 have none.
-const DiscoveryRunFormat = 3
+// the whole entry, not only its first line; format 4 also masks numbers of
+// 15 or more digits (and lists of them). Runs before format 2 have none.
+const DiscoveryRunFormat = 4
 
 // ErrOldDiscoveryRun is returned for a run of another DiscoveryRunFormat.
 var ErrOldDiscoveryRun = errors.New("made by an older lapp; import the log again")
