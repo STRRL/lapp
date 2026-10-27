@@ -35,6 +35,7 @@ go test -v -run TestFunctionName ./pkg/pattern/
 ## CLI Usage
 
 ```bash
+go run ./cmd/lapp/ <logfile> --no-open [--name <name>] [--addr 127.0.0.1:0]
 go run ./cmd/lapp/ workspace create <topic>
 go run ./cmd/lapp/ workspace add-log --topic <topic> <logfile>
 go run ./cmd/lapp/ workspace add-log --topic <topic> --stdin
@@ -44,6 +45,8 @@ go run ./cmd/lapp/ workspace discover --topic <topic> [--model <model>]
 go run ./cmd/lapp/ workspace analyze --topic <topic> [question] [--model <model>]
 go run ./cmd/lapp/ web [--addr 127.0.0.1:0]
 ```
+
+`lapp <logfile>` (or a pipe into `lapp`) opens the page in the default browser unless `--no-open` is given. Agents must always pass `--no-open`: the browser is the user's, and pages popping up while they work are disruptive. Open the printed URL with a headless browser instead.
 
 Topic names are sanitized to lower-kebab-case. Workspaces live under `~/.lapp/workspaces/<topic>/`.
 
